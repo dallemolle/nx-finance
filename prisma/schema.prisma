@@ -1,0 +1,83 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id              String          @id @default(cuid())
+  email           String          @unique
+  password        String
+  status_2fa      Boolean         @default(false)
+  secret_2fa      String?
+  transactions    Transaction[]
+  categories      Category[]
+  paymentMethods  PaymentMethod[]
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+}
+
+enum TransactionStatus {
+  PENDENTE
+  PAGO
+  ATRASADO
+}
+
+enum TransactionType {
+  ENTRADA
+  SAIDA
+}
+
+model Transaction {
+  id                String            @id @default(cuid())
+  descricao         String
+  valor             Decimal           @db.Decimal(10, 2)
+  data_lancamento   DateTime          @default(now())
+  data_vencimento   DateTime
+  data_pagamento    DateTime?
+  status            TransactionStatus @default(PENDENTE)
+  tipo              TransactionType
+  
+  userId            String
+  user              User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  categoria_id      String
+  category          Category          @relation(fields: [categoria_id], references: [id])
+  
+  tipo_pagamento_id String?
+  paymentMethod     PaymentMethod?    @relation(fields: [tipo_pagamento_id], references: [id])
+
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+}
+
+model Category {
+  id           String          @id @default(cuid())
+  nome         String
+  cor          String
+  icone        String
+  tipo         TransactionType
+  
+  userId       String
+  user         User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transactions Transaction[]
+
+  @@unique([nome, userId, tipo])
+}
+
+model PaymentMethod {
+  id           String        @id @default(cuid())
+  nome         String
+  
+  userId       String
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transactions Transaction[]
+
+  @@unique([nome, userId])
+}

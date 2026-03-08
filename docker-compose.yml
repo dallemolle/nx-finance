@@ -1,0 +1,32 @@
+services:
+  db:
+    image: postgres:15-alpine
+    container_name: nx-finance-db
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: nx_finance
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  app:
+    build: .
+    container_name: nx-finance-app
+    ports:
+      - "3000:3000"
+    environment:
+      DATABASE_URL: "postgresql://postgres:password@db:5432/nx_finance?schema=public"
+      NEXTAUTH_SECRET: "your-nextauth-secret-more-than-32-chars"
+      NEXTAUTH_URL: "http://localhost:3000"
+      SMTP_HOST: "smtp.example.com"
+      SMTP_PORT: "587"
+      SMTP_USER: "your-email@example.com"
+      SMTP_PASS: "your-smtp-password"
+      EMAIL_FROM: "no-reply@nxfinance.com"
+    depends_on:
+      - db
+
+volumes:
+  postgres_data:

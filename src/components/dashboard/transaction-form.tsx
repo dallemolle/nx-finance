@@ -106,26 +106,26 @@ export function TransactionForm({ categories: initialCategories, paymentMethods:
             <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                     <Label>Tipo</Label>
-                    <Select onValueChange={(v) => setValue("tipo", v as any)} defaultValue={initialData?.tipo || "SAIDA"}>
-                        <SelectTrigger>
+                    <Select onValueChange={(v) => setValue("tipo", v as any)} value={tipo}>
+                        <SelectTrigger className="cursor-pointer">
                             <SelectValue placeholder="Selecione o tipo" />
                         </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="ENTRADA">Receita (Entrada)</SelectItem>
-                            <SelectItem value="SAIDA">Despesa (Saída)</SelectItem>
+                        <SelectContent className="pointer-events-auto">
+                            <SelectItem value="ENTRADA" className="cursor-pointer">Receita (Entrada)</SelectItem>
+                            <SelectItem value="SAIDA" className="cursor-pointer">Despesa (Saída)</SelectItem>
                         </SelectContent>
                     </Select>
                 </div>
 
                 <div className="space-y-2">
                     <Label>Status</Label>
-                    <Select onValueChange={(v) => setValue("status", v as any)} defaultValue={initialData?.status || "PENDENTE"}>
-                        <SelectTrigger>
+                    <Select onValueChange={(v) => setValue("status", v as any)} value={watch("status")}>
+                        <SelectTrigger className="cursor-pointer">
                             <SelectValue placeholder="Selecione o status" />
                         </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="PENDENTE">Pendente</SelectItem>
-                            <SelectItem value="PAGO">Pago</SelectItem>
+                        <SelectContent className="pointer-events-auto">
+                            <SelectItem value="PENDENTE" className="cursor-pointer">Pendente</SelectItem>
+                            <SelectItem value="PAGO" className="cursor-pointer">Pago</SelectItem>
                         </SelectContent>
                     </Select>
                 </div>

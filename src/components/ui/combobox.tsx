@@ -98,6 +98,7 @@ export function Combobox({
                                         setOpen(false)
                                         setSearch("")
                                     }}
+                                    className="cursor-pointer"
                                 >
                                     <Check
                                         className={cn(
@@ -116,7 +117,7 @@ export function Combobox({
                                         setOpen(false)
                                         setSearch("")
                                     }}
-                                    className="text-primary font-medium"
+                                    className="text-primary font-medium cursor-pointer"
                                 >
                                     <Plus className="mr-2 h-4 w-4" />
                                     Criar "{search}"

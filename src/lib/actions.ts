@@ -58,14 +58,15 @@ export async function createCategory(data: any) {
     const userId = await getUserId();
     const validatedData = categorySchema.parse(data);
 
-    // Check if category already exists for this user and type
-    const existing = await db.category.findUnique({
+    // Check if category already exists for this user and type (case-insensitive)
+    const existing = await db.category.findFirst({
         where: {
-            nome_userId_tipo: {
-                nome: validatedData.nome,
-                userId,
-                tipo: validatedData.tipo,
+            nome: {
+                equals: validatedData.nome,
+                mode: 'insensitive'
             },
+            userId,
+            tipo: validatedData.tipo,
         },
     });
 

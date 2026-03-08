@@ -66,13 +66,6 @@ export function Combobox({
                         placeholder={searchPlaceholder}
                         value={search}
                         onValueChange={setSearch}
-                        onKeyDown={(e) => {
-                            if (e.key === "Enter" && search && onAdd && options.filter(o => o.label.toLowerCase().includes(search.toLowerCase())).length === 0) {
-                                onAdd(search)
-                                setOpen(false)
-                                setSearch("")
-                            }
-                        }}
                     />
                     <CommandList>
                         <CommandEmpty>
@@ -96,6 +89,26 @@ export function Combobox({
                             </div>
                         </CommandEmpty>
                         <CommandGroup>
+                            {options.map((option) => (
+                                <CommandItem
+                                    key={option.value}
+                                    value={option.label}
+                                    onSelect={() => {
+                                        onValueChange(option.value)
+                                        setOpen(false)
+                                        setSearch("")
+                                    }}
+                                    className="cursor-pointer"
+                                >
+                                    <Check
+                                        className={cn(
+                                            "mr-2 h-4 w-4",
+                                            value === option.value ? "opacity-100" : "opacity-0"
+                                        )}
+                                    />
+                                    {option.label}
+                                </CommandItem>
+                            ))}
                             {onAdd && search && options.every(o => o.label.toLowerCase() !== search.toLowerCase()) && (
                                 <CommandItem
                                     value={search}
@@ -110,25 +123,6 @@ export function Combobox({
                                     Criar "{search}"
                                 </CommandItem>
                             )}
-                            {options.map((option) => (
-                                <CommandItem
-                                    key={option.value}
-                                    value={option.label}
-                                    onSelect={() => {
-                                        onValueChange(option.value)
-                                        setOpen(false)
-                                        setSearch("")
-                                    }}
-                                >
-                                    <Check
-                                        className={cn(
-                                            "mr-2 h-4 w-4",
-                                            value === option.value ? "opacity-100" : "opacity-0"
-                                        )}
-                                    />
-                                    {option.label}
-                                </CommandItem>
-                            ))}
                         </CommandGroup>
                     </CommandList>
                 </Command>

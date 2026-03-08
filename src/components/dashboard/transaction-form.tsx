@@ -1,170 +1,194 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import * as z from "zod";
 import { transactionSchema } from "@/lib/validations";
-import { createTransaction, updateTransaction, getCategories, getPaymentMethods } from "@/lib/actions";
+import { createTransaction, updateTransaction, createCategory, createPaymentMethod } from "@/lib/actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Combobox } from "@/components/ui/combobox";
-import { useEffect, useState } from "react";
-import { Loader2 } from "lucide-react";
 
-export function TransactionForm({ userId, initialData, onSuccess }: any) {
+interface TransactionFormProps {
+    categories: any[];
+    paymentMethods: any[];
+    initialData?: any;
+    onSuccess: () => void;
+}
+
+export function TransactionForm({ categories: initialCategories, paymentMethods: initialPaymentMethods, initialData, onSuccess }: TransactionFormProps) {
     const [loading, setLoading] = useState(false);
-    const [categories, setCategories] = useState<any[]>([]);
-    const [paymentMethods, setPaymentMethods] = useState<any[]>([]);
+    const [error, setError] = useState<string | null>(null);
+    const [categories, setCategories] = useState(initialCategories);
+    const [paymentMethods, setPaymentMethods] = useState(initialPaymentMethods);
 
-    const form = useForm<z.infer<typeof transactionSchema>>({
+    // Sync state with props when they change (e.g. after async fetch)
+    useEffect(() => {
+        setCategories(initialCategories);
+    }, [initialCategories]);
+
+    useEffect(() => {
+        setPaymentMethods(initialPaymentMethods);
+    }, [initialPaymentMethods]);
+
+    const { register, handleSubmit, setValue, watch, formState: { errors } } = useForm({
         resolver: zodResolver(transactionSchema),
         defaultValues: initialData ? {
             ...initialData,
-            valor: initialData.valor.toString(),
-            data_vencimento: new Date(initialData.data_vencimento)
+            data_vencimento: new Date(initialData.data_vencimento),
+            valor: Number(initialData.valor),
         } : {
             tipo: "SAIDA",
             status: "PENDENTE",
             data_vencimento: new Date(),
-        },
+        }
     });
 
-    useEffect(() => {
-        async function loadOptions() {
-            const [cats, pm] = await Promise.all([
-                getCategories(userId),
-                getPaymentMethods(userId)
-            ]);
-            setCategories(cats);
-            setPaymentMethods(pm);
-        }
-        loadOptions();
-    }, [userId]);
+    const tipo = watch("tipo");
+    const dataVencimento = watch("data_vencimento");
+    const categoriaId = watch("categoria_id");
+    const paymentMethodId = watch("tipo_pagamento_id");
 
-    async function onSubmit(values: z.infer<typeof transactionSchema>) {
+    const onSubmit = async (data: any) => {
         setLoading(true);
+        setError(null);
         try {
-            if (initialData) {
-                await updateTransaction(initialData.id, values);
+            if (initialData?.id) {
+                await updateTransaction(initialData.id, data);
             } else {
-                await createTransaction({ ...values, userId });
+                await createTransaction(data);
             }
             onSuccess();
-        } catch (error) {
-            console.error(error);
+        } catch (err: any) {
+            setError(err.message || "Erro ao salvar transação");
         } finally {
             setLoading(false);
         }
-    }
+    };
+
+    const handleAddCategory = async (name: string) => {
+        try {
+            const newCat = await createCategory({
+                nome: name,
+                cor: "#3b82f6", // Default blue
+                icone: "Wallet", // Default icon
+                tipo: tipo,
+            });
+            setCategories([...categories, newCat]);
+            setValue("categoria_id", newCat.id);
+        } catch (err: any) {
+            setError("Erro ao criar categoria: " + err.message);
+        }
+    };
+
+    const handleAddPaymentMethod = async (name: string) => {
+        try {
+            const newPM = await createPaymentMethod({ nome: name });
+            setPaymentMethods([...paymentMethods, newPM]);
+            setValue("tipo_pagamento_id", newPM.id);
+        } catch (err: any) {
+            setError("Erro ao criar meio de pagamento: " + err.message);
+        }
+    };
 
     return (
-        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
-            <div className="flex justify-center mb-4">
-                <Tabs
-                    value={form.watch("tipo")}
-                    onValueChange={(v: any) => form.setValue("tipo", v)}
-                    className="w-full"
-                >
-                    <TabsList className="grid w-full grid-cols-2 p-1 bg-muted/50 rounded-xl max-w-[300px] mx-auto">
-                        <TabsTrigger value="SAIDA" className="rounded-lg data-[state=active]:bg-rose-500 data-[state=active]:text-white">Despesa</TabsTrigger>
-                        <TabsTrigger value="ENTRADA" className="rounded-lg data-[state=active]:bg-emerald-500 data-[state=active]:text-white">Receita</TabsTrigger>
-                    </TabsList>
-                </Tabs>
-            </div>
+        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 py-4">
+            {error && (
+                <Alert variant="destructive">
+                    <AlertDescription>{error}</AlertDescription>
+                </Alert>
+            )}
 
             <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                    <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Valor</Label>
-                    <div className="relative">
-                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground font-medium">R$</span>
-                        <Input
-                            placeholder="0,00"
-                            className="pl-9 h-11 text-lg font-semibold rounded-xl bg-background/50 border-muted group-focus-within:border-primary"
-                            {...form.register("valor")}
-                        />
-                    </div>
+                    <Label>Tipo</Label>
+                    <Select onValueChange={(v) => setValue("tipo", v as any)} defaultValue={initialData?.tipo || "SAIDA"}>
+                        <SelectTrigger>
+                            <SelectValue placeholder="Selecione o tipo" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="ENTRADA">Receita (Entrada)</SelectItem>
+                            <SelectItem value="SAIDA">Despesa (Saída)</SelectItem>
+                        </SelectContent>
+                    </Select>
                 </div>
 
                 <div className="space-y-2">
-                    <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Status</Label>
-                    <Select
-                        value={form.watch("status")}
-                        onValueChange={(v: any) => form.setValue("status", v)}
-                    >
-                        <SelectTrigger className="h-11 rounded-xl bg-background/50 border-muted">
-                            <SelectValue />
+                    <Label>Status</Label>
+                    <Select onValueChange={(v) => setValue("status", v as any)} defaultValue={initialData?.status || "PENDENTE"}>
+                        <SelectTrigger>
+                            <SelectValue placeholder="Selecione o status" />
                         </SelectTrigger>
                         <SelectContent>
                             <SelectItem value="PENDENTE">Pendente</SelectItem>
                             <SelectItem value="PAGO">Pago</SelectItem>
-                            <SelectItem value="ATRASADO">Atrasado</SelectItem>
                         </SelectContent>
                     </Select>
                 </div>
             </div>
 
             <div className="space-y-2">
-                <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Descrição</Label>
-                <Input
-                    placeholder="Ex: Aluguel, Supermercado..."
-                    className="h-11 rounded-xl bg-background/50 border-muted"
-                    {...form.register("descricao")}
-                />
+                <Label htmlFor="descricao">Descrição</Label>
+                <Input id="descricao" {...register("descricao")} placeholder="Ex: Aluguel, Salário, etc" />
+                {errors.descricao && <p className="text-xs text-red-500">{errors.descricao.message as string}</p>}
             </div>
 
             <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                    <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Vencimento</Label>
-                    <DatePicker
-                        date={form.watch("data_vencimento")}
-                        setDate={(d) => d && form.setValue("data_vencimento", d)}
-                    />
+                    <Label htmlFor="valor">Valor (R$)</Label>
+                    <Input id="valor" type="number" step="0.01" {...register("valor")} placeholder="0,00" />
+                    {errors.valor && <p className="text-xs text-red-500">{errors.valor.message as string}</p>}
                 </div>
 
                 <div className="space-y-2">
-                    <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Categoria</Label>
+                    <Label>Data de Vencimento</Label>
+                    <DatePicker
+                        date={dataVencimento}
+                        setDate={(d) => setValue("data_vencimento", d as Date)}
+                    />
+                    {errors.data_vencimento && <p className="text-xs text-red-500">{errors.data_vencimento.message as string}</p>}
+                </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                    <Label>Categoria</Label>
                     <Combobox
-                        options={categories.filter(c => c.tipo === form.watch("tipo")).map(c => ({
-                            label: c.nome,
-                            value: c.id,
-                            color: c.cor
-                        }))}
-                        value={form.watch("categoria_id")}
-                        onChange={(v) => form.setValue("categoria_id", v)}
-                        placeholder="Selecione..."
-                        onAdd={(name) => console.log("Add cat:", name)}
+                        options={categories
+                            .filter(c => c.tipo === tipo)
+                            .map(c => ({ value: c.id, label: c.nome }))
+                        }
+                        value={categoriaId}
+                        onValueChange={(v) => setValue("categoria_id", v)}
+                        onAdd={handleAddCategory}
+                        placeholder="Selecione ou crie..."
+                        searchPlaceholder="Procurar categoria..."
+                        emptyMessage="Categoria não encontrada."
+                    />
+                    {errors.categoria_id && <p className="text-xs text-red-500">{errors.categoria_id.message as string}</p>}
+                </div>
+
+                <div className="space-y-2">
+                    <Label>Meio de Pagamento</Label>
+                    <Combobox
+                        options={paymentMethods.map(p => ({ value: p.id, label: p.nome }))}
+                        value={paymentMethodId}
+                        onValueChange={(v) => setValue("tipo_pagamento_id", v)}
+                        onAdd={handleAddPaymentMethod}
+                        placeholder="Selecione ou crie..."
+                        searchPlaceholder="Procurar meio..."
+                        emptyMessage="Não encontrado."
                     />
                 </div>
             </div>
 
-            <div className="space-y-2">
-                <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Forma de Pagamento</Label>
-                <Combobox
-                    options={paymentMethods.map(p => ({
-                        label: p.nome,
-                        value: p.id
-                    }))}
-                    value={form.watch("tipo_pagamento_id") || ""}
-                    onChange={(v) => form.setValue("tipo_pagamento_id", v)}
-                    placeholder="Selecione..."
-                    onAdd={(name) => console.log("Add method:", name)}
-                />
-            </div>
-
-            <div className="pt-4">
-                <Button
-                    type="submit"
-                    className="w-full h-12 text-lg font-bold rounded-xl shadow-xl shadow-primary/20 bg-primary hover:bg-primary/90 transition-all active:scale-95"
-                    disabled={loading}
-                >
-                    {loading && <Loader2 className="mr-2 h-5 w-5 animate-spin" />}
-                    {initialData ? "Atualizar" : "Salvar Lançamento"}
-                </Button>
-            </div>
+            <Button type="submit" className="w-full" disabled={loading}>
+                {loading ? "Salvando..." : initialData ? "Atualizar Registro" : "Adicionar Transação"}
+            </Button>
         </form>
     );
 }

@@ -1,37 +1,41 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Plus } from "lucide-react";
-import {
-    Dialog,
-    DialogContent,
-    DialogHeader,
-    DialogTitle,
-    DialogTrigger,
-} from "@/components/ui/dialog";
 import { TransactionForm } from "./transaction-form";
+import { getCategories, getPaymentMethods } from "@/lib/reports";
+import { Plus } from "lucide-react";
 
 export function NewTransactionDialog({ userId }: { userId: string }) {
     const [open, setOpen] = useState(false);
+    const [categories, setCategories] = useState<any[]>([]);
+    const [paymentMethods, setPaymentMethods] = useState<any[]>([]);
+
+    useEffect(() => {
+        if (open) {
+            getCategories(userId).then(setCategories);
+            getPaymentMethods(userId).then(setPaymentMethods);
+        }
+    }, [open, userId]);
 
     return (
         <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
-                <Button className="rounded-xl px-6 bg-primary hover:bg-primary/90 shadow-lg shadow-primary/20 transition-all hover:scale-105 active:scale-95">
-                    <Plus className="mr-2 h-4 w-4" /> Novo Lançamento
+                <Button className="flex items-center gap-2">
+                    <Plus className="h-4 w-4" />
+                    Nova Transação
                 </Button>
             </DialogTrigger>
-            <DialogContent className="sm:max-w-[500px] p-0 overflow-hidden border-none shadow-2xl">
-                <div className="p-6 bg-gradient-to-br from-background to-muted/30">
-                    <DialogHeader className="mb-6">
-                        <DialogTitle className="text-2xl font-bold tracking-tight">Nova Transação</DialogTitle>
-                    </DialogHeader>
-                    <TransactionForm
-                        userId={userId}
-                        onSuccess={() => setOpen(false)}
-                    />
-                </div>
+            <DialogContent className="sm:max-w-[425px]">
+                <DialogHeader>
+                    <DialogTitle>Adicionar Transação</DialogTitle>
+                </DialogHeader>
+                <TransactionForm
+                    categories={categories}
+                    paymentMethods={paymentMethods}
+                    onSuccess={() => setOpen(false)}
+                />
             </DialogContent>
         </Dialog>
     );

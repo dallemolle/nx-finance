@@ -1,10 +1,10 @@
-"use client";
+"use client"
 
-import * as React from "react";
-import { Check, ChevronsUpDown, Plus } from "lucide-react";
+import * as React from "react"
+import { Check, ChevronsUpDown, Plus } from "lucide-react"
 
-import { cn } from "@/lib/utils";
-import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils"
+import { Button } from "@/components/ui/button"
 import {
     Command,
     CommandEmpty,
@@ -12,26 +12,34 @@ import {
     CommandInput,
     CommandItem,
     CommandList,
-} from "@/components/ui/command";
+} from "@/components/ui/command"
 import {
     Popover,
     PopoverContent,
     PopoverTrigger,
-} from "@/components/ui/popover";
+} from "@/components/ui/popover"
 
 interface ComboboxProps {
-    options: { label: string; value: string; color?: string }[];
-    value: string;
-    onChange: (value: string) => void;
-    placeholder?: string;
-    onAdd?: (name: string) => void;
+    options: { value: string; label: string }[]
+    value: string
+    onValueChange: (value: string) => void
+    onAdd?: (search: string) => void
+    placeholder?: string
+    searchPlaceholder?: string
+    emptyMessage?: string
 }
 
-export function Combobox({ options, value, onChange, placeholder, onAdd }: ComboboxProps) {
-    const [open, setOpen] = React.useState(false);
-    const [searchValue, setSearchValue] = React.useState("");
-
-    const selectedOption = options.find((opt) => opt.value === value);
+export function Combobox({
+    options,
+    value,
+    onValueChange,
+    onAdd,
+    placeholder = "Selecione uma opção...",
+    searchPlaceholder = "Procurar...",
+    emptyMessage = "Nenhum resultado encontrado.",
+}: ComboboxProps) {
+    const [open, setOpen] = React.useState(false)
+    const [search, setSearch] = React.useState("")
 
     return (
         <Popover open={open} onOpenChange={setOpen}>
@@ -40,48 +48,45 @@ export function Combobox({ options, value, onChange, placeholder, onAdd }: Combo
                     variant="outline"
                     role="combobox"
                     aria-expanded={open}
-                    className="w-full justify-between h-11 rounded-xl bg-background/50 border-muted font-normal text-muted-foreground"
+                    className="w-full justify-between"
                 >
-                    {selectedOption ? (
-                        <div className="flex items-center gap-2">
-                            {selectedOption.color && (
-                                <div
-                                    className="w-3 h-3 rounded-full"
-                                    style={{ backgroundColor: selectedOption.color }}
-                                />
-                            )}
-                            <span className="text-foreground">{selectedOption.label}</span>
-                        </div>
-                    ) : (
-                        placeholder || "Selecionar..."
-                    )}
+                    {value
+                        ? options.find((option) => option.value === value)?.label
+                        : placeholder}
                     <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                 </Button>
             </PopoverTrigger>
-            <PopoverContent className="w-[--radix-popover-trigger-width] p-0 rounded-xl overflow-hidden border-none shadow-2xl">
-                <Command>
+            <PopoverContent
+                className="p-0 pointer-events-auto"
+                style={{ width: 'var(--radix-popover-trigger-width)' }}
+                align="start"
+            >
+                <Command shouldFilter={true}>
                     <CommandInput
-                        placeholder="Pesquisar..."
-                        value={searchValue}
-                        onValueChange={setSearchValue}
+                        placeholder={searchPlaceholder}
+                        value={search}
+                        onValueChange={setSearch}
                     />
                     <CommandList>
-                        <CommandEmpty className="p-2">
-                            <p className="text-xs text-muted-foreground mb-2 text-center">Nenhum resultado.</p>
-                            {onAdd && (
-                                <Button
-                                    variant="secondary"
-                                    size="sm"
-                                    className="w-full text-xs h-8 rounded-lg"
-                                    onClick={() => {
-                                        onAdd(searchValue);
-                                        setOpen(false);
-                                    }}
-                                >
-                                    <Plus className="mr-2 h-3 w-3" />
-                                    Adicionar "{searchValue}"
-                                </Button>
-                            )}
+                        <CommandEmpty>
+                            <div className="flex flex-col items-center gap-2 p-4">
+                                <p className="text-sm text-muted-foreground">{emptyMessage}</p>
+                                {onAdd && search && (
+                                    <Button
+                                        variant="secondary"
+                                        size="sm"
+                                        className="w-full flex items-center justify-center gap-2"
+                                        onClick={() => {
+                                            onAdd(search)
+                                            setOpen(false)
+                                            setSearch("")
+                                        }}
+                                    >
+                                        <Plus className="h-4 w-4" />
+                                        Criar "{search}"
+                                    </Button>
+                                )}
+                            </div>
                         </CommandEmpty>
                         <CommandGroup>
                             {options.map((option) => (
@@ -89,10 +94,10 @@ export function Combobox({ options, value, onChange, placeholder, onAdd }: Combo
                                     key={option.value}
                                     value={option.label}
                                     onSelect={() => {
-                                        onChange(option.value);
-                                        setOpen(false);
+                                        onValueChange(option.value)
+                                        setOpen(false)
+                                        setSearch("")
                                     }}
-                                    className="rounded-lg m-1"
                                 >
                                     <Check
                                         className={cn(
@@ -100,21 +105,27 @@ export function Combobox({ options, value, onChange, placeholder, onAdd }: Combo
                                             value === option.value ? "opacity-100" : "opacity-0"
                                         )}
                                     />
-                                    <div className="flex items-center gap-2">
-                                        {option.color && (
-                                            <div
-                                                className="w-2.5 h-2.5 rounded-full"
-                                                style={{ backgroundColor: option.color }}
-                                            />
-                                        )}
-                                        {option.label}
-                                    </div>
+                                    {option.label}
                                 </CommandItem>
                             ))}
+                            {onAdd && search && options.every(o => o.label.toLowerCase() !== search.toLowerCase()) && (
+                                <CommandItem
+                                    value={search}
+                                    onSelect={() => {
+                                        onAdd(search)
+                                        setOpen(false)
+                                        setSearch("")
+                                    }}
+                                    className="text-primary font-medium"
+                                >
+                                    <Plus className="mr-2 h-4 w-4" />
+                                    Criar "{search}"
+                                </CommandItem>
+                            )}
                         </CommandGroup>
                     </CommandList>
                 </Command>
             </PopoverContent>
         </Popover>
-    );
+    )
 }

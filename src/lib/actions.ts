@@ -2,74 +2,113 @@
 
 import { db } from "@/lib/db";
 import { revalidatePath } from "next/cache";
+import { categorySchema, paymentMethodSchema, transactionSchema } from "@/lib/validations";
+import { authOptions } from "@/lib/auth";
+import { getServerSession } from "next-auth";
 
+async function getUserId() {
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.id) throw new Error("Não autorizado");
+    return session.user.id;
+}
+
+// Transaction Actions
 export async function createTransaction(data: any) {
+    const userId = await getUserId();
+    const validatedData = transactionSchema.parse(data);
+
     const transaction = await db.transaction.create({
         data: {
-            descricao: data.descricao,
-            valor: parseFloat(data.valor),
-            tipo: data.tipo,
-            status: data.status || "PENDENTE",
-            data_vencimento: new Date(data.data_vencimento),
-            userId: data.userId,
-            categoria_id: data.categoria_id,
-            tipo_pagamento_id: data.tipo_pagamento_id,
+            ...validatedData,
+            userId,
         },
     });
-    revalidatePath("/");
+
+    revalidatePath("/dashboard");
     revalidatePath("/reports");
     return transaction;
 }
 
 export async function updateTransaction(id: string, data: any) {
+    const userId = await getUserId();
+    const validatedData = transactionSchema.parse(data);
+
     const transaction = await db.transaction.update({
-        where: { id },
-        data: {
-            descricao: data.descricao,
-            valor: parseFloat(data.valor),
-            tipo: data.tipo,
-            status: data.status,
-            data_vencimento: new Date(data.data_vencimento),
-            categoria_id: data.categoria_id,
-            tipo_pagamento_id: data.tipo_pagamento_id,
-        },
+        where: { id, userId },
+        data: validatedData,
     });
-    revalidatePath("/");
+
+    revalidatePath("/dashboard");
     revalidatePath("/reports");
     return transaction;
 }
 
 export async function deleteTransaction(id: string) {
-    await db.transaction.delete({ where: { id } });
-    revalidatePath("/");
+    const userId = await getUserId();
+    await db.transaction.delete({
+        where: { id, userId },
+    });
+
+    revalidatePath("/dashboard");
     revalidatePath("/reports");
 }
 
-export async function getCategories(userId: string) {
-    return db.category.findMany({ where: { userId } });
-}
-
-export async function getPaymentMethods(userId: string) {
-    return db.paymentMethod.findMany({ where: { userId } });
-}
-
+// Category Actions
 export async function createCategory(data: any) {
-    return db.category.create({
-        data: {
-            nome: data.nome,
-            cor: data.cor || "#000000",
-            icone: data.icone || "Tag",
-            tipo: data.tipo,
-            userId: data.userId,
+    const userId = await getUserId();
+    const validatedData = categorySchema.parse(data);
+
+    // Check if category already exists for this user and type (case-insensitive)
+    const existing = await db.category.findFirst({
+        where: {
+            nome: {
+                equals: validatedData.nome,
+                mode: 'insensitive'
+            },
+            userId,
+            tipo: validatedData.tipo,
         },
     });
+
+    if (existing) return existing;
+
+    const category = await db.category.create({
+        data: {
+            ...validatedData,
+            userId,
+        },
+    });
+
+    revalidatePath("/dashboard");
+    revalidatePath("/reports");
+    return category;
 }
 
+// Payment Method Actions
 export async function createPaymentMethod(data: any) {
-    return db.paymentMethod.create({
-        data: {
-            nome: data.nome,
-            userId: data.userId,
+    const userId = await getUserId();
+    const validatedData = paymentMethodSchema.parse(data);
+
+    // Check if payment method already exists for this user
+    const existing = await db.paymentMethod.findUnique({
+        where: {
+            nome_userId: {
+                nome: validatedData.nome,
+                userId,
+            },
         },
     });
+
+    if (existing) return existing;
+
+    const paymentMethod = await db.paymentMethod.create({
+        data: {
+            ...validatedData,
+            userId,
+        },
+    });
+
+    revalidatePath("/dashboard");
+    revalidatePath("/reports");
+    return paymentMethod;
 }

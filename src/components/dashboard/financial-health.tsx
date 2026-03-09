@@ -13,7 +13,7 @@ export function FinancialHealth({ score }: FinancialHealthProps) {
     const clampedScore = Math.min(score, 100);
     const getStatus = () => {
         if (score < 50) return { label: "Excelente", color: "text-emerald-500", bg: "bg-emerald-500" };
-        if (score < 80) return { label: "Boa", color: "text-blue-500", bg: "bg-blue-500" };
+        if (score < 80) return { label: "Boa", color: "text-indigo-500", bg: "bg-indigo-500" };
         if (score < 100) return { label: "Alerta", color: "text-orange-500", bg: "bg-orange-500" };
         return { label: "Crítica", color: "text-rose-500", bg: "bg-rose-500" };
     };

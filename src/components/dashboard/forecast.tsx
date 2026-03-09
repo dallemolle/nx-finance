@@ -17,7 +17,7 @@ export function Forecast({ forecast, daysPassed, totalDays }: ForecastProps) {
         <Card className="border-none shadow-lg bg-white dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-800">
             <CardHeader className="flex flex-row items-center justify-between pb-2">
                 <CardTitle className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Projeção do Mês</CardTitle>
-                <Calculator className="w-4 h-4 text-blue-500" />
+                <Calculator className="w-4 h-4 text-indigo-400" />
             </CardHeader>
             <CardContent className="space-y-4">
                 <div className="flex flex-col">
@@ -25,10 +25,10 @@ export function Forecast({ forecast, daysPassed, totalDays }: ForecastProps) {
                     <span className="text-[10px] text-muted-foreground font-medium uppercase tracking-tight">Estimativa Final</span>
                 </div>
 
-                <div className="p-3 rounded-lg bg-blue-50/50 dark:bg-blue-900/10 border border-blue-100/50 dark:border-blue-900/20">
+                <div className="p-3 rounded-lg bg-slate-50 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800">
                     <div className="flex items-start gap-2">
-                        <AlertTriangle className="w-4 h-4 text-blue-600 mt-0.5" />
-                        <p className="text-xs text-blue-700 dark:text-blue-300 leading-tight">
+                        <AlertTriangle className="w-4 h-4 text-indigo-500 mt-0.5" />
+                        <p className="text-xs text-slate-600 dark:text-slate-400 leading-tight">
                             Com base nos {daysPassed} dias decorridos, você deve fechar o mês com este valor em saídas.
                         </p>
                     </div>

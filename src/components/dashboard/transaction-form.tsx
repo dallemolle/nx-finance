@@ -14,6 +14,9 @@ import { DatePicker } from "@/components/ui/date-picker";
 import { Combobox } from "@/components/ui/combobox";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
+import { Switch } from "@/components/ui/switch";
+import { addMonths, format } from "date-fns";
+import { ptBR } from "date-fns/locale";
 
 interface TransactionFormProps {
     categories: any[];
@@ -54,6 +57,8 @@ export function TransactionForm({ categories: initialCategories, paymentMethods:
     const dataVencimento = watch("data_vencimento");
     const categoriaId = watch("categoria_id");
     const paymentMethodId = watch("tipo_pagamento_id");
+    const isInstallment = watch("isInstallment");
+    const installmentsCount = watch("installmentsCount");
 
     const onSubmit = (data: any) => {
         setError(null);
@@ -193,6 +198,46 @@ export function TransactionForm({ categories: initialCategories, paymentMethods:
                     />
                 </div>
             </div>
+
+            {tipo === "SAIDA" && !initialData && (
+                <div className="space-y-4 rounded-lg border p-4 bg-muted/20">
+                    <div className="flex items-center justify-between">
+                        <div className="space-y-0.5">
+                            <Label>Despesa Parcelada?</Label>
+                            <p className="text-xs text-muted-foreground">O valor total será dividido entre as parcelas.</p>
+                        </div>
+                        <Switch
+                            checked={isInstallment}
+                            onCheckedChange={(checked) => {
+                                setValue("isInstallment", checked);
+                                if (checked && !installmentsCount) {
+                                    setValue("installmentsCount", 2);
+                                }
+                            }}
+                        />
+                    </div>
+
+                    {isInstallment && (
+                        <div className="space-y-2 animate-in fade-in slide-in-from-top-2 duration-300">
+                            <Label htmlFor="installmentsCount">Quantidade de Parcelas</Label>
+                            <Input
+                                id="installmentsCount"
+                                type="number"
+                                min={2}
+                                max={48}
+                                {...register("installmentsCount")}
+                                placeholder="Ex: 12"
+                            />
+                            {errors.installmentsCount && <p className="text-xs text-red-500">{errors.installmentsCount.message as string}</p>}
+                            {watch("valor") > 0 && installmentsCount > 0 && (
+                                <p className="text-xs text-blue-500 font-medium">
+                                    {installmentsCount} parcelas de {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(watch("valor") / installmentsCount)}
+                                </p>
+                            )}
+                        </div>
+                    )}
+                </div>
+            )}
 
             <Button type="submit" className="w-full" disabled={isPending}>
                 {isPending ? (

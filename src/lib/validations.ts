@@ -12,6 +12,16 @@ export const transactionSchema = z.object({
     tipo: TransactionType,
     categoria_id: z.string().min(1, "Categoria é obrigatória"),
     tipo_pagamento_id: z.string().optional().nullable(),
+    isInstallment: z.boolean().default(false),
+    installmentsCount: z.coerce.number().min(2, "Mínimo de 2 parcelas").max(48, "Máximo de 48 parcelas").optional().nullable(),
+}).refine((data) => {
+    if (data.isInstallment && !data.installmentsCount) {
+        return false;
+    }
+    return true;
+}, {
+    message: "Quantidade de parcelas é obrigatória para despesas parceladas",
+    path: ["installmentsCount"],
 });
 
 export const categorySchema = z.object({

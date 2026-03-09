@@ -5,6 +5,8 @@ import { revalidatePath } from "next/cache";
 import { categorySchema, paymentMethodSchema, transactionSchema } from "@/lib/validations";
 import { authOptions } from "@/lib/auth";
 import { getServerSession } from "next-auth";
+import { addMonths, format } from "date-fns";
+import { ptBR } from "date-fns/locale";
 
 async function getUserId() {
     const session = await getServerSession(authOptions);
@@ -17,10 +19,35 @@ export async function createTransaction(data: any) {
     try {
         const userId = await getUserId();
         const validatedData = transactionSchema.parse(data);
+        const { isInstallment, installmentsCount, ...rest } = validatedData;
+
+        if (isInstallment && installmentsCount && installmentsCount > 1) {
+            const installmentValue = rest.valor / installmentsCount;
+            const transactions = await db.$transaction(
+                Array.from({ length: installmentsCount }).map((_, i) => {
+                    const dueDate = addMonths(new Date(rest.data_vencimento), i);
+                    const description = `${rest.descricao} (${String(i + 1).padStart(2, '0')}/${String(installmentsCount).padStart(2, '0')})`;
+
+                    return db.transaction.create({
+                        data: {
+                            ...rest,
+                            descricao: description,
+                            valor: installmentValue,
+                            data_vencimento: dueDate,
+                            userId,
+                        },
+                    });
+                })
+            );
+
+            revalidatePath("/dashboard");
+            revalidatePath("/reports");
+            return { success: true, data: transactions[0] };
+        }
 
         const transaction = await db.transaction.create({
             data: {
-                ...validatedData,
+                ...rest,
                 userId,
             },
         });

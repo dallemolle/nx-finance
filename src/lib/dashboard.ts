@@ -1,74 +1,103 @@
 "use server";
 
 import { db } from "@/lib/db";
-import { startOfMonth, endOfMonth, isBefore, isAfter } from "date-fns";
+import { startOfMonth, endOfMonth, isBefore, subMonths, getDaysInMonth } from "date-fns";
 
 export async function getDashboardData(userId: string, month: number, year: number) {
-    const startDate = startOfMonth(new Date(year, month - 1));
-    const endDate = endOfMonth(new Date(year, month - 1));
+    const targetDate = new Date(year, month - 1);
+    const startDate = startOfMonth(targetDate);
+    const endDate = endOfMonth(targetDate);
 
-    const transactions = await db.transaction.findMany({
-        where: {
-            userId,
-            data_vencimento: {
-                gte: startDate,
-                lte: endDate,
-            },
-        },
-        include: {
-            category: true,
-        },
-        orderBy: {
-            data_vencimento: "desc",
-        },
-    });
+    const prevMonthDate = subMonths(targetDate, 1);
+    const prevStartDate = startOfMonth(prevMonthDate);
+    const prevEndDate = endOfMonth(prevMonthDate);
 
-    const summary = transactions.reduce(
-        (acc: { totalEntradas: number; totalSaidas: number }, t: any) => {
+    // Fetch current and previous month transactions
+    const [transactions, prevTransactions] = await Promise.all([
+        db.transaction.findMany({
+            where: { userId, data_vencimento: { gte: startDate, lte: endDate } },
+            include: { category: true },
+            orderBy: { data_vencimento: "desc" },
+        }),
+        db.transaction.findMany({
+            where: { userId, data_vencimento: { gte: prevStartDate, lte: prevEndDate } },
+        })
+    ]);
+
+    const calculateTotals = (data: any[]) => data.reduce(
+        (acc, t) => {
             const valor = Number(t.valor);
-            if (t.tipo === "ENTRADA") {
-                acc.totalEntradas += valor;
-            } else {
-                acc.totalSaidas += valor;
-            }
+            if (t.tipo === "ENTRADA") acc.totalEntradas += valor;
+            else acc.totalSaidas += valor;
             return acc;
         },
         { totalEntradas: 0, totalSaidas: 0 }
     );
 
-    const saldoTotal = summary.totalEntradas - summary.totalSaidas;
+    const currentSummary = calculateTotals(transactions);
+    const prevSummary = calculateTotals(prevTransactions);
 
-    // Pie chart data
+    const calculateDelta = (curr: number, prev: number) => {
+        if (prev === 0) return 0;
+        return ((curr - prev) / prev) * 100;
+    };
+
+    const saldoTotal = currentSummary.totalEntradas - currentSummary.totalSaidas;
+
+    // Intelligent Category Grouping
+    const groupName = (name: string) => {
+        const n = name.toLowerCase().trim();
+        if (n.startsWith("mercado") || n.startsWith("mer")) return "Mercado";
+        if (n.startsWith("comida") || n.startsWith("restaurante") || n.startsWith("ifood")) return "Alimentação";
+        return name;
+    };
+
     const categoryData = transactions
         .filter((t: any) => t.tipo === "SAIDA")
         .reduce((acc: any[], t: any) => {
-            const categoryName = t.category.nome;
+            const name = groupName(t.category.nome);
             const valor = Number(t.valor);
-            const existing = acc.find((item: any) => item.name === categoryName);
+            const existing = acc.find((item: any) => item.name === name);
             if (existing) {
                 existing.value += valor;
             } else {
-                acc.push({ name: categoryName, value: valor, fill: t.category.cor });
+                acc.push({ name, value: valor, fill: t.category.cor });
             }
             return acc;
         }, [] as { name: string; value: number; fill: string }[]);
 
+    // Monthly Forecast & Health
+    const today = new Date();
+    const isCurrentMonth = today.getMonth() === targetDate.getMonth() && today.getFullYear() === targetDate.getFullYear();
+    const daysPassed = isCurrentMonth ? today.getDate() : getDaysInMonth(targetDate);
+    const dailyAverage = currentSummary.totalSaidas / daysPassed;
+    const forecast = dailyAverage * getDaysInMonth(targetDate);
+
+    const healthScore = currentSummary.totalEntradas > 0
+        ? (currentSummary.totalSaidas / currentSummary.totalEntradas) * 100
+        : currentSummary.totalSaidas > 0 ? 100 : 0;
+
     const monthlyTransactions = transactions.map((t: any) => {
-        // Rule: data_vencimento < today and status != PAID => OVERDUE
         const isOverdue = t.status !== "PAGO" && isBefore(t.data_vencimento, new Date());
-        return {
-            ...t,
-            status: isOverdue ? "ATRASADO" : t.status
-        } as any;
+        return { ...t, status: isOverdue ? "ATRASADO" : t.status };
     });
 
     return {
         summary: {
             saldoTotal,
-            totalEntradas: summary.totalEntradas,
-            totalSaidas: summary.totalSaidas,
+            totalEntradas: currentSummary.totalEntradas,
+            totalSaidas: currentSummary.totalSaidas,
+            deltaEntradas: calculateDelta(currentSummary.totalEntradas, prevSummary.totalEntradas),
+            deltaSaidas: calculateDelta(currentSummary.totalSaidas, prevSummary.totalSaidas),
+            deltaSaldo: calculateDelta(saldoTotal, prevSummary.totalEntradas - prevSummary.totalSaidas),
         },
         categoryData,
         monthlyTransactions,
+        metrics: {
+            forecast,
+            healthScore,
+            daysPassed,
+            totalDays: getDaysInMonth(targetDate)
+        }
     };
-} 
+}

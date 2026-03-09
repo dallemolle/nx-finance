@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { TransactionForm } from "./transaction-form";
@@ -9,6 +10,7 @@ import { Plus } from "lucide-react";
 
 export function NewTransactionDialog({ userId }: { userId: string }) {
     const [open, setOpen] = useState(false);
+    const router = useRouter();
     const [categories, setCategories] = useState<any[]>([]);
     const [paymentMethods, setPaymentMethods] = useState<any[]>([]);
 
@@ -18,6 +20,11 @@ export function NewTransactionDialog({ userId }: { userId: string }) {
             getPaymentMethods(userId).then(setPaymentMethods);
         }
     }, [open, userId]);
+
+    const handleSuccess = () => {
+        setOpen(false);
+        router.refresh(); // Trigger native Next.js revalidation
+    };
 
     return (
         <Dialog open={open} onOpenChange={setOpen}>
@@ -34,7 +41,7 @@ export function NewTransactionDialog({ userId }: { userId: string }) {
                 <TransactionForm
                     categories={categories}
                     paymentMethods={paymentMethods}
-                    onSuccess={() => setOpen(false)}
+                    onSuccess={handleSuccess}
                 />
             </DialogContent>
         </Dialog>

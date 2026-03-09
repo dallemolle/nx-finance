@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { TransactionForm } from "./transaction-form";
@@ -14,6 +15,7 @@ interface EditTransactionDialogProps {
 
 export function EditTransactionDialog({ transaction, userId }: EditTransactionDialogProps) {
     const [open, setOpen] = useState(false);
+    const router = useRouter();
     const [categories, setCategories] = useState<any[]>([]);
     const [paymentMethods, setPaymentMethods] = useState<any[]>([]);
 
@@ -23,6 +25,11 @@ export function EditTransactionDialog({ transaction, userId }: EditTransactionDi
             getPaymentMethods(userId).then(setPaymentMethods);
         }
     }, [open, userId]);
+
+    const handleSuccess = () => {
+        setOpen(false);
+        router.refresh(); // Trigger native Next.js revalidation
+    };
 
     return (
         <Dialog open={open} onOpenChange={setOpen}>
@@ -39,7 +46,7 @@ export function EditTransactionDialog({ transaction, userId }: EditTransactionDi
                     initialData={transaction}
                     categories={categories}
                     paymentMethods={paymentMethods}
-                    onSuccess={() => setOpen(false)}
+                    onSuccess={handleSuccess}
                 />
             </DialogContent>
         </Dialog>

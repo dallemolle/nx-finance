@@ -36,12 +36,12 @@ export function RecentTransactions({ transactions, userId }: RecentTransactionsP
     return (
         <Card className="col-span-1 border-none shadow-lg md:col-span-2">
             <CardHeader>
-                <CardTitle className="text-lg font-semibold">Últimas Transações</CardTitle>
+                <CardTitle className="text-lg font-semibold">Lançamentos do Mês</CardTitle>
             </CardHeader>
             <CardContent>
-                <div className="space-y-4">
+                <div className="space-y-4 max-h-[400px] overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-muted-foreground/20">
                     {transactions.map((t) => (
-                        <div key={t.id} className="flex items-center justify-between p-3 transition-colors rounded-lg hover:bg-muted/50">
+                        <div key={t.id} className="flex items-center justify-between p-3 transition-colors rounded-lg hover:bg-muted/50 border-b border-muted/30 last:border-0">
                             <div className="flex flex-col">
                                 <span className="font-medium">{t.descricao}</span>
                                 <span className="text-xs text-muted-foreground">
@@ -61,7 +61,7 @@ export function RecentTransactions({ transactions, userId }: RecentTransactionsP
                     ))}
                     {transactions.length === 0 && (
                         <div className="py-8 text-center text-muted-foreground italic">
-                            Nenhuma transação recente.
+                            Nenhum lançamento encontrado para este mês.
                         </div>
                     )}
                 </div>

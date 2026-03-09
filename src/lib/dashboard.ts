@@ -53,7 +53,7 @@ export async function getDashboardData(userId: string, month: number, year: numb
             return acc;
         }, [] as { name: string; value: number; fill: string }[]);
 
-    const latestTransactions = transactions.slice(0, 5).map((t: any) => {
+    const monthlyTransactions = transactions.map((t: any) => {
         // Rule: data_vencimento < today and status != PAID => OVERDUE
         const isOverdue = t.status !== "PAGO" && isBefore(t.data_vencimento, new Date());
         return {
@@ -69,6 +69,6 @@ export async function getDashboardData(userId: string, month: number, year: numb
             totalSaidas: summary.totalSaidas,
         },
         categoryData,
-        latestTransactions,
+        monthlyTransactions,
     };
 }

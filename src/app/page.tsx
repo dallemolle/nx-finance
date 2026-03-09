@@ -77,7 +77,7 @@ export default function DashboardPage() {
 
             <div className="grid gap-6 md:grid-cols-3">
                 <CategoryChart data={data.categoryData} />
-                <RecentTransactions transactions={data.latestTransactions} userId={session.user.id} />
+                <RecentTransactions transactions={data.monthlyTransactions} userId={session.user.id} />
             </div>
         </div>
     );

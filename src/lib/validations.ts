@@ -4,7 +4,7 @@ export const TransactionType = z.enum(["ENTRADA", "SAIDA"]);
 export const TransactionStatus = z.enum(["PENDENTE", "PAGO", "ATRASADO"]);
 
 export const transactionSchema = z.object({
-    descricao: z.string().min(1, "Descrição é obrigatória").transform(val => val.charAt(0).toUpperCase() + val.slice(1)),
+    descricao: z.string().min(1, "Descrição é obrigatória").transform(val => val.trim().charAt(0).toUpperCase() + val.slice(1).toLowerCase()),
     valor: z.coerce.number().positive("Valor deve ser positivo"),
     data_vencimento: z.coerce.date(),
     data_pagamento: z.coerce.date().optional().nullable(),
@@ -15,14 +15,14 @@ export const transactionSchema = z.object({
 });
 
 export const categorySchema = z.object({
-    nome: z.string().min(1, "Nome é obrigatório").transform(val => val.charAt(0).toUpperCase() + val.slice(1)),
+    nome: z.string().min(1, "Nome é obrigatório").transform(val => val.trim().charAt(0).toUpperCase() + val.slice(1).toLowerCase()),
     cor: z.string().regex(/^#[0-9A-F]{6}$/i, "Cor inválida"),
     icone: z.string().min(1, "Ícone é obrigatório"),
     tipo: TransactionType,
 });
 
 export const paymentMethodSchema = z.object({
-    nome: z.string().min(1, "Nome é obrigatório").transform(val => val.charAt(0).toUpperCase() + val.slice(1)),
+    nome: z.string().min(1, "Nome é obrigatório").transform(val => val.trim().charAt(0).toUpperCase() + val.slice(1).toLowerCase()),
 });
 
 export const loginSchema = z.object({

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { transactionSchema } from "@/lib/validations";
@@ -13,6 +13,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Combobox } from "@/components/ui/combobox";
 import { Loader2 } from "lucide-react";
+import { toast } from "sonner";
 
 interface TransactionFormProps {
     categories: any[];
@@ -22,12 +23,12 @@ interface TransactionFormProps {
 }
 
 export function TransactionForm({ categories: initialCategories, paymentMethods: initialPaymentMethods, initialData, onSuccess }: TransactionFormProps) {
-    const [loading, setLoading] = useState(false);
+    const [isPending, startTransition] = useTransition();
     const [error, setError] = useState<string | null>(null);
     const [categories, setCategories] = useState(initialCategories);
     const [paymentMethods, setPaymentMethods] = useState(initialPaymentMethods);
 
-    // Sync state with props when they change (e.g. after async fetch)
+    // Sync state with props when they change
     useEffect(() => {
         setCategories(initialCategories);
     }, [initialCategories]);
@@ -54,36 +55,40 @@ export function TransactionForm({ categories: initialCategories, paymentMethods:
     const categoriaId = watch("categoria_id");
     const paymentMethodId = watch("tipo_pagamento_id");
 
-    const onSubmit = async (data: any) => {
-        setLoading(true);
+    const onSubmit = (data: any) => {
         setError(null);
-        try {
-            if (initialData?.id) {
-                await updateTransaction(initialData.id, data);
-            } else {
-                await createTransaction(data);
+        startTransition(async () => {
+            try {
+                if (initialData?.id) {
+                    await updateTransaction(initialData.id, data);
+                    toast.success("Transação atualizada com sucesso!");
+                } else {
+                    await createTransaction(data);
+                    toast.success("Transação realizada com sucesso!");
+                }
+                reset();
+                onSuccess();
+            } catch (err: any) {
+                const message = err.message || "Erro ao salvar transação";
+                setError(message);
+                toast.error(message);
             }
-            reset(); // Clear form after success
-            onSuccess();
-        } catch (err: any) {
-            setError(err.message || "Erro ao salvar transação");
-        } finally {
-            setLoading(false);
-        }
+        });
     };
 
     const handleAddCategory = async (name: string) => {
         try {
             const newCat = await createCategory({
                 nome: name,
-                cor: "#3b82f6", // Default blue
-                icone: "Wallet", // Default icon
+                cor: "#3b82f6",
+                icone: "Wallet",
                 tipo: tipo,
             });
             setCategories([...categories, newCat]);
             setValue("categoria_id", newCat.id);
+            toast.success(`Categoria "${name}" criada!`);
         } catch (err: any) {
-            setError("Erro ao criar categoria: " + err.message);
+            toast.error("Erro ao criar categoria: " + err.message);
         }
     };
 
@@ -92,8 +97,9 @@ export function TransactionForm({ categories: initialCategories, paymentMethods:
             const newPM = await createPaymentMethod({ nome: name });
             setPaymentMethods([...paymentMethods, newPM]);
             setValue("tipo_pagamento_id", newPM.id);
+            toast.success(`Meio "${name}" criado!`);
         } catch (err: any) {
-            setError("Erro ao criar meio de pagamento: " + err.message);
+            toast.error("Erro ao criar meio de pagamento: " + err.message);
         }
     };
 
@@ -188,8 +194,8 @@ export function TransactionForm({ categories: initialCategories, paymentMethods:
                 </div>
             </div>
 
-            <Button type="submit" className="w-full" disabled={loading}>
-                {loading ? (
+            <Button type="submit" className="w-full" disabled={isPending}>
+                {isPending ? (
                     <>
                         <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                         Salvando...

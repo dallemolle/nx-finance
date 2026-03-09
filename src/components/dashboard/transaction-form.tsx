@@ -12,6 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Combobox } from "@/components/ui/combobox";
+import { Loader2 } from "lucide-react";
 
 interface TransactionFormProps {
     categories: any[];
@@ -35,7 +36,7 @@ export function TransactionForm({ categories: initialCategories, paymentMethods:
         setPaymentMethods(initialPaymentMethods);
     }, [initialPaymentMethods]);
 
-    const { register, handleSubmit, setValue, watch, formState: { errors } } = useForm({
+    const { register, handleSubmit, setValue, watch, reset, formState: { errors } } = useForm({
         resolver: zodResolver(transactionSchema),
         defaultValues: initialData ? {
             ...initialData,
@@ -62,6 +63,7 @@ export function TransactionForm({ categories: initialCategories, paymentMethods:
             } else {
                 await createTransaction(data);
             }
+            reset(); // Clear form after success
             onSuccess();
         } catch (err: any) {
             setError(err.message || "Erro ao salvar transação");
@@ -187,7 +189,16 @@ export function TransactionForm({ categories: initialCategories, paymentMethods:
             </div>
 
             <Button type="submit" className="w-full" disabled={loading}>
-                {loading ? "Salvando..." : initialData ? "Atualizar Registro" : "Adicionar Transação"}
+                {loading ? (
+                    <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Salvando...
+                    </>
+                ) : initialData ? (
+                    "Atualizar Registro"
+                ) : (
+                    "Adicionar Transação"
+                )}
             </Button>
         </form>
     );

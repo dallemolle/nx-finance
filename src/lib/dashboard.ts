@@ -71,4 +71,4 @@ export async function getDashboardData(userId: string, month: number, year: numb
         categoryData,
         monthlyTransactions,
     };
-}
+} 

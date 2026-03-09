@@ -12,6 +12,7 @@ import { NewTransactionDialog } from "../components/dashboard/new-transaction-di
 import { FinancialHealth } from "../components/dashboard/financial-health";
 import { Forecast } from "../components/dashboard/forecast";
 import { ExportButtons } from "../components/dashboard/export-buttons";
+import { ThemeToggle } from "../components/theme-toggle";
 
 export default function DashboardPage() {
     const { data: session } = useSession();
@@ -43,7 +44,10 @@ export default function DashboardPage() {
             <div className="p-8 space-y-8 animate-in fade-in duration-500">
                 <div className="flex items-center justify-between">
                     <Skeleton className="w-[200px] h-8" />
-                    <Skeleton className="w-[250px] h-10" />
+                    <div className="flex items-center gap-3">
+                        <Skeleton className="w-[40px] h-10" />
+                        <Skeleton className="w-[250px] h-10" />
+                    </div>
                 </div>
                 <div className="grid gap-4 md:grid-cols-3">
                     <Skeleton className="h-32" />
@@ -66,6 +70,7 @@ export default function DashboardPage() {
                     <p className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Bem-vindo ao seu centro financeiro premium.</p>
                 </div>
                 <div className="flex items-center gap-3">
+                    <ThemeToggle />
                     <ExportButtons />
                     <NewTransactionDialog userId={session.user.id} />
                     <MonthPicker

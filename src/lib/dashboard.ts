@@ -49,7 +49,7 @@ export async function getDashboardData(userId: string, month: number, year: numb
         const n = name.toLowerCase().trim();
         if (n.startsWith("mercado") || n.startsWith("mer")) return "Mercado";
         if (n.startsWith("comida") || n.startsWith("restaurante") || n.startsWith("ifood")) return "Alimentação";
-        return name;
+        return n.charAt(0).toUpperCase() + n.slice(1);
     };
 
     const categoryData = transactions

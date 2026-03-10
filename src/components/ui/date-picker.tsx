@@ -32,8 +32,8 @@ export function DatePicker({ date, setDate, placeholder = "Escolha uma data" }: 
                     )}
                 >
                     <CalendarIcon className="mr-3 h-4 w-4 opacity-70" />
-                    <span className="truncate">
-                        {date ? format(date, "PPP", { locale: ptBR }) : <span>{placeholder}</span>}
+                    <span className="font-medium">
+                        {date ? format(date, "dd 'de' MMMM 'de' yyyy", { locale: ptBR }) : <span>{placeholder}</span>}
                     </span>
                 </Button>
             </PopoverTrigger>

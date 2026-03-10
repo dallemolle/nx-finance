@@ -1,7 +1,9 @@
 "use client";
 
-import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from "recharts";
+import { useState } from "react";
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { cn } from "@/lib/utils";
 
 interface CategoryChartProps {
     data: {
@@ -12,6 +14,7 @@ interface CategoryChartProps {
 }
 
 export function CategoryChart({ data }: CategoryChartProps) {
+    const [activeIndex, setActiveIndex] = useState<number | null>(null);
     const total = data.reduce((acc, curr) => acc + curr.value, 0);
     const formatCurrency = (value: number) =>
         new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 }).format(value);
@@ -22,10 +25,11 @@ export function CategoryChart({ data }: CategoryChartProps) {
                 <CardTitle className="text-lg font-semibold text-slate-700 dark:text-slate-300">Gastos por Categoria</CardTitle>
             </CardHeader>
             <CardContent>
-                <div className="h-[300px] w-full relative">
-                    {data.length > 0 ? (
-                        <>
-                            <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                {data.length > 0 ? (
+                    <div className="flex flex-col gap-8 h-auto">
+                        {/* CHART SIDE */}
+                        <div className="w-full h-[240px] relative">
+                            <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none z-10">
                                 <span className="text-xs font-semibold text-muted-foreground uppercase tracking-widest">Total</span>
                                 <span className="text-2xl font-black text-slate-900 dark:text-slate-100 italic">{formatCurrency(total)}</span>
                             </div>
@@ -35,14 +39,22 @@ export function CategoryChart({ data }: CategoryChartProps) {
                                         data={data}
                                         cx="50%"
                                         cy="50%"
-                                        innerRadius={75}
+                                        innerRadius={70}
                                         outerRadius={95}
                                         paddingAngle={2}
                                         dataKey="value"
                                         stroke="none"
+                                        onMouseEnter={(_, index) => setActiveIndex(index)}
+                                        onMouseLeave={() => setActiveIndex(null)}
                                     >
                                         {data.map((entry, index) => (
-                                            <Cell key={`cell-${index}`} fill={entry.fill} className="hover:opacity-80 transition-opacity outline-none" />
+                                            <Cell
+                                                key={`cell-${index}`}
+                                                fill={entry.fill}
+                                                className="transition-all duration-300 outline-none"
+                                                opacity={activeIndex === null || activeIndex === index ? 1 : 0.3}
+                                                style={{ filter: activeIndex === index ? 'drop-shadow(0px 4px 6px rgba(0,0,0,0.1))' : 'none' }}
+                                            />
                                         ))}
                                     </Pie>
                                     <Tooltip
@@ -51,25 +63,63 @@ export function CategoryChart({ data }: CategoryChartProps) {
                                             borderRadius: '12px',
                                             border: 'none',
                                             boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)',
-                                            backgroundColor: 'rgba(255, 255, 255, 0.9)',
+                                            backgroundColor: 'rgba(255, 255, 255, 0.95)',
                                             backdropFilter: 'blur(4px)'
                                         }}
                                     />
-                                    <Legend
-                                        verticalAlign="bottom"
-                                        height={36}
-                                        iconType="circle"
-                                        formatter={(value) => <span className="text-xs font-medium text-slate-600 dark:text-slate-400">{value}</span>}
-                                    />
                                 </PieChart>
                             </ResponsiveContainer>
-                        </>
-                    ) : (
-                        <div className="flex h-full items-center justify-center text-muted-foreground italic">
-                            Nenhuma despesa este mês.
                         </div>
-                    )}
-                </div>
+
+                        {/* LEGEND SIDE */}
+                        <div className="w-full flex flex-col space-y-1">
+                            {data.map((item, index) => (
+                                <div
+                                    key={item.name}
+                                    className={cn(
+                                        "flex items-center justify-between py-3 px-2 transition-colors cursor-default border-b border-slate-100 dark:border-slate-800/50 last:border-none",
+                                        activeIndex === index
+                                            ? "bg-slate-50 dark:bg-slate-800/80 rounded-md shadow-sm"
+                                            : "hover:bg-slate-50/50 dark:hover:bg-slate-800/40 rounded-sm"
+                                    )}
+                                    onMouseEnter={() => setActiveIndex(index)}
+                                    onMouseLeave={() => setActiveIndex(null)}
+                                >
+                                    <div className="flex items-center gap-3">
+                                        <div
+                                            className="w-3 h-3 rounded-full flex-shrink-0"
+                                            style={{ backgroundColor: item.fill, opacity: activeIndex === null || activeIndex === index ? 1 : 0.4 }}
+                                        />
+                                        <span className={cn(
+                                            "text-sm tracking-tight capitalize",
+                                            activeIndex === index ? "font-bold text-slate-900 dark:text-slate-100" : "font-normal text-slate-700 dark:text-slate-300"
+                                        )}>
+                                            {item.name}
+                                        </span>
+                                    </div>
+                                    <div className="flex items-center gap-2 text-right">
+                                        <span className={cn(
+                                            "text-sm tracking-tight",
+                                            activeIndex === index ? "font-bold text-slate-900 dark:text-slate-100" : "font-medium text-slate-700 dark:text-slate-300"
+                                        )}>
+                                            {formatCurrency(item.value)}
+                                        </span>
+                                        <span className={cn(
+                                            "text-sm w-12 text-right font-medium",
+                                            activeIndex === index ? "text-slate-600 dark:text-slate-400" : "text-muted-foreground"
+                                        )}>
+                                            ({Math.round((item.value / total) * 100)}%)
+                                        </span>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                ) : (
+                    <div className="flex h-[300px] w-full items-center justify-center text-muted-foreground italic">
+                        Nenhuma despesa este mês.
+                    </div>
+                )}
             </CardContent>
         </Card>
     );

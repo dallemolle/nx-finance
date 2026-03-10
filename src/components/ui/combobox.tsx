@@ -57,7 +57,7 @@ export function Combobox({
                 </Button>
             </PopoverTrigger>
             <PopoverContent
-                className="p-0 pointer-events-auto"
+                className="p-0 pointer-events-auto z-[9999]"
                 style={{ width: 'var(--radix-popover-trigger-width)' }}
                 align="start"
             >
@@ -98,7 +98,11 @@ export function Combobox({
                                         setOpen(false)
                                         setSearch("")
                                     }}
-                                    className="cursor-pointer"
+                                    onMouseDown={(e) => {
+                                        e.preventDefault()
+                                        e.stopPropagation()
+                                    }}
+                                    className="cursor-pointer hover:bg-accent hover:text-accent-foreground"
                                 >
                                     <Check
                                         className={cn(

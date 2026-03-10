@@ -17,6 +17,8 @@ import { toast } from "sonner";
 import { Switch } from "@/components/ui/switch";
 import { addMonths, format } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { Decimal } from "decimal.js";
+import { cn } from "@/lib/utils";
 
 interface TransactionFormProps {
     categories: any[];
@@ -230,9 +232,46 @@ export function TransactionForm({ categories: initialCategories, paymentMethods:
                             />
                             {errors.installmentsCount && <p className="text-xs text-red-500">{errors.installmentsCount.message as string}</p>}
                             {watch("valor") > 0 && installmentsCount > 0 && (
-                                <p className="text-xs text-blue-500 font-medium">
-                                    {installmentsCount} parcelas de {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(watch("valor") / installmentsCount)}
-                                </p>
+                                <div className="mt-4 space-y-2 border-t pt-4">
+                                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Prévia das Parcelas</p>
+                                    <div className="max-h-[200px] overflow-y-auto rounded-md border bg-background/50">
+                                        <table className="w-full text-left text-xs">
+                                            <thead className="sticky top-0 bg-muted/50 border-b">
+                                                <tr>
+                                                    <th className="p-2 font-medium">Parc.</th>
+                                                    <th className="p-2 font-medium">Vencimento</th>
+                                                    <th className="p-2 font-medium text-right">Valor</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {Array.from({ length: installmentsCount }).map((_, i) => {
+                                                    const totalValue = new Decimal(watch("valor") || 0);
+                                                    const count = Number(installmentsCount);
+                                                    const installmentValue = totalValue.dividedBy(count).toDecimalPlaces(2, Decimal.ROUND_DOWN);
+                                                    const lastInstallmentValue = totalValue.minus(installmentValue.times(count - 1));
+
+                                                    const currentVal = i === count - 1 ? lastInstallmentValue : installmentValue;
+                                                    const dueDate = addMonths(new Date(dataVencimento), i);
+                                                    const isAdjusted = i === count - 1 && !lastInstallmentValue.equals(installmentValue);
+
+                                                    return (
+                                                        <tr key={i} className={cn("border-b last:border-0", isAdjusted && "bg-blue-50/50 dark:bg-blue-900/20")}>
+                                                            <td className="p-2">{String(i + 1).padStart(2, '0')} / {String(count).padStart(2, '0')}</td>
+                                                            <td className="p-2">{format(dueDate, "dd/MM/yyyy")}</td>
+                                                            <td className={cn("p-2 text-right font-medium", isAdjusted && "text-blue-600 dark:text-blue-400")}>
+                                                                {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(currentVal.toNumber())}
+                                                                {isAdjusted && <span className="ml-1 text-[10px] opacity-70" title="Ajuste de centavos">*</span>}
+                                                            </td>
+                                                        </tr>
+                                                    );
+                                                })}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                    <p className="text-[10px] text-muted-foreground italic">
+                                        * A última parcela contém o ajuste de centavos para garantir a precisão do valor total.
+                                    </p>
+                                </div>
                             )}
                         </div>
                     )}

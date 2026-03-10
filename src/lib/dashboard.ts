@@ -85,7 +85,11 @@ export async function getDashboardData(userId: string, month: number, year: numb
 
     const monthlyTransactions = transactions.map((t: any) => {
         const isOverdue = t.status !== "PAGO" && isBefore(t.data_vencimento, new Date());
-        return { ...t, status: isOverdue ? "ATRASADO" : t.status };
+        return {
+            ...t,
+            valor: Number(t.valor),
+            status: isOverdue ? "ATRASADO" : t.status
+        };
     });
 
     return {

@@ -7,6 +7,7 @@ import { authOptions } from "@/lib/auth";
 import { getServerSession } from "next-auth";
 import { addMonths, format } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { Decimal } from "decimal.js";
 
 async function getUserId() {
     const session = await getServerSession(authOptions);
@@ -22,17 +23,21 @@ export async function createTransaction(data: any) {
         const { isInstallment, installmentsCount, ...rest } = validatedData;
 
         if (isInstallment && installmentsCount && installmentsCount > 1) {
-            const installmentValue = rest.valor / installmentsCount;
+            const totalValue = new Decimal(rest.valor);
+            const installmentValue = totalValue.dividedBy(installmentsCount).toDecimalPlaces(2, Decimal.ROUND_DOWN);
+            const lastInstallmentValue = totalValue.minus(installmentValue.times(installmentsCount - 1));
+
             const transactions = await db.$transaction(
                 Array.from({ length: installmentsCount }).map((_, i) => {
                     const dueDate = addMonths(new Date(rest.data_vencimento), i);
                     const description = `${rest.descricao} (${String(i + 1).padStart(2, '0')}/${String(installmentsCount).padStart(2, '0')})`;
+                    const currentInstallmentValue = i === installmentsCount - 1 ? lastInstallmentValue : installmentValue;
 
                     return db.transaction.create({
                         data: {
                             ...rest,
                             descricao: description,
-                            valor: installmentValue,
+                            valor: currentInstallmentValue.toNumber(),
                             data_vencimento: dueDate,
                             userId,
                         },
@@ -42,7 +47,13 @@ export async function createTransaction(data: any) {
 
             revalidatePath("/dashboard");
             revalidatePath("/reports");
-            return { success: true, data: transactions[0] };
+            return {
+                success: true,
+                data: {
+                    ...transactions[0],
+                    valor: Number(transactions[0].valor)
+                }
+            };
         }
 
         const transaction = await db.transaction.create({
@@ -54,7 +65,13 @@ export async function createTransaction(data: any) {
 
         revalidatePath("/dashboard");
         revalidatePath("/reports");
-        return { success: true, data: transaction };
+        return {
+            success: true,
+            data: {
+                ...transaction,
+                valor: Number(transaction.valor)
+            }
+        };
     } catch (error: any) {
         console.error("Error creating transaction:", error);
         throw new Error(error.message || "Erro ao criar transação");
@@ -65,15 +82,22 @@ export async function updateTransaction(id: string, data: any) {
     try {
         const userId = await getUserId();
         const validatedData = transactionSchema.parse(data);
+        const { isInstallment, installmentsCount, ...rest } = validatedData;
 
         const transaction = await db.transaction.update({
             where: { id, userId },
-            data: validatedData,
+            data: rest,
         });
 
         revalidatePath("/dashboard");
         revalidatePath("/reports");
-        return { success: true, data: transaction };
+        return {
+            success: true,
+            data: {
+                ...transaction,
+                valor: Number(transaction.valor)
+            }
+        };
     } catch (error: any) {
         console.error("Error updating transaction:", error);
         throw new Error(error.message || "Erro ao atualizar transação");

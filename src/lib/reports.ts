@@ -34,6 +34,7 @@ export async function getReportData(userId: string, month: number, year: number,
         const isOverdue = t.status !== "PAGO" && t.data_vencimento < new Date();
         return {
             ...t,
+            valor: Number(t.valor),
             status: isOverdue ? "ATRASADO" : t.status,
             formattedAmount: new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(Number(t.valor)),
             displayDate: format(t.data_vencimento, "dd/MM/yyyy", { locale: ptBR })

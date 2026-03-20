@@ -24,7 +24,7 @@ export function CategoryChart({ data }: CategoryChartProps) {
         new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value);
 
     return (
-        <Card className="col-span-1 border-none shadow-lg bg-white dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-800 flex flex-col h-[520px] max-h-[520px]">
+        <Card className={cn("col-span-1 border-none shadow-lg bg-white dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-800 flex flex-col", !isExpanded ? "h-[520px] max-h-[520px]" : "h-auto")}>
             <CardHeader className="pb-2 shrink-0">
                 <CardTitle className="text-lg font-semibold text-slate-700 dark:text-slate-300">Gastos por Categoria</CardTitle>
             </CardHeader>
@@ -78,8 +78,8 @@ export function CategoryChart({ data }: CategoryChartProps) {
                         {/* LEGEND SIDE */}
                         <div className="w-full flex flex-col flex-1 min-h-0">
                             <div className={cn(
-                                "flex flex-col space-y-1 w-full flex-1 overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-slate-200 dark:scrollbar-thumb-slate-800",
-                                !isExpanded ? "max-h-[140px]" : "max-h-full"
+                                "flex flex-col space-y-1 w-full flex-1 pr-1 scrollbar-thin scrollbar-thumb-slate-200 dark:scrollbar-thumb-slate-800",
+                                !isExpanded ? "overflow-y-auto max-h-[140px]" : "overflow-visible h-auto"
                             )}>
                                 {sortedData.map((item, index) => (
                                     <div

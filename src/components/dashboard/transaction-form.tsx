@@ -140,6 +140,7 @@ export function TransactionForm({ categories: initialCategories, paymentMethods:
                         </SelectTrigger>
                         <SelectContent className="pointer-events-auto">
                             <SelectItem value="PENDENTE" className="cursor-pointer">Pendente</SelectItem>
+                            <SelectItem value="ATRASADO" className="cursor-pointer">Atrasado</SelectItem>
                             <SelectItem value="PAGO" className="cursor-pointer">Pago</SelectItem>
                         </SelectContent>
                     </Select>

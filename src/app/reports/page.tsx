@@ -50,10 +50,38 @@ export default async function ReportsPage({ searchParams }: ReportsPageProps) {
         }
     };
 
+    const totals = data.reduce(
+        (acc, t) => {
+            const val = t.tipo === 'SAIDA' ? -Number(t.valor) : Number(t.valor);
+            const status = t.status;
+
+            // Somar nos totais individuais
+            if (status === 'PAGO') {
+                acc.PAGO += val;
+            } else if (status === 'ATRASADO') {
+                acc.ATRASADO += val;
+            } else if (status === 'PENDENTE') {
+                acc.PENDENTE += val;
+            }
+
+            // Somar PENDENTE + ATRASADO no total de PENDENCIAS
+            if (status === 'PENDENTE' || status === 'ATRASADO') {
+                acc.PENDENCIAS += val;
+            }
+
+            return acc;
+        },
+        { PAGO: 0, PENDENTE: 0, ATRASADO: 0, PENDENCIAS: 0 }
+    );
+
+    const formatCurrency = (val: number) => {
+        return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
+    };
+
     return (
         <>
             <TopNav />
-            <div className="p-8 space-y-8 max-w-7xl mx-auto animate-in fade-in duration-700">
+            <div className="px-8 pb-8 pt-4 space-y-6 max-w-7xl mx-auto animate-in fade-in duration-700">
                 <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                     <h1 className="text-3xl font-black tracking-tight italic">Relatórios</h1>
                     <div className="flex flex-wrap items-center gap-3">
@@ -106,6 +134,27 @@ export default async function ReportsPage({ searchParams }: ReportsPageProps) {
                             )}
                         </TableBody>
                     </Table>
+                </div>
+
+                <div className="mt-6 flex flex-wrap items-center justify-center sm:justify-between bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-4 rounded-xl shadow-sm">
+                    <div className="flex flex-wrap items-center justify-center gap-4 sm:gap-8 text-sm font-bold tracking-tight">
+                        <span className="text-emerald-600 dark:text-emerald-400 flex items-center gap-2">
+                            <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                            Total Pago: {formatCurrency(totals.PAGO)}
+                        </span>
+                        <span className="text-slate-600 dark:text-slate-400 flex items-center gap-2">
+                            <span className="w-2 h-2 rounded-full bg-slate-500"></span>
+                            Total Pendente: {formatCurrency(totals.PENDENTE)}
+                        </span>
+                        <span className="text-rose-600 dark:text-rose-400 flex items-center gap-2">
+                            <span className="w-2 h-2 rounded-full bg-rose-500"></span>
+                            Total Atrasado: {formatCurrency(totals.ATRASADO)}
+                        </span>
+                        <span className="text-orange-600 dark:text-orange-400 flex items-center gap-2">
+                            <span className="w-2 h-2 rounded-full bg-orange-500"></span>
+                            Total Pendências: {formatCurrency(totals.PENDENCIAS)}
+                        </span>
+                    </div>
                 </div>
             </div>
         </>

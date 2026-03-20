@@ -33,7 +33,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     return (
         <>
             <TopNav />
-            <div className="p-8 space-y-8 animate-in fade-in duration-700 max-w-7xl mx-auto">
+            <div className="px-8 pb-8 pt-1 space-y-6 animate-in fade-in duration-700 max-w-7xl mx-auto">
                 <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                     <div>
                         <h1 className="text-4xl font-black tracking-tighter text-slate-900 dark:text-slate-100 italic">Dashboard</h1>

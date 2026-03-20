@@ -104,6 +104,30 @@ export async function updateTransaction(id: string, data: any) {
     }
 }
 
+export async function payTransaction(id: string) {
+    try {
+        const userId = await getUserId();
+        
+        const transaction = await db.transaction.update({
+            where: { id, userId },
+            data: { status: "PAGO" },
+        });
+
+        revalidatePath("/dashboard");
+        revalidatePath("/reports");
+        return {
+            success: true,
+            data: {
+                ...transaction,
+                valor: Number(transaction.valor)
+            }
+        };
+    } catch (error: any) {
+        console.error("Error paying transaction:", error);
+        throw new Error(error.message || "Erro ao liquidar transação");
+    }
+}
+
 export async function deleteTransaction(id: string) {
     try {
         const userId = await getUserId();

@@ -3,6 +3,7 @@ import { Badge } from "@/components/ui/badge";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { EditTransactionDialog } from "./edit-transaction-dialog";
+import { QuickPayButton } from "./quick-pay-button";
 
 interface Transaction {
     id: string;
@@ -34,14 +35,14 @@ export function RecentTransactions({ transactions, userId }: RecentTransactionsP
     };
 
     return (
-        <Card className="col-span-1 border-none shadow-xl bg-white dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-800 md:col-span-2">
-            <CardHeader className="pb-3">
+        <Card className="col-span-1 border-none shadow-xl bg-white dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-800 md:col-span-2 flex flex-col h-[520px] max-h-[520px]">
+            <CardHeader className="pb-3 shrink-0">
                 <CardTitle className="text-lg font-bold text-slate-800 dark:text-slate-200 tracking-tight">Lançamentos do Mês</CardTitle>
             </CardHeader>
-            <CardContent>
-                <div className="space-y-1 max-h-[440px] overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-slate-200 dark:scrollbar-thumb-slate-800">
+            <CardContent className="flex-1 min-h-0 overflow-hidden pb-4">
+                <div className="space-y-0.5 h-full overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-slate-200 dark:scrollbar-thumb-slate-800">
                     {transactions.map((t) => (
-                        <div key={t.id} className="group flex items-center justify-between p-2.5 transition-all rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800/50 border-b border-slate-100/50 dark:border-slate-800/50 last:border-0">
+                        <div key={t.id} className="group flex items-center justify-between py-1.5 px-2 transition-all rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800/50 border-b border-slate-100/50 dark:border-slate-800/50 last:border-0">
                             <div className="flex items-center gap-3">
                                 <div className={`w-1 h-10 rounded-full ${t.tipo === 'ENTRADA' ? 'bg-emerald-500' : 'bg-rose-500'} opacity-20 group-hover:opacity-100 transition-opacity`} />
                                 <div className="flex flex-col">
@@ -51,14 +52,17 @@ export function RecentTransactions({ transactions, userId }: RecentTransactionsP
                                     </span>
                                 </div>
                             </div>
-                            <div className="flex items-center gap-6">
-                                <div className="text-right min-w-[100px]">
+                            <div className="flex items-center gap-1 md:gap-3">
+                                <div className="text-right min-w-[80px] md:min-w-[100px]">
                                     <p className={`text-sm font-black tracking-tight ${t.tipo === 'ENTRADA' ? 'text-emerald-600' : 'text-rose-600'}`}>
                                         {t.tipo === 'ENTRADA' ? '+' : '-'} {formatCurrency(Number(t.valor))}
                                     </p>
                                     {getStatusBadge(t.status)}
                                 </div>
-                                <EditTransactionDialog transaction={t} userId={userId} />
+                                <div className="flex items-center">
+                                    {t.status !== "PAGO" && <QuickPayButton transactionId={t.id} />}
+                                    <EditTransactionDialog transaction={t} userId={userId} />
+                                </div>
                             </div>
                         </div>
                     ))}

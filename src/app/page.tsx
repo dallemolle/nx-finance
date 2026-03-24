@@ -12,6 +12,7 @@ import { Forecast } from "../components/dashboard/forecast";
 import { ExportButtons } from "../components/dashboard/export-buttons";
 import { ThemeToggle } from "../components/theme-toggle";
 import { TopNav } from "@/components/layout/top-nav";
+import { CsvImportDialog } from "@/components/dashboard/csv-import-dialog";
 
 interface DashboardPageProps {
     searchParams: Promise<{ month?: string; year?: string }>;
@@ -33,7 +34,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     return (
         <>
             <TopNav />
-            <div className="px-8 pb-8 pt-1 space-y-6 animate-in fade-in duration-700 max-w-7xl mx-auto">
+            <div className="px-8 pb-8 pt-4 space-y-6 animate-in fade-in duration-700 max-w-7xl mx-auto">
                 <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                     <div>
                         <h1 className="text-4xl font-black tracking-tighter text-slate-900 dark:text-slate-100 italic">Dashboard</h1>
@@ -42,6 +43,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                     <div className="flex items-center gap-3">
                         <ThemeToggle />
                         <ExportButtons />
+                        <CsvImportDialog userId={session.user.id} />
                         <NewTransactionDialog userId={session.user.id} />
                         <MonthPicker
                             month={month}

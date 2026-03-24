@@ -11,7 +11,7 @@ export function TopNav() {
     const router = useRouter();
 
     return (
-        <nav className="w-full border-b border-border/40 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 mb-6">
+        <nav className="w-full border-b border-border/40 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
             <div className="max-w-7xl mx-auto px-8 h-14 flex items-center justify-between">
 
                 {/* Back Button */}

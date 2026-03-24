@@ -75,7 +75,12 @@ export default async function ReportsPage({ searchParams }: ReportsPageProps) {
     );
 
     const formatCurrency = (val: number) => {
-        return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
+        return new Intl.NumberFormat('pt-BR', { 
+            style: 'currency', 
+            currency: 'BRL',
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2
+        }).format(val);
     };
 
     return (

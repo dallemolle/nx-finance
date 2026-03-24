@@ -25,9 +25,9 @@ export function QuickPayButton({ transactionId }: QuickPayButtonProps) {
     };
 
     return (
-        <Button 
-            variant="ghost" 
-            size="icon" 
+        <Button
+            variant="ghost"
+            size="icon"
             className="h-7 w-7 md:h-8 md:w-8 text-emerald-500 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/50"
             onClick={handlePay}
             disabled={isPending}

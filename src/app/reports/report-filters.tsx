@@ -6,10 +6,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from ".
 interface ReportFiltersProps {
     statusFilter: string;
     categoryFilter: string;
+    institutionFilter: string;
     categories: any[];
+    institutions: any[];
 }
 
-export function ReportFilters({ statusFilter, categoryFilter, categories }: ReportFiltersProps) {
+export function ReportFilters({ statusFilter, categoryFilter, institutionFilter, categories, institutions }: ReportFiltersProps) {
     const router = useRouter();
     const searchParams = useSearchParams();
 
@@ -40,6 +42,17 @@ export function ReportFilters({ statusFilter, categoryFilter, categories }: Repo
                     <SelectItem value="ALL">Todas Categorias</SelectItem>
                     {categories.map(c => (
                         <SelectItem key={c.id} value={c.id}>{c.nome}</SelectItem>
+                    ))}
+                </SelectContent>
+            </Select>
+            <Select value={institutionFilter} onValueChange={(v) => updateParams("institution", v)}>
+                <SelectTrigger className="w-[160px] border-none bg-muted/50 font-medium">
+                    <SelectValue placeholder="Instituição" />
+                </SelectTrigger>
+                <SelectContent>
+                    <SelectItem value="ALL">Todas Instituições</SelectItem>
+                    {institutions.map(inst => (
+                        <SelectItem key={inst.id} value={inst.id}>{inst.nome}</SelectItem>
                     ))}
                 </SelectContent>
             </Select>

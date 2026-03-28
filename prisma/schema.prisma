@@ -19,6 +19,7 @@ model User {
   transactions    Transaction[]
   categories      Category[]
   paymentMethods  PaymentMethod[]
+  institutions    FinancialInstitution[]
   mappingSuggestions MappingSuggestion[]
   createdAt       DateTime        @default(now())
   updatedAt       DateTime        @updatedAt
@@ -53,6 +54,9 @@ model Transaction {
   
   tipo_pagamento_id String?
   paymentMethod     PaymentMethod?    @relation(fields: [tipo_pagamento_id], references: [id])
+
+  institution_id    String
+  institution       FinancialInstitution @relation(fields: [institution_id], references: [id])
 
   createdAt         DateTime          @default(now())
   updatedAt         DateTime          @updatedAt
@@ -98,4 +102,20 @@ model MappingSuggestion {
   updatedAt    DateTime      @updatedAt
 
   @@unique([search_term, userId])
+}
+
+model FinancialInstitution {
+  id           String        @id @default(cuid())
+  nome         String
+  cor          String?
+  metadata     Json?         @default("{}")
+  
+  userId       String
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transactions Transaction[]
+
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  @@unique([nome, userId])
 }

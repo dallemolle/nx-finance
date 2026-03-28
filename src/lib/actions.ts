@@ -2,7 +2,7 @@
 
 import { db } from "@/lib/db";
 import { revalidatePath } from "next/cache";
-import { categorySchema, paymentMethodSchema, transactionSchema } from "@/lib/validations";
+import { categorySchema, paymentMethodSchema, transactionSchema, financialInstitutionSchema } from "@/lib/validations";
 import { authOptions } from "@/lib/auth";
 import { getServerSession } from "next-auth";
 import { addMonths, format } from "date-fns";
@@ -211,5 +211,71 @@ export async function createPaymentMethod(data: any) {
     } catch (error: any) {
         console.error("Error creating payment method:", error);
         throw new Error(error.message || "Erro ao criar meio de pagamento");
+    }
+}
+
+// Financial Institution Actions
+export async function createFinancialInstitution(data: any) {
+    try {
+        const userId = await getUserId();
+        const validatedData = financialInstitutionSchema.parse(data);
+
+        // Check if institution already exists for this user
+        const existing = await db.financialInstitution.findUnique({
+            where: {
+                nome_userId: {
+                    nome: validatedData.nome,
+                    userId,
+                },
+            },
+        });
+
+        if (existing) return existing;
+
+        const financialInstitution = await db.financialInstitution.create({
+            data: {
+                ...validatedData,
+                userId,
+            },
+        });
+
+        revalidatePath("/dashboard");
+        revalidatePath("/reports");
+        return financialInstitution;
+    } catch (error: any) {
+        console.error("Error creating financial institution:", error);
+        throw new Error(error.message || "Erro ao criar instituição financeira");
+    }
+}
+
+export async function deleteFinancialInstitution(id: string) {
+    try {
+        const userId = await getUserId();
+        
+        // Validation: verify if the institution has linked transactions
+        const transactionCount = await db.transaction.count({
+            where: {
+                userId,
+                institution_id: id,
+            }
+        });
+
+        if (transactionCount > 0) {
+            throw new Error(`Não é possível excluir. Existem ${transactionCount} transações vinculadas a esta instituição.`);
+        }
+
+        await db.financialInstitution.delete({
+            where: {
+                id,
+                userId,
+            },
+        });
+
+        revalidatePath("/dashboard");
+        revalidatePath("/reports");
+        return { success: true };
+    } catch (error: any) {
+        console.error("Error deleting financial institution:", error);
+        throw new Error(error.message || "Erro ao excluir instituição financeira");
     }
 }

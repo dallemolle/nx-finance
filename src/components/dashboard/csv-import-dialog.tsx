@@ -10,7 +10,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Upload, ChevronRight, X, AlertCircle } from "lucide-react";
 import Papa from "papaparse";
-import { getCategories, getPaymentMethods } from "@/lib/reports";
+import { getCategories, getPaymentMethods, getFinancialInstitutions } from "@/lib/reports";
+import { InstitutionCombobox } from "@/components/dashboard/institution-combobox";
 import { processBatchTransactions, getMappingSuggestions } from "@/lib/csv-actions";
 import { createCategory } from "@/lib/actions";
 
@@ -25,10 +26,12 @@ export function CsvImportDialog({ userId }: { userId: string }) {
     // Global Configs
     const [dueDate, setDueDate] = useState<string>("");
     const [paymentMethodId, setPaymentMethodId] = useState<string>("none");
+    const [institutionId, setInstitutionId] = useState<string>("");
 
     // Data
     const [categories, setCategories] = useState<any[]>([]);
     const [paymentMethods, setPaymentMethods] = useState<any[]>([]);
+    const [institutions, setInstitutions] = useState<any[]>([]);
     const [suggestions, setSuggestions] = useState<any[]>([]);
 
     const [parsedData, setParsedData] = useState<any[]>([]);
@@ -41,11 +44,13 @@ export function CsvImportDialog({ userId }: { userId: string }) {
             setFile(null);
             setDueDate("");
             setPaymentMethodId("none");
+            setInstitutionId("");
             setParsedData([]);
             setError(null);
 
             getCategories(userId).then(setCategories);
             getPaymentMethods(userId).then(setPaymentMethods);
+            getFinancialInstitutions(userId).then(setInstitutions);
             getMappingSuggestions().then(setSuggestions).catch(console.error);
         }
     }, [open, userId]);
@@ -64,6 +69,10 @@ export function CsvImportDialog({ userId }: { userId: string }) {
         }
         if (!dueDate) {
             setError("Data de vencimento global é obrigatória para o lote");
+            return;
+        }
+        if (!institutionId) {
+            setError("Selecione uma Instituição Financeira para o lote.");
             return;
         }
 
@@ -148,6 +157,7 @@ export function CsvImportDialog({ userId }: { userId: string }) {
             status: "PENDENTE", // Usually imported statements are paid
             categoria_id: row.category_id,
             tipo_pagamento_id: paymentMethodId === "none" ? null : paymentMethodId,
+            institution_id: institutionId,
         }));
 
         try {
@@ -201,7 +211,19 @@ export function CsvImportDialog({ userId }: { userId: string }) {
                                 />
                             </div>
 
-                            <div className="grid grid-cols-2 gap-4">
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                <div className="space-y-2">
+                                    <Label>Instituição Financeira</Label>
+                                    <InstitutionCombobox
+                                        options={institutions}
+                                        value={institutionId}
+                                        onValueChange={setInstitutionId}
+                                        onAdded={(newInst) => {
+                                            setInstitutions([...institutions, newInst]);
+                                            setInstitutionId(newInst.id);
+                                        }}
+                                    />
+                                </div>
                                 <div className="space-y-2">
                                     <Label>Data de Vencimento do Lote</Label>
                                     <Input
@@ -215,7 +237,7 @@ export function CsvImportDialog({ userId }: { userId: string }) {
                                     <Label>Meio de Pagamento (Opcional)</Label>
                                     <Select value={paymentMethodId} onValueChange={setPaymentMethodId}>
                                         <SelectTrigger>
-                                            <SelectValue placeholder="Selecione um meio de pagamento" />
+                                            <SelectValue placeholder="Selecione um meio..." />
                                         </SelectTrigger>
                                         <SelectContent>
                                             <SelectItem value="none">Não especificado</SelectItem>

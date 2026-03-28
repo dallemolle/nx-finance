@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { TransactionForm } from "./transaction-form";
-import { getCategories, getPaymentMethods } from "@/lib/reports";
+import { getCategories, getPaymentMethods, getFinancialInstitutions } from "@/lib/reports";
 import { Pencil } from "lucide-react";
 
 interface EditTransactionDialogProps {
@@ -18,11 +18,13 @@ export function EditTransactionDialog({ transaction, userId }: EditTransactionDi
     const router = useRouter();
     const [categories, setCategories] = useState<any[]>([]);
     const [paymentMethods, setPaymentMethods] = useState<any[]>([]);
+    const [institutions, setInstitutions] = useState<any[]>([]);
 
     useEffect(() => {
         if (open) {
             getCategories(userId).then(setCategories);
             getPaymentMethods(userId).then(setPaymentMethods);
+            getFinancialInstitutions(userId).then(setInstitutions);
         }
     }, [open, userId]);
 
@@ -46,6 +48,7 @@ export function EditTransactionDialog({ transaction, userId }: EditTransactionDi
                     initialData={transaction}
                     categories={categories}
                     paymentMethods={paymentMethods}
+                    institutions={institutions}
                     onSuccess={handleSuccess}
                 />
             </DialogContent>

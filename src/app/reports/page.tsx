@@ -1,4 +1,4 @@
-import { getReportData, getCategories } from "@/lib/reports";
+import { getReportData, getCategories, getFinancialInstitutions } from "@/lib/reports";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../../components/ui/table";
 import { Badge } from "../../components/ui/badge";
 import { MonthPicker } from "@/components/dashboard/month-picker";
@@ -14,6 +14,7 @@ interface ReportsPageProps {
         year?: string;
         status?: string;
         category?: string;
+        institution?: string;
     }>;
 }
 
@@ -27,19 +28,22 @@ export default async function ReportsPage({ searchParams }: ReportsPageProps) {
         month: monthParam,
         year: yearParam,
         status: statusFilter = "ALL",
-        category: categoryFilter = "ALL"
+        category: categoryFilter = "ALL",
+        institution: institutionFilter = "ALL"
     } = await searchParams;
 
     const now = new Date();
     const month = monthParam ? parseInt(monthParam) : now.getMonth() + 1;
     const year = yearParam ? parseInt(yearParam) : now.getFullYear();
 
-    const [data, categories] = await Promise.all([
+    const [data, categories, institutions] = await Promise.all([
         getReportData(session.user.id, month, year, {
             status: statusFilter,
-            categoria_id: categoryFilter
+            categoria_id: categoryFilter,
+            institution_id: institutionFilter
         }),
-        getCategories(session.user.id)
+        getCategories(session.user.id),
+        getFinancialInstitutions(session.user.id)
     ]);
 
     const getStatusBadge = (status: string) => {
@@ -97,7 +101,9 @@ export default async function ReportsPage({ searchParams }: ReportsPageProps) {
                         <ReportFilters
                             statusFilter={statusFilter}
                             categoryFilter={categoryFilter}
+                            institutionFilter={institutionFilter}
                             categories={categories}
+                            institutions={institutions}
                         />
                     </div>
                 </div>
@@ -107,6 +113,7 @@ export default async function ReportsPage({ searchParams }: ReportsPageProps) {
                         <TableHeader className="bg-muted/50">
                             <TableRow>
                                 <TableHead className="font-bold">Descrição</TableHead>
+                                <TableHead className="font-bold">Instituição</TableHead>
                                 <TableHead className="font-bold">Categoria</TableHead>
                                 <TableHead className="font-bold">Data</TableHead>
                                 <TableHead className="font-bold">Valor</TableHead>
@@ -117,6 +124,16 @@ export default async function ReportsPage({ searchParams }: ReportsPageProps) {
                             {data.map((t) => (
                                 <TableRow key={t.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/50 transition-colors">
                                     <TableCell className="font-medium capitalize">{t.descricao}</TableCell>
+                                    <TableCell>
+                                        {t.institution ? (
+                                            <div className="flex items-center gap-2">
+                                                {t.institution.cor && <div className="w-2 h-2 rounded-full" style={{ backgroundColor: t.institution.cor }} />}
+                                                <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">{t.institution.nome}</span>
+                                            </div>
+                                        ) : (
+                                            <span className="text-muted-foreground italic text-xs">-</span>
+                                        )}
+                                    </TableCell>
                                     <TableCell>
                                         <div className="flex items-center gap-2">
                                             <div className="w-3 h-3 rounded-full" style={{ backgroundColor: t.category.cor }} />

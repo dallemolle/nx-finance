@@ -55,3 +55,10 @@ Como o ambiente local não possui o Node.js configurado no PATH, siga estes pass
 - [x] **Middleware 2FA**: Lógica de redirecionamento para verificação de segundo fator.
 - [x] **Dashboard Premium**: Interface com Recharts, cards de resumo e sistema de metas.
 - [x] **Relacionamentos**: Transações vinculadas a Categorias e Métodos de Pagamento.
+
+
+nota leandro para subir o projeto:
+docker-compose up --build -d
+npx prisma generate
+npx prisma db push
+npm run dev

@@ -18,12 +18,14 @@ export async function getReportData(userId: string, month: number, year: number,
 
     if (filters?.status && filters.status !== "ALL") where.status = filters.status;
     if (filters?.categoria_id && filters.categoria_id !== "ALL") where.categoria_id = filters.categoria_id;
+    if (filters?.institution_id && filters.institution_id !== "ALL") where.institution_id = filters.institution_id;
 
     const transactions = await db.transaction.findMany({
         where,
         include: {
             category: true,
             paymentMethod: true,
+            institution: true,
         },
         orderBy: {
             data_vencimento: "desc",
@@ -48,4 +50,8 @@ export async function getCategories(userId: string) {
 
 export async function getPaymentMethods(userId: string) {
     return db.paymentMethod.findMany({ where: { userId } });
+}
+
+export async function getFinancialInstitutions(userId: string) {
+    return db.financialInstitution.findMany({ where: { userId } });
 }

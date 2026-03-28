@@ -12,6 +12,7 @@ interface Transaction {
     data_vencimento: Date;
     status: string;
     tipo: string;
+    institution?: { id: string; nome: string; cor: string | null };
 }
 
 interface RecentTransactionsProps {
@@ -47,7 +48,17 @@ export function RecentTransactions({ transactions, userId }: RecentTransactionsP
                                 <div className={`w-1 h-10 rounded-full ${t.tipo === 'ENTRADA' ? 'bg-emerald-500' : 'bg-rose-500'} opacity-20 group-hover:opacity-100 transition-opacity`} />
                                 <div className="flex flex-col">
                                     <span className="font-semibold text-slate-700 dark:text-slate-200 text-sm leading-tight capitalize">{t.descricao}</span>
-                                    <span className="text-[11px] text-muted-foreground font-medium">
+                                    {t.institution && (
+                                        <div className="flex items-center gap-1 mt-0.5">
+                                            {t.institution.cor && (
+                                                <div className="w-2 h-2 rounded-full" style={{ backgroundColor: t.institution.cor }} />
+                                            )}
+                                            <span className="text-[10px] text-muted-foreground uppercase font-semibold tracking-wider">
+                                                {t.institution.nome}
+                                            </span>
+                                        </div>
+                                    )}
+                                    <span className="text-[11px] text-muted-foreground font-medium mt-0.5">
                                         {format(new Date(t.data_vencimento), "dd 'de' MMMM", { locale: ptBR })}
                                     </span>
                                 </div>

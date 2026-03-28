@@ -12,6 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Combobox } from "@/components/ui/combobox";
+import { InstitutionCombobox } from "@/components/dashboard/institution-combobox";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { Switch } from "@/components/ui/switch";
@@ -23,15 +24,17 @@ import { cn } from "@/lib/utils";
 interface TransactionFormProps {
     categories: any[];
     paymentMethods: any[];
+    institutions: any[];
     initialData?: any;
     onSuccess: () => void;
 }
 
-export function TransactionForm({ categories: initialCategories, paymentMethods: initialPaymentMethods, initialData, onSuccess }: TransactionFormProps) {
+export function TransactionForm({ categories: initialCategories, paymentMethods: initialPaymentMethods, institutions: initialInstitutions, initialData, onSuccess }: TransactionFormProps) {
     const [isPending, startTransition] = useTransition();
     const [error, setError] = useState<string | null>(null);
     const [categories, setCategories] = useState(initialCategories);
     const [paymentMethods, setPaymentMethods] = useState(initialPaymentMethods);
+    const [institutions, setInstitutions] = useState(initialInstitutions);
 
     // Sync state with props when they change
     useEffect(() => {
@@ -41,6 +44,10 @@ export function TransactionForm({ categories: initialCategories, paymentMethods:
     useEffect(() => {
         setPaymentMethods(initialPaymentMethods);
     }, [initialPaymentMethods]);
+
+    useEffect(() => {
+        setInstitutions(initialInstitutions);
+    }, [initialInstitutions]);
 
     const { register, handleSubmit, setValue, watch, reset, formState: { errors } } = useForm({
         resolver: zodResolver(transactionSchema),
@@ -59,6 +66,7 @@ export function TransactionForm({ categories: initialCategories, paymentMethods:
     const dataVencimento = watch("data_vencimento");
     const categoriaId = watch("categoria_id");
     const paymentMethodId = watch("tipo_pagamento_id");
+    const institutionId = watch("institution_id");
     const isInstallment = watch("isInstallment");
     const installmentsCount = watch("installmentsCount");
 
@@ -170,7 +178,21 @@ export function TransactionForm({ categories: initialCategories, paymentMethods:
                 </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="space-y-2">
+                    <Label>Instituição Financeira</Label>
+                    <InstitutionCombobox
+                        options={institutions}
+                        value={institutionId}
+                        onValueChange={(v) => setValue("institution_id", v)}
+                        onAdded={(newInst) => {
+                            setInstitutions([...institutions, newInst]);
+                            setValue("institution_id", newInst.id);
+                        }}
+                    />
+                    {errors.institution_id && <p className="text-xs text-red-500">{errors.institution_id.message as string}</p>}
+                </div>
+
                 <div className="space-y-2">
                     <Label>Categoria</Label>
                     <Combobox

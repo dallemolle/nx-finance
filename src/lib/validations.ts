@@ -12,6 +12,7 @@ export const transactionSchema = z.object({
     tipo: TransactionType,
     categoria_id: z.string().min(1, "Categoria é obrigatória"),
     tipo_pagamento_id: z.string().optional().nullable(),
+    institution_id: z.string().min(1, "Instituição é obrigatória"),
     isInstallment: z.boolean().default(false),
     installmentsCount: z.coerce.number().min(2, "Mínimo de 2 parcelas").max(48, "Máximo de 48 parcelas").optional().nullable(),
 }).refine((data) => {
@@ -33,6 +34,11 @@ export const categorySchema = z.object({
 
 export const paymentMethodSchema = z.object({
     nome: z.string().min(1, "Nome é obrigatório").transform(val => val.trim().charAt(0).toUpperCase() + val.slice(1).toLowerCase()),
+});
+
+export const financialInstitutionSchema = z.object({
+    nome: z.string().min(1, "Nome da Instituição é obrigatório").transform(val => val.trim().charAt(0).toUpperCase() + val.slice(1).toLowerCase()),
+    cor: z.string().regex(/^#[0-9A-F]{6}$/i, "Cor inválida").optional().or(z.literal("")),
 });
 
 export const loginSchema = z.object({

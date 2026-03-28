@@ -16,7 +16,7 @@ export async function getDashboardData(userId: string, month: number, year: numb
     const [transactions, prevTransactions] = await Promise.all([
         db.transaction.findMany({
             where: { userId, data_vencimento: { gte: startDate, lte: endDate } },
-            include: { category: true },
+            include: { category: true, institution: true },
             orderBy: { data_vencimento: "desc" },
         }),
         db.transaction.findMany({

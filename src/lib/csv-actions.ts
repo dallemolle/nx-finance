@@ -66,7 +66,8 @@ export async function processBatchTransactions(transactions: any[]) {
                     tipo: t.tipo || "SAIDA",
                     userId,
                     categoria_id: t.categoria_id,
-                    tipo_pagamento_id: t.tipo_pagamento_id || null
+                    tipo_pagamento_id: t.tipo_pagamento_id || null,
+                    institution_id: t.institution_id
                 }
             }))
         );

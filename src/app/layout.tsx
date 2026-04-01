@@ -8,6 +8,8 @@ export const metadata: Metadata = {
     description: "Personal Finance Control",
 };
 
+import { EnvironmentBanner } from "@/components/environment-banner";
+
 export default function RootLayout({
     children,
 }: {
@@ -15,8 +17,9 @@ export default function RootLayout({
 }) {
     return (
         <html lang="pt-BR" suppressHydrationWarning>
-            <body className="font-sans antialiased">
+            <body className="font-sans antialiased flex flex-col min-h-screen">
                 <Providers>
+                    <EnvironmentBanner />
                     {children}
                     <Toaster richColors position="top-right" />
                 </Providers>

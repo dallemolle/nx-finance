@@ -7,8 +7,9 @@ import { Button } from "@/components/ui/button";
 import { TransactionForm } from "./transaction-form";
 import { getCategories, getPaymentMethods, getFinancialInstitutions } from "@/lib/reports";
 import { Plus } from "lucide-react";
+import { cn } from "@/lib/utils";
 
-export function NewTransactionDialog({ userId }: { userId: string }) {
+export function NewTransactionDialog({ userId, className }: { userId: string, className?: string }) {
     const [open, setOpen] = useState(false);
     const router = useRouter();
     const [categories, setCategories] = useState<any[]>([]);
@@ -31,7 +32,7 @@ export function NewTransactionDialog({ userId }: { userId: string }) {
     return (
         <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
-                <Button className="flex items-center gap-2">
+                <Button className={cn("flex items-center gap-2", className)}>
                     <Plus className="h-4 w-4" />
                     Nova Transação
                 </Button>

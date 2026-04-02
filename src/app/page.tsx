@@ -40,15 +40,23 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                         <h1 className="text-4xl font-black tracking-tighter text-slate-900 dark:text-slate-100 italic">Dashboard</h1>
                         <p className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Bem-vindo ao seu centro financeiro premium.</p>
                     </div>
-                    <div className="flex items-center gap-3">
-                        <ThemeToggle />
-                        <ExportButtons />
-                        <CsvImportDialog userId={session.user.id} />
-                        <NewTransactionDialog userId={session.user.id} />
-                        <MonthPicker
-                            month={month}
-                            year={year}
-                        />
+                    <div className="flex flex-col md:flex-row md:items-center gap-3 w-full md:w-auto">
+                        <div className="flex items-center justify-between w-full md:w-auto gap-3">
+                            <ThemeToggle />
+                            <div className="md:hidden">
+                                <MonthPicker month={month} year={year} />
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 md:flex md:flex-row gap-3 w-full md:w-auto">
+                            <ExportButtons className="w-full" />
+                            <CsvImportDialog userId={session.user.id} className="w-full" />
+                            <NewTransactionDialog userId={session.user.id} className="w-full" />
+                        </div>
+
+                        <div className="hidden md:block">
+                            <MonthPicker month={month} year={year} />
+                        </div>
                     </div>
                 </div>
 

@@ -13,9 +13,10 @@ import Papa from "papaparse";
 import { getCategories, getPaymentMethods, getFinancialInstitutions } from "@/lib/reports";
 import { InstitutionCombobox } from "@/components/dashboard/institution-combobox";
 import { processBatchTransactions, getMappingSuggestions } from "@/lib/csv-actions";
+import { cn } from "@/lib/utils";
 import { createCategory } from "@/lib/actions";
 
-export function CsvImportDialog({ userId }: { userId: string }) {
+export function CsvImportDialog({ userId, className }: { userId: string, className?: string }) {
     const [open, setOpen] = useState(false);
     const router = useRouter();
 
@@ -178,7 +179,7 @@ export function CsvImportDialog({ userId }: { userId: string }) {
     return (
         <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
-                <Button variant="outline" className="flex items-center gap-2">
+                <Button variant="outline" className={cn("flex items-center gap-2", className)}>
                     <Upload className="h-4 w-4" />
                     Importar CSV
                 </Button>

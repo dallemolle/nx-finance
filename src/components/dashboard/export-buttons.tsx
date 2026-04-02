@@ -9,7 +9,9 @@ import {
     DropdownMenuTrigger
 } from "@/components/ui/dropdown-menu";
 
-export function ExportButtons() {
+import { cn } from "@/lib/utils";
+
+export function ExportButtons({ className }: { className?: string }) {
     const handleExport = (type: 'csv' | 'pdf') => {
         // Mock functionality for now
         alert(`Exportando para ${type.toUpperCase()}... (Recurso em desenvolvimento)`);
@@ -18,7 +20,7 @@ export function ExportButtons() {
     return (
         <DropdownMenu>
             <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="sm" className="gap-2 h-9 border-slate-200 dark:border-slate-800 shadow-sm font-semibold">
+                <Button variant="outline" size="sm" className={cn("gap-2 h-9 border-slate-200 dark:border-slate-800 shadow-sm font-semibold", className)}>
                     <Download className="w-4 h-4" />
                     Exportar
                 </Button>

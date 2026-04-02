@@ -1,14 +1,11 @@
 export function EnvironmentBanner() {
   const dbUrl = process.env.DATABASE_URL || "";
   
-  // Vamos considerar que o banco oficial de produção se chama nx_finance.
-  // Se a URL do banco não contiver esse nome, estamos em ambiente de teste/homologação.
-  const isProductionDB = dbUrl.includes("nx_finance");
+  // Condição: Se NÃO for produção OU se o banco não contiver /nxfinance
+  const isProduction = process.env.NODE_ENV === "production" || process.env.NEXT_PUBLIC_VERCEL_ENV === "production";
+  const isOfficialDB = dbUrl.includes("/nxfinance");
 
-  // Outra forma segura de garantir que na Vercel "production" não exiba isso, caso o nome do banco mude.
-  const isVercelProd = process.env.VERCEL_ENV === "production";
-
-  if (isProductionDB || isVercelProd) {
+  if (isProduction && isOfficialDB) {
     return null;
   }
 

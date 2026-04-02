@@ -6,6 +6,9 @@ import { Toaster } from "sonner";
 export const metadata: Metadata = {
     title: "Nx Finance",
     description: "Personal Finance Control",
+    icons: {
+        icon: "/logo_app_nxfinance.ico",
+    },
 };
 
 import { EnvironmentBanner } from "@/components/environment-banner";

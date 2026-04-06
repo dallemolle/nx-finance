@@ -221,6 +221,7 @@ export function TransactionForm({ categories: initialCategories, paymentMethods:
                         searchPlaceholder="Procurar meio..."
                         emptyMessage="Não encontrado."
                     />
+                    {errors.tipo_pagamento_id && <p className="text-xs text-red-500">{errors.tipo_pagamento_id.message as string}</p>}
                 </div>
             </div>
 

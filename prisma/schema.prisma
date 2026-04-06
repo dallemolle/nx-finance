@@ -52,8 +52,8 @@ model Transaction {
   categoria_id      String
   category          Category          @relation(fields: [categoria_id], references: [id])
   
-  tipo_pagamento_id String?
-  paymentMethod     PaymentMethod?    @relation(fields: [tipo_pagamento_id], references: [id])
+  tipo_pagamento_id String
+  paymentMethod     PaymentMethod     @relation(fields: [tipo_pagamento_id], references: [id])
 
   institution_id    String
   institution       FinancialInstitution @relation(fields: [institution_id], references: [id])

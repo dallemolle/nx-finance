@@ -76,6 +76,10 @@ export function CsvImportDialog({ userId, className }: { userId: string, classNa
             setError("Selecione uma Instituição Financeira para o lote.");
             return;
         }
+        if (paymentMethodId === "none") {
+            setError("Selecione um Meio de Pagamento para o lote.");
+            return;
+        }
 
         setIsLoading(true);
         Papa.parse(file, {

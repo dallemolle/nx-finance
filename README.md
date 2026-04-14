@@ -59,6 +59,9 @@ Como o ambiente local não possui o Node.js configurado no PATH, siga estes pass
 
 nota leandro para subir o projeto:
 docker-compose up --build -d
+
+docker-compose exec app npx prisma@6 db push
+
 npx prisma generate
 npx prisma db push
 npm run dev

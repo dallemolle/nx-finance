@@ -5,14 +5,7 @@ import { Check, ChevronsUpDown, Plus } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
-import {
-    Command,
-    CommandEmpty,
-    CommandGroup,
-    CommandInput,
-    CommandItem,
-    CommandList,
-} from "@/components/ui/command"
+import { Input } from "@/components/ui/input"
 import {
     Popover,
     PopoverContent,
@@ -41,6 +34,14 @@ export function Combobox({
     const [open, setOpen] = React.useState(false)
     const [search, setSearch] = React.useState("")
 
+    const filteredOptions = options.filter((option) =>
+        option.label.toLowerCase().includes(search.toLowerCase())
+    )
+
+    const showAddButton = onAdd && search && !options.some(
+        (o) => o.label.toLowerCase() === search.toLowerCase()
+    )
+
     return (
         <Popover open={open} onOpenChange={setOpen}>
             <PopoverTrigger asChild>
@@ -57,79 +58,72 @@ export function Combobox({
                 </Button>
             </PopoverTrigger>
             <PopoverContent
-                className="p-0 pointer-events-auto z-[9999]"
+                className="p-1 pointer-events-auto"
                 style={{ width: 'var(--radix-popover-trigger-width)' }}
                 align="start"
+                portal={true}
             >
-                <Command shouldFilter={true}>
-                    <CommandInput
+                <div className="flex flex-col gap-1 p-1">
+                    <Input
                         placeholder={searchPlaceholder}
                         value={search}
-                        onValueChange={setSearch}
+                        onChange={(e) => setSearch(e.target.value)}
+                        className="h-9 mb-1"
                     />
-                    <CommandList>
-                        <CommandEmpty>
-                            <div className="flex flex-col items-center gap-2 p-4">
-                                <p className="text-sm text-muted-foreground">{emptyMessage}</p>
-                                {onAdd && search && (
-                                    <Button
-                                        variant="secondary"
-                                        size="sm"
-                                        className="w-full flex items-center justify-center gap-2"
-                                        onClick={() => {
-                                            onAdd(search)
-                                            setOpen(false)
-                                            setSearch("")
-                                        }}
-                                    >
-                                        <Plus className="h-4 w-4" />
-                                        Criar "{search}"
-                                    </Button>
-                                )}
-                            </div>
-                        </CommandEmpty>
-                        <CommandGroup>
-                            {options.map((option) => (
-                                <CommandItem
+                    
+                    <div
+                        className="max-h-[200px] overflow-y-auto overflow-x-hidden flex flex-col gap-0.5"
+                        onWheel={(e) => e.stopPropagation()}
+                        onPointerDown={(e) => e.stopPropagation()}
+                        style={{ touchAction: 'pan-y' }}
+                    >
+                        {filteredOptions.length > 0 ? (
+                            filteredOptions.map((option) => (
+                                <button
                                     key={option.value}
-                                    value={option.label}
-                                    onSelect={() => {
+                                    type="button"
+                                    className={cn(
+                                        "flex w-full items-center rounded-sm px-2 py-1.5 text-sm outline-none transition-colors",
+                                        "hover:bg-accent hover:text-accent-foreground",
+                                        value === option.value ? "bg-accent/50" : "transparent"
+                                    )}
+                                    onClick={() => {
                                         onValueChange(option.value)
                                         setOpen(false)
                                         setSearch("")
                                     }}
-                                    onMouseDown={(e) => {
-                                        e.preventDefault()
-                                        e.stopPropagation()
-                                    }}
-                                    className="cursor-pointer hover:bg-accent hover:text-accent-foreground"
                                 >
                                     <Check
                                         className={cn(
-                                            "mr-2 h-4 w-4",
+                                            "mr-2 h-4 w-4 shrink-0",
                                             value === option.value ? "opacity-100" : "opacity-0"
                                         )}
                                     />
-                                    {option.label}
-                                </CommandItem>
-                            ))}
-                            {onAdd && search && options.every(o => o.label.toLowerCase() !== search.toLowerCase()) && (
-                                <CommandItem
-                                    value={search}
-                                    onSelect={() => {
-                                        onAdd(search)
-                                        setOpen(false)
-                                        setSearch("")
-                                    }}
-                                    className="text-primary font-medium"
-                                >
-                                    <Plus className="mr-2 h-4 w-4" />
-                                    Criar "{search}"
-                                </CommandItem>
-                            )}
-                        </CommandGroup>
-                    </CommandList>
-                </Command>
+                                    <span className="truncate">{option.label}</span>
+                                </button>
+                            ))
+                        ) : (
+                            <div className="py-6 text-center text-sm text-muted-foreground">
+                                {emptyMessage}
+                            </div>
+                        )}
+
+                        {showAddButton && (
+                            <button
+                                type="button"
+                                className="flex w-full items-center rounded-sm px-2 py-1.5 text-sm font-medium text-primary hover:bg-accent outline-none"
+                                onClick={() => {
+                                    onAdd(search)
+                                    setOpen(false)
+                                    setSearch("")
+                                }}
+                            >
+                                <Plus className="mr-2 h-4 w-4 shrink-0" />
+                                <span className="truncate text-left">Criar "{search}"</span>
+                            </button>
+                        )}
+                    </div>
+                </div>
             </PopoverContent>
         </Popover>
     )

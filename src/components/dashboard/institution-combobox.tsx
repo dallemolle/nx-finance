@@ -5,14 +5,6 @@ import { Check, ChevronsUpDown, Plus, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import {
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
-} from "@/components/ui/command";
-import {
   Popover,
   PopoverContent,
   PopoverTrigger,
@@ -46,6 +38,10 @@ export function InstitutionCombobox({ options, value, onValueChange, onAdded }: 
   const [isCreating, setIsCreating] = React.useState(false);
 
   const selectedOption = options.find((opt) => opt.id === value);
+
+  const filteredOptions = options.filter((opt) =>
+    opt.nome.toLowerCase().includes(searchValue.toLowerCase())
+  );
 
   const handleCreate = async () => {
     if (!newName.trim()) return;
@@ -87,52 +83,75 @@ export function InstitutionCombobox({ options, value, onValueChange, onAdded }: 
             <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
           </Button>
         </PopoverTrigger>
-        <PopoverContent className="w-[300px] p-0 pointer-events-auto">
-          <Command>
-            <CommandInput 
-              placeholder="Buscar instituição..." 
+        <PopoverContent 
+          className="w-[300px] p-1 pointer-events-auto"
+          portal={true}
+        >
+          <div className="flex flex-col gap-1 p-1">
+            <Input
+              placeholder="Buscar instituição..."
               value={searchValue}
-              onValueChange={setSearchValue}
+              onChange={(e) => setSearchValue(e.target.value)}
+              className="h-9 mb-1"
             />
-            <CommandList>
-              <CommandEmpty className="py-6 text-center text-sm">
-                Nenhuma instituição encontrada.
-                <Button 
-                   variant="ghost" 
-                   className="mt-2 w-full justify-start text-primary"
-                   onClick={() => openCreateDialog(searchValue)}
-                >
-                  <Plus className="mr-2 h-4 w-4" />
-                  Cadastrar "{searchValue}"
-                </Button>
-              </CommandEmpty>
-              <CommandGroup>
-                {options.map((opt) => (
-                  <CommandItem
+            
+            <div 
+              className="max-h-[200px] overflow-y-auto overflow-x-hidden flex flex-col gap-0.5"
+              onWheel={(e) => e.stopPropagation()}
+              onPointerDown={(e) => e.stopPropagation()}
+              style={{ touchAction: 'pan-y' }}
+            >
+              {filteredOptions.length > 0 ? (
+                filteredOptions.map((opt) => (
+                  <button
                     key={opt.id}
-                    value={opt.nome}
-                    onSelect={() => {
+                    type="button"
+                    className={cn(
+                        "flex w-full items-center rounded-sm px-2 py-1.5 text-sm outline-none transition-colors",
+                        "hover:bg-accent hover:text-accent-foreground",
+                        value === opt.id ? "bg-accent/50" : "transparent"
+                    )}
+                    onClick={() => {
                       onValueChange(opt.id);
                       setOpen(false);
+                      setSearchValue("");
                     }}
                   >
                     <Check
                       className={cn(
-                        "mr-2 h-4 w-4",
+                        "mr-2 h-4 w-4 shrink-0",
                         value === opt.id ? "opacity-100" : "opacity-0"
                       )}
                     />
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 truncate">
                         {opt.cor && (
-                            <div className="w-3 h-3 rounded-full" style={{ backgroundColor: opt.cor }} />
+                            <div 
+                                className="w-3 h-3 rounded-full shrink-0" 
+                                style={{ backgroundColor: opt.cor }} 
+                            />
                         )}
-                        {opt.nome}
+                        <span className="truncate">{opt.nome}</span>
                     </div>
-                  </CommandItem>
-                ))}
-              </CommandGroup>
-            </CommandList>
-          </Command>
+                  </button>
+                ))
+              ) : (
+                <div className="py-6 text-center text-sm text-muted-foreground whitespace-normal p-2">
+                  Nenhuma instituição encontrada.
+                </div>
+              )}
+
+              {searchValue && !options.some(o => o.nome.toLowerCase() === searchValue.toLowerCase()) && (
+                <button
+                  type="button"
+                  className="flex w-full items-center rounded-sm px-2 py-1.5 text-sm font-medium text-primary hover:bg-accent outline-none"
+                  onClick={() => openCreateDialog(searchValue)}
+                >
+                  <Plus className="mr-2 h-4 w-4 shrink-0" />
+                  <span className="truncate text-left">Cadastrar "{searchValue}"</span>
+                </button>
+              )}
+            </div>
+          </div>
         </PopoverContent>
       </Popover>
 
@@ -154,14 +173,14 @@ export function InstitutionCombobox({ options, value, onValueChange, onAdded }: 
             <div className="grid gap-2">
               <Label htmlFor="cor">Cor de Destaque</Label>
               <div className="flex gap-2 items-center">
-                  <Input
+                  <input
                     id="cor"
                     type="color"
-                    className="w-12 h-12 p-1 cursor-pointer"
+                    className="w-12 h-12 p-1 cursor-pointer bg-transparent border rounded-md"
                     value={newColor}
                     onChange={(e) => setNewColor(e.target.value)}
                   />
-                  <span className="text-sm border px-3 py-2 rounded-md font-mono">{newColor}</span>
+                  <span className="text-sm border px-3 py-2 rounded-md font-mono flex-1">{newColor}</span>
               </div>
             </div>
           </div>

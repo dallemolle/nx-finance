@@ -85,7 +85,7 @@ export function InstitutionCombobox({ options, value, onValueChange, onAdded }: 
         </PopoverTrigger>
         <PopoverContent 
           className="w-[300px] p-1 pointer-events-auto"
-          portal={true}
+          portal={false}
         >
           <div className="flex flex-col gap-1 p-1">
             <Input
@@ -99,6 +99,9 @@ export function InstitutionCombobox({ options, value, onValueChange, onAdded }: 
               className="max-h-[200px] overflow-y-auto overflow-x-hidden flex flex-col gap-0.5"
               onWheel={(e) => e.stopPropagation()}
               onPointerDown={(e) => e.stopPropagation()}
+              onTouchStart={(e) => e.stopPropagation()}
+              onTouchMove={(e) => e.stopPropagation()}
+              onTouchEnd={(e) => e.stopPropagation()}
               style={{ touchAction: 'pan-y' }}
             >
               {filteredOptions.length > 0 ? (

@@ -1,5 +1,6 @@
 "use server";
 
+import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { revalidatePath } from "next/cache";
 import { categorySchema, paymentMethodSchema, transactionSchema, financialInstitutionSchema } from "@/lib/validations";
@@ -20,7 +21,7 @@ export async function createTransaction(data: any) {
     try {
         const userId = await getUserId();
         const validatedData = transactionSchema.parse(data);
-        const { isInstallment, installmentsCount, ...rest } = validatedData;
+        const { isInstallment, installmentsCount, installmentDescriptions, ...rest } = validatedData;
 
         if (isInstallment && installmentsCount && installmentsCount > 1) {
             const totalValue = new Decimal(rest.valor);
@@ -30,7 +31,11 @@ export async function createTransaction(data: any) {
             const transactions = await db.$transaction(
                 Array.from({ length: installmentsCount }).map((_, i) => {
                     const dueDate = addMonths(new Date(rest.data_vencimento), i);
-                    const description = `${rest.descricao} (${String(i + 1).padStart(2, '0')}/${String(installmentsCount).padStart(2, '0')})`;
+                    const defaultDescription = `${rest.descricao} (${String(i + 1).padStart(2, '0')}/${String(installmentsCount).padStart(2, '0')})`;
+                    const description = (validatedData.installmentDescriptions && validatedData.installmentDescriptions[i]) 
+                        ? validatedData.installmentDescriptions[i] 
+                        : defaultDescription;
+                    
                     const currentInstallmentValue = i === installmentsCount - 1 ? lastInstallmentValue : installmentValue;
 
                     return db.transaction.create({
@@ -180,6 +185,53 @@ export async function createCategory(data: any) {
     }
 }
 
+export async function updateCategory(id: string, data: any) {
+    try {
+        const userId = await getUserId();
+        const validatedData = categorySchema.partial().parse(data);
+
+        const category = await db.category.update({
+            where: { id, userId },
+            data: validatedData,
+        });
+
+        revalidatePath("/dashboard");
+        revalidatePath("/reports");
+        return category;
+    } catch (error: any) {
+        if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+            throw new Error("Já existe um registro com este nome para este usuário.");
+        }
+        console.error("Error updating category:", error);
+        throw new Error(error.message || "Erro ao atualizar categoria");
+    }
+}
+
+export async function deleteCategory(id: string) {
+    try {
+        const userId = await getUserId();
+        
+        const transactionCount = await db.transaction.count({
+            where: { userId, categoria_id: id },
+        });
+
+        if (transactionCount > 0) {
+            throw new Error(`Não é possível excluir. Existem ${transactionCount} transações vinculadas a esta categoria.`);
+        }
+
+        await db.category.delete({
+            where: { id, userId },
+        });
+
+        revalidatePath("/dashboard");
+        revalidatePath("/reports");
+        return { success: true };
+    } catch (error: any) {
+        console.error("Error deleting category:", error);
+        throw new Error(error.message || "Erro ao excluir categoria");
+    }
+}
+
 // Payment Method Actions
 export async function createPaymentMethod(data: any) {
     try {
@@ -214,6 +266,53 @@ export async function createPaymentMethod(data: any) {
     }
 }
 
+export async function updatePaymentMethod(id: string, data: any) {
+    try {
+        const userId = await getUserId();
+        const validatedData = paymentMethodSchema.partial().parse(data);
+
+        const paymentMethod = await db.paymentMethod.update({
+            where: { id, userId },
+            data: validatedData,
+        });
+
+        revalidatePath("/dashboard");
+        revalidatePath("/reports");
+        return paymentMethod;
+    } catch (error: any) {
+        if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+            throw new Error("Já existe um registro com este nome.");
+        }
+        console.error("Error updating payment method:", error);
+        throw new Error(error.message || "Erro ao atualizar meio de pagamento");
+    }
+}
+
+export async function deletePaymentMethod(id: string) {
+    try {
+        const userId = await getUserId();
+        
+        const transactionCount = await db.transaction.count({
+            where: { userId, tipo_pagamento_id: id },
+        });
+
+        if (transactionCount > 0) {
+            throw new Error(`Não é possível excluir. Existem ${transactionCount} transações vinculadas a este meio de pagamento.`);
+        }
+
+        await db.paymentMethod.delete({
+            where: { id, userId },
+        });
+
+        revalidatePath("/dashboard");
+        revalidatePath("/reports");
+        return { success: true };
+    } catch (error: any) {
+        console.error("Error deleting payment method:", error);
+        throw new Error(error.message || "Erro ao excluir meio de pagamento");
+    }
+}
+
 // Financial Institution Actions
 export async function createFinancialInstitution(data: any) {
     try {
@@ -245,6 +344,28 @@ export async function createFinancialInstitution(data: any) {
     } catch (error: any) {
         console.error("Error creating financial institution:", error);
         throw new Error(error.message || "Erro ao criar instituição financeira");
+    }
+}
+
+export async function updateFinancialInstitution(id: string, data: any) {
+    try {
+        const userId = await getUserId();
+        const validatedData = financialInstitutionSchema.partial().parse(data);
+
+        const financialInstitution = await db.financialInstitution.update({
+            where: { id, userId },
+            data: validatedData,
+        });
+
+        revalidatePath("/dashboard");
+        revalidatePath("/reports");
+        return financialInstitution;
+    } catch (error: any) {
+        if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+            throw new Error("Já existe uma instituição com este nome.");
+        }
+        console.error("Error updating financial institution:", error);
+        throw new Error(error.message || "Erro ao atualizar instituição financeira");
     }
 }
 

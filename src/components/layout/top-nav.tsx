@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { ArrowLeft, LayoutDashboard, FileText } from "lucide-react";
+import { ArrowLeft, LayoutDashboard, FileText, Settings } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -61,6 +61,22 @@ export function TopNav() {
                         >
                             <FileText className="h-4 w-4" />
                             <span className="hidden sm:inline-block">Relatórios</span>
+                        </Button>
+                    </Link>
+
+                    <Link href="/dashboard/settings">
+                        <Button
+                            variant={pathname.startsWith("/dashboard/settings") ? "secondary" : "ghost"}
+                            size="sm"
+                            className={cn(
+                                "h-9 transition-colors gap-2",
+                                pathname.startsWith("/dashboard/settings")
+                                    ? "bg-slate-100 text-slate-900 border-none hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-50 dark:hover:bg-slate-700"
+                                    : "text-muted-foreground"
+                            )}
+                        >
+                            <Settings className="h-4 w-4" />
+                            <span className="hidden sm:inline-block">Configurações</span>
                         </Button>
                     </Link>
                 </div>

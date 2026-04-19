@@ -36,6 +36,10 @@ export function TransactionForm({ categories: initialCategories, paymentMethods:
     const [paymentMethods, setPaymentMethods] = useState(initialPaymentMethods);
     const [institutions, setInstitutions] = useState(initialInstitutions);
 
+    // Dynamic installments descriptions state
+    const [installmentNames, setInstallmentNames] = useState<string[]>([]);
+    const [manualEdits, setManualEdits] = useState<Set<number>>(new Set());
+
     // Sync state with props when they change
     useEffect(() => {
         setCategories(initialCategories);
@@ -63,6 +67,7 @@ export function TransactionForm({ categories: initialCategories, paymentMethods:
     });
 
     const tipo = watch("tipo");
+    const baseDesc = watch("descricao");
     const dataVencimento = watch("data_vencimento");
     const categoriaId = watch("categoria_id");
     const paymentMethodId = watch("tipo_pagamento_id");
@@ -70,18 +75,58 @@ export function TransactionForm({ categories: initialCategories, paymentMethods:
     const isInstallment = watch("isInstallment");
     const installmentsCount = watch("installmentsCount");
 
+    // Sync installment names when base description or count changes
+    useEffect(() => {
+        if (isInstallment && installmentsCount > 0) {
+            setInstallmentNames(prev => {
+                const count = Number(installmentsCount);
+                const newNames = [...prev];
+                
+                // Adjust size
+                if (newNames.length !== count) {
+                    newNames.length = count;
+                }
+
+                for (let i = 0; i < count; i++) {
+                    // Only update if not manually edited OR if it was empty
+                    if (!manualEdits.has(i) || !newNames[i]) {
+                        const suffix = `(${String(i + 1).padStart(2, '0')}/${String(count).padStart(2, '0')})`;
+                        newNames[i] = baseDesc ? `${baseDesc} ${suffix}` : `Parcela ${suffix}`;
+                    }
+                }
+                return newNames;
+            });
+        }
+    }, [baseDesc, installmentsCount, isInstallment, manualEdits]);
+
+    const handleInstallmentNameChange = (index: number, value: string) => {
+        setManualEdits(prev => new Set(prev).add(index));
+        setInstallmentNames(prev => {
+            const next = [...prev];
+            next[index] = value;
+            return next;
+        });
+    };
+
     const onSubmit = (data: any) => {
         setError(null);
+        const submissionData = {
+            ...data,
+            installmentDescriptions: isInstallment ? installmentNames : undefined
+        };
+
         startTransition(async () => {
             try {
                 if (initialData?.id) {
-                    await updateTransaction(initialData.id, data);
+                    await updateTransaction(initialData.id, submissionData);
                     toast.success("Transação atualizada com sucesso!");
                 } else {
-                    await createTransaction(data);
+                    await createTransaction(submissionData);
                     toast.success("Transação realizada com sucesso!");
                 }
                 reset();
+                setManualEdits(new Set());
+                setInstallmentNames([]);
                 onSuccess();
             } catch (err: any) {
                 const message = err.message || "Erro ao salvar transação";
@@ -156,14 +201,14 @@ export function TransactionForm({ categories: initialCategories, paymentMethods:
             </div>
 
             <div className="space-y-2">
-                <Label htmlFor="descricao">Descrição</Label>
+                <Label htmlFor="descricao">Descrição Geral</Label>
                 <Input id="descricao" {...register("descricao")} placeholder="Ex: Aluguel, Salário, etc" />
                 {errors.descricao && <p className="text-xs text-red-500">{errors.descricao.message as string}</p>}
             </div>
 
             <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                    <Label htmlFor="valor">Valor (R$)</Label>
+                    <Label htmlFor="valor">Valor Total (R$)</Label>
                     <Input id="valor" type="number" step="0.01" {...register("valor")} placeholder="0,00" />
                     {errors.valor && <p className="text-xs text-red-500">{errors.valor.message as string}</p>}
                 </div>
@@ -221,6 +266,7 @@ export function TransactionForm({ categories: initialCategories, paymentMethods:
                         searchPlaceholder="Procurar meio..."
                         emptyMessage="Não encontrado."
                     />
+                    {errors.tipo_pagamento_id && <p className="text-xs text-red-500">{errors.tipo_pagamento_id.message as string}</p>}
                 </div>
             </div>
 
@@ -256,13 +302,14 @@ export function TransactionForm({ categories: initialCategories, paymentMethods:
                             {errors.installmentsCount && <p className="text-xs text-red-500">{errors.installmentsCount.message as string}</p>}
                             {watch("valor") > 0 && installmentsCount > 0 && (
                                 <div className="mt-4 space-y-2 border-t pt-4">
-                                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Prévia das Parcelas</p>
-                                    <div className="max-h-[200px] overflow-y-auto rounded-md border bg-background/50">
+                                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Prévia e Personalização</p>
+                                    <div className="max-h-[300px] overflow-y-auto rounded-md border bg-background/50">
                                         <table className="w-full text-left text-xs">
                                             <thead className="sticky top-0 bg-muted/50 border-b">
                                                 <tr>
-                                                    <th className="p-2 font-medium">Parc.</th>
-                                                    <th className="p-2 font-medium">Vencimento</th>
+                                                    <th className="p-2 font-medium w-16 text-center">Parc.</th>
+                                                    <th className="p-2 font-medium">Nome da Parcela (Editável)</th>
+                                                    <th className="p-2 font-medium whitespace-nowrap">Vencimento</th>
                                                     <th className="p-2 font-medium text-right">Valor</th>
                                                 </tr>
                                             </thead>
@@ -279,11 +326,18 @@ export function TransactionForm({ categories: initialCategories, paymentMethods:
 
                                                     return (
                                                         <tr key={i} className={cn("border-b last:border-0", isAdjusted && "bg-blue-50/50 dark:bg-blue-900/20")}>
-                                                            <td className="p-2">{String(i + 1).padStart(2, '0')} / {String(count).padStart(2, '0')}</td>
-                                                            <td className="p-2">{format(dueDate, "dd/MM/yyyy")}</td>
+                                                            <td className="p-2 text-center text-muted-foreground">{String(i + 1).padStart(2, '0')}</td>
+                                                            <td className="p-1">
+                                                                <Input 
+                                                                    value={installmentNames[i] || ""}
+                                                                    onChange={(e) => handleInstallmentNameChange(i, e.target.value)}
+                                                                    className="h-7 text-xs bg-transparent border-dashed hover:border-solid focus:bg-background transition-colors"
+                                                                />
+                                                            </td>
+                                                            <td className="p-2 whitespace-nowrap">{format(dueDate, "dd/MM/yy")}</td>
                                                             <td className={cn("p-2 text-right font-medium", isAdjusted && "text-blue-600 dark:text-blue-400")}>
                                                                 {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(currentVal.toNumber())}
-                                                                {isAdjusted && <span className="ml-1 text-[10px] opacity-70" title="Ajuste de centavos">*</span>}
+                                                                {isAdjusted && <span className="ml-0.5 text-[10px] opacity-70" title="Ajuste de centavos">*</span>}
                                                             </td>
                                                         </tr>
                                                     );
@@ -292,7 +346,7 @@ export function TransactionForm({ categories: initialCategories, paymentMethods:
                                         </table>
                                     </div>
                                     <p className="text-[10px] text-muted-foreground italic">
-                                        * A última parcela contém o ajuste de centavos para garantir a precisão do valor total.
+                                        * A última parcela contém o ajuste de centavos. Clique nos campos de nome para personalizar.
                                     </p>
                                 </div>
                             )}

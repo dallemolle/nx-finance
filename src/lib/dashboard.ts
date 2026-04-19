@@ -59,10 +59,7 @@ export async function getDashboardData(userId: string, month: number, year: numb
             const valor = Number(t.valor);
             const existing = acc.find((item: any) => item.name === name);
 
-            // Premium Color Palette overrides
             let fill = t.category.cor;
-            if (name === "Mercado") fill = "#0d9488"; // teal-600
-            if (name === "Alimentação") fill = "#0891b2"; // cyan-600
 
             if (existing) {
                 existing.value += valor;

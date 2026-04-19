@@ -35,53 +35,77 @@ export function RecentTransactions({ transactions, userId }: RecentTransactionsP
         }
     };
 
+    const entradas = transactions.filter(t => t.tipo === "ENTRADA");
+    const saidas = transactions.filter(t => t.tipo === "SAIDA");
+
+    const renderTransactionList = (list: Transaction[], emptyMessage: string) => {
+        if (list.length === 0) {
+            return (
+                <div className="py-6 text-center text-muted-foreground italic text-xs">
+                    {emptyMessage}
+                </div>
+            );
+        }
+
+        return list.map((t) => (
+            <div key={t.id} className="group flex items-center justify-between py-1.5 px-2 transition-all rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800/50 border-b border-slate-100/50 dark:border-slate-800/50 last:border-0">
+                <div className="flex items-center gap-3">
+                    <div className={`w-1 h-10 rounded-full ${t.tipo === 'ENTRADA' ? 'bg-emerald-500' : 'bg-rose-500'} opacity-20 group-hover:opacity-100 transition-opacity`} />
+                    <div className="flex flex-col">
+                        <span className="font-semibold text-slate-700 dark:text-slate-200 text-sm leading-tight capitalize">{t.descricao}</span>
+                        {t.institution && (
+                            <div className="flex items-center gap-1 mt-0.5">
+                                {t.institution.cor && (
+                                    <div className="w-2 h-2 rounded-full" style={{ backgroundColor: t.institution.cor }} />
+                                )}
+                                <span className="text-[10px] text-muted-foreground uppercase font-semibold tracking-wider">
+                                    {t.institution.nome}
+                                </span>
+                            </div>
+                        )}
+                        <span className="text-[11px] text-muted-foreground font-medium mt-0.5">
+                            {format(new Date(t.data_vencimento), "dd 'de' MMMM", { locale: ptBR })}
+                        </span>
+                    </div>
+                </div>
+                <div className="flex items-center gap-1 md:gap-3">
+                    <div className="text-right min-w-[80px] md:min-w-[100px]">
+                        <p className={`text-sm font-black tracking-tight ${t.tipo === 'ENTRADA' ? 'text-emerald-600' : 'text-rose-600'}`}>
+                            {t.tipo === 'ENTRADA' ? '+' : '-'} {formatCurrency(Number(t.valor))}
+                        </p>
+                        {getStatusBadge(t.status)}
+                    </div>
+                    <div className="flex items-center">
+                        {t.status !== "PAGO" && <QuickPayButton transactionId={t.id} />}
+                        <EditTransactionDialog transaction={t} userId={userId} />
+                    </div>
+                </div>
+            </div>
+        ));
+    };
+
     return (
         <Card className="col-span-1 border-none shadow-xl bg-white dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-800 md:col-span-2 flex flex-col h-[520px] max-h-[520px]">
             <CardHeader className="pb-3 shrink-0">
                 <CardTitle className="text-lg font-bold text-slate-800 dark:text-slate-200 tracking-tight">Lançamentos do Mês</CardTitle>
             </CardHeader>
             <CardContent className="flex-1 min-h-0 overflow-hidden pb-4">
-                <div className="space-y-0.5 h-full overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-slate-200 dark:scrollbar-thumb-slate-800">
-                    {transactions.map((t) => (
-                        <div key={t.id} className="group flex items-center justify-between py-1.5 px-2 transition-all rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800/50 border-b border-slate-100/50 dark:border-slate-800/50 last:border-0">
-                            <div className="flex items-center gap-3">
-                                <div className={`w-1 h-10 rounded-full ${t.tipo === 'ENTRADA' ? 'bg-emerald-500' : 'bg-rose-500'} opacity-20 group-hover:opacity-100 transition-opacity`} />
-                                <div className="flex flex-col">
-                                    <span className="font-semibold text-slate-700 dark:text-slate-200 text-sm leading-tight capitalize">{t.descricao}</span>
-                                    {t.institution && (
-                                        <div className="flex items-center gap-1 mt-0.5">
-                                            {t.institution.cor && (
-                                                <div className="w-2 h-2 rounded-full" style={{ backgroundColor: t.institution.cor }} />
-                                            )}
-                                            <span className="text-[10px] text-muted-foreground uppercase font-semibold tracking-wider">
-                                                {t.institution.nome}
-                                            </span>
-                                        </div>
-                                    )}
-                                    <span className="text-[11px] text-muted-foreground font-medium mt-0.5">
-                                        {format(new Date(t.data_vencimento), "dd 'de' MMMM", { locale: ptBR })}
-                                    </span>
-                                </div>
-                            </div>
-                            <div className="flex items-center gap-1 md:gap-3">
-                                <div className="text-right min-w-[80px] md:min-w-[100px]">
-                                    <p className={`text-sm font-black tracking-tight ${t.tipo === 'ENTRADA' ? 'text-emerald-600' : 'text-rose-600'}`}>
-                                        {t.tipo === 'ENTRADA' ? '+' : '-'} {formatCurrency(Number(t.valor))}
-                                    </p>
-                                    {getStatusBadge(t.status)}
-                                </div>
-                                <div className="flex items-center">
-                                    {t.status !== "PAGO" && <QuickPayButton transactionId={t.id} />}
-                                    <EditTransactionDialog transaction={t} userId={userId} />
-                                </div>
-                            </div>
+                <div className="space-y-4 h-full overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-slate-200 dark:scrollbar-thumb-slate-800">
+                    <div>
+                        <div className="flex items-center gap-2 mb-2">
+                             <h3 className="text-[10px] uppercase font-black text-emerald-600 tracking-[0.2em] bg-emerald-50 dark:bg-emerald-950/30 px-2 py-0.5 rounded">Entradas / Receitas</h3>
+                             <div className="h-[1px] flex-1 bg-emerald-100 dark:bg-emerald-900/30" />
                         </div>
-                    ))}
-                    {transactions.length === 0 && (
-                        <div className="py-12 text-center text-muted-foreground italic text-sm">
-                            Nenhum lançamento encontrado para este período.
+                        {renderTransactionList(entradas, "Nenhuma receita este mês.")}
+                    </div>
+
+                    <div>
+                        <div className="flex items-center gap-2 mb-2">
+                             <h3 className="text-[10px] uppercase font-black text-rose-600 tracking-[0.2em] bg-rose-50 dark:bg-rose-950/30 px-2 py-0.5 rounded">Saídas / Despesas</h3>
+                             <div className="h-[1px] flex-1 bg-rose-100 dark:bg-rose-900/30" />
                         </div>
-                    )}
+                        {renderTransactionList(saidas, "Nenhuma despesa este mês.")}
+                    </div>
                 </div>
             </CardContent>
         </Card>

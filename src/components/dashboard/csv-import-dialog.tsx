@@ -14,7 +14,8 @@ import { getCategories, getPaymentMethods, getFinancialInstitutions } from "@/li
 import { InstitutionCombobox } from "@/components/dashboard/institution-combobox";
 import { processBatchTransactions, getMappingSuggestions } from "@/lib/csv-actions";
 import { cn } from "@/lib/utils";
-import { createCategory } from "@/lib/actions";
+import { createCategory, createPaymentMethod } from "@/lib/actions";
+import { Combobox } from "@/components/ui/combobox";
 
 export function CsvImportDialog({ userId, className }: { userId: string, className?: string }) {
     const [open, setOpen] = useState(false);
@@ -76,6 +77,10 @@ export function CsvImportDialog({ userId, className }: { userId: string, classNa
             setError("Selecione uma Instituição Financeira para o lote.");
             return;
         }
+        if (paymentMethodId === "none") {
+            setError("Selecione um Meio de Pagamento para o lote.");
+            return;
+        }
 
         setIsLoading(true);
         Papa.parse(file, {
@@ -133,6 +138,16 @@ export function CsvImportDialog({ userId, className }: { userId: string, classNa
             });
             setCategories(prev => [...prev, newCat]);
             handleRowChange(id, "category_id", newCat.id);
+        } catch (e: any) {
+            console.error(e);
+        }
+    };
+    
+    const handlePaymentMethodAdd = async (name: string) => {
+        try {
+            const newPM = await createPaymentMethod({ nome: name });
+            setPaymentMethods(prev => [...prev, newPM]);
+            setPaymentMethodId(newPM.id);
         } catch (e: any) {
             console.error(e);
         }
@@ -235,18 +250,15 @@ export function CsvImportDialog({ userId, className }: { userId: string, classNa
                                     />
                                 </div>
                                 <div className="space-y-2">
-                                    <Label>Meio de Pagamento (Opcional)</Label>
-                                    <Select value={paymentMethodId} onValueChange={setPaymentMethodId}>
-                                        <SelectTrigger>
-                                            <SelectValue placeholder="Selecione um meio..." />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="none">Não especificado</SelectItem>
-                                            {paymentMethods.map(pm => (
-                                                <SelectItem key={pm.id} value={pm.id}>{pm.nome}</SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
+                                    <Label>Meio de Pagamento</Label>
+                                    <Combobox
+                                        options={paymentMethods.map(pm => ({ value: pm.id, label: pm.nome }))}
+                                        value={paymentMethodId === "none" ? "" : paymentMethodId}
+                                        onValueChange={setPaymentMethodId}
+                                        onAdd={handlePaymentMethodAdd}
+                                        placeholder="Selecione o meio..."
+                                        searchPlaceholder="Buscar ou criar..."
+                                    />
                                 </div>
                             </div>
                         </div>

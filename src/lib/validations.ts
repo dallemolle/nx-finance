@@ -11,10 +11,11 @@ export const transactionSchema = z.object({
     status: TransactionStatus,
     tipo: TransactionType,
     categoria_id: z.string().min(1, "Categoria é obrigatória"),
-    tipo_pagamento_id: z.string().optional().nullable(),
+    tipo_pagamento_id: z.string().min(1, "Meio de pagamento é obrigatório"),
     institution_id: z.string().min(1, "Instituição é obrigatória"),
     isInstallment: z.boolean().default(false),
     installmentsCount: z.coerce.number().min(2, "Mínimo de 2 parcelas").max(48, "Máximo de 48 parcelas").optional().nullable(),
+    installmentDescriptions: z.array(z.string()).optional(),
 }).refine((data) => {
     if (data.isInstallment && !data.installmentsCount) {
         return false;

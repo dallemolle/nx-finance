@@ -2,6 +2,7 @@
 
 import { db } from "@/lib/db";
 import { startOfMonth, endOfMonth, isBefore, subMonths, getDaysInMonth } from "date-fns";
+import { getCategoryGroupName } from "./dashboard-utils";
 
 export async function getDashboardData(userId: string, month: number, year: number) {
     const targetDate = new Date(year, month - 1);
@@ -45,17 +46,10 @@ export async function getDashboardData(userId: string, month: number, year: numb
     const saldoTotal = currentSummary.totalEntradas - currentSummary.totalSaidas;
 
     // Intelligent Category Grouping
-    const groupName = (name: string) => {
-        const n = name.toLowerCase().trim();
-        if (n.startsWith("mercado") || n.startsWith("mer")) return "Mercado";
-        if (n.startsWith("comida") || n.startsWith("restaurante") || n.startsWith("ifood")) return "Alimentação";
-        return n.charAt(0).toUpperCase() + n.slice(1);
-    };
-
     const categoryData = transactions
         .filter((t: any) => t.tipo === "SAIDA")
         .reduce((acc: any[], t: any) => {
-            const name = groupName(t.category.nome);
+            const name = getCategoryGroupName(t.category.nome);
             const valor = Number(t.valor);
             const existing = acc.find((item: any) => item.name === name);
 

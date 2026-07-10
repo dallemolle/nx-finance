@@ -63,7 +63,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                 <SummaryCards summary={data.summary} />
 
                 <div className="grid gap-6 md:grid-cols-3">
-                    <CategoryChart data={data.categoryData} />
+                    <CategoryChart data={data.categoryData} transactions={data.monthlyTransactions} />
                     <div className="col-span-1 md:col-span-2">
                         <RecentTransactions transactions={data.monthlyTransactions} userId={session.user.id} />
                     </div>

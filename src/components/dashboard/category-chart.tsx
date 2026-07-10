@@ -4,7 +4,11 @@ import { useState } from "react";
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
-import { ChevronDown, ChevronUp } from "lucide-react";
+import { ChevronDown, ChevronUp, ScrollText, ArrowDownRight, Tag, Building2, Banknote } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { format } from "date-fns";
+import { ptBR } from "date-fns/locale";
+import { getCategoryGroupName } from "@/lib/dashboard-utils";
 
 interface CategoryChartProps {
     data: {
@@ -12,11 +16,13 @@ interface CategoryChartProps {
         value: number;
         fill: string;
     }[];
+    transactions?: any[];
 }
 
-export function CategoryChart({ data }: CategoryChartProps) {
+export function CategoryChart({ data, transactions = [] }: CategoryChartProps) {
     const [activeIndex, setActiveIndex] = useState<number | null>(null);
     const [isExpanded, setIsExpanded] = useState(false);
+    const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
 
     const sortedData = [...data].sort((a, b) => b.value - a.value);
     const total = sortedData.reduce((acc, curr) => acc + curr.value, 0);
@@ -85,13 +91,14 @@ export function CategoryChart({ data }: CategoryChartProps) {
                                     <div
                                         key={item.name}
                                         className={cn(
-                                            "flex items-center justify-between py-3 px-2 transition-colors cursor-default border-b border-slate-100 dark:border-slate-800/50 last:border-none",
+                                            "flex items-center justify-between py-3 px-2 transition-colors cursor-pointer border-b border-slate-100 dark:border-slate-800/50 last:border-none",
                                             activeIndex === index
                                                 ? "bg-slate-50 dark:bg-slate-800/80 rounded-md shadow-sm"
                                                 : "hover:bg-slate-50/50 dark:hover:bg-slate-800/40 rounded-sm"
                                         )}
                                         onMouseEnter={() => setActiveIndex(index)}
                                         onMouseLeave={() => setActiveIndex(null)}
+                                        onClick={() => setSelectedCategory(item.name)}
                                     >
                                         <div className="flex items-center gap-3">
                                             <div
@@ -148,6 +155,87 @@ export function CategoryChart({ data }: CategoryChartProps) {
                     </div>
                 )}
             </CardContent>
+
+            <Dialog open={selectedCategory !== null} onOpenChange={(open) => !open && setSelectedCategory(null)}>
+                <DialogContent className="max-w-2xl max-h-[85vh] flex flex-col sm:rounded-2xl bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl border border-slate-200/50 dark:border-slate-800/50 shadow-2xl p-0 overflow-hidden">
+                    {selectedCategory && (() => {
+                        const categoryItem = sortedData.find(c => c.name === selectedCategory);
+                        const categoryTransactions = transactions.filter(t => 
+                            t.tipo === "SAIDA" && getCategoryGroupName(t.category?.nome || "") === selectedCategory
+                        );
+                        
+                        return (
+                            <>
+                                <DialogHeader className="p-6 pb-4 border-b border-slate-100 dark:border-slate-800/50 shrink-0">
+                                    <div className="flex items-center gap-4">
+                                        <div 
+                                            className="w-12 h-12 rounded-2xl flex items-center justify-center shadow-inner"
+                                            style={{ backgroundColor: `${categoryItem?.fill}20`, color: categoryItem?.fill }}
+                                        >
+                                            <Tag className="w-6 h-6" />
+                                        </div>
+                                        <div>
+                                            <DialogTitle className="text-2xl font-bold text-slate-800 dark:text-slate-100 mb-1">
+                                                {selectedCategory}
+                                            </DialogTitle>
+                                            <DialogDescription className="text-sm font-medium">
+                                                Total no período: <span className="text-slate-900 dark:text-white font-bold">{formatCurrency(categoryItem?.value || 0)}</span> ({categoryTransactions.length} transações)
+                                            </DialogDescription>
+                                        </div>
+                                    </div>
+                                </DialogHeader>
+                                
+                                <div className="flex-1 overflow-y-auto bg-slate-50/30 dark:bg-slate-950/30 p-2 sm:p-4 scrollbar-thin scrollbar-thumb-slate-200 dark:scrollbar-thumb-slate-800">
+                                    <div className="space-y-2">
+                                        {categoryTransactions.length > 0 ? (
+                                            categoryTransactions.map((t) => (
+                                                <div 
+                                                    key={t.id} 
+                                                    className="flex items-center justify-between p-4 bg-white dark:bg-slate-900 rounded-xl border border-slate-100 dark:border-slate-800/50 shadow-sm hover:shadow-md hover:border-slate-300 dark:hover:border-slate-700 transition-all group"
+                                                >
+                                                    <div className="flex items-center gap-4">
+                                                        <div className="w-10 h-10 rounded-full bg-rose-50 dark:bg-rose-950/30 text-rose-500 flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform">
+                                                            <ArrowDownRight className="w-5 h-5" />
+                                                        </div>
+                                                        <div className="flex flex-col">
+                                                            <span className="font-semibold text-slate-800 dark:text-slate-200 text-sm md:text-base line-clamp-1">{t.descricao}</span>
+                                                            <div className="flex items-center gap-3 text-xs text-slate-500 mt-1">
+                                                                <span className="flex items-center gap-1">
+                                                                    <ScrollText className="w-3 h-3" />
+                                                                    {format(new Date(t.data_vencimento), "dd 'de' MMM", { locale: ptBR })}
+                                                                </span>
+                                                                <span className="hidden sm:flex items-center gap-1">
+                                                                    <Building2 className="w-3 h-3" />
+                                                                    {t.institution?.nome || "Cartão"}
+                                                                </span>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                    
+                                                    <div className="flex items-center gap-1 bg-rose-50 dark:bg-rose-950/20 px-3 py-1.5 rounded-lg border border-rose-100 dark:border-rose-900/30">
+                                                        <Banknote className="w-4 h-4 text-rose-500" />
+                                                        <span className="font-bold text-rose-600 dark:text-rose-400">
+                                                            {formatCurrency(Number(t.valor))}
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            ))
+                                        ) : (
+                                            <div className="flex flex-col items-center justify-center py-12 text-center">
+                                                <div className="w-16 h-16 bg-slate-100 dark:bg-slate-800 rounded-full flex items-center justify-center mb-4">
+                                                    <ScrollText className="w-8 h-8 text-slate-400" />
+                                                </div>
+                                                <p className="text-slate-500 font-medium">Nenhuma transação encontrada</p>
+                                                <p className="text-sm text-slate-400 mt-1">Os dados podem estar agrupados temporariamente.</p>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            </>
+                        );
+                    })()}
+                </DialogContent>
+            </Dialog>
         </Card>
     );
 }

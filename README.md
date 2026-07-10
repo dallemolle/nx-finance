@@ -58,7 +58,10 @@ Como o ambiente local não possui o Node.js configurado no PATH, siga estes pass
 
 
 nota leandro para subir o projeto:
-docker-compose up --build -d
+Para testar:
+docker-compose down -v        # limpa volumes
+docker-compose up --build -d  # reconstrói com as correções
+docker logs nx-finance-app    # acompanha startup
 
 docker-compose exec app npx prisma@6 db push
 

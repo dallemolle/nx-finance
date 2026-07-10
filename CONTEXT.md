@@ -71,6 +71,7 @@ postinstall → prisma generate
 | `edit-transaction-dialog.tsx` | Client Component | Diálogo de edição com `initialData` |
 | `quick-pay-button.tsx` | Client Component | Botão de pagamento rápido (altera status para PAGO) |
 | `csv-import-dialog.tsx` | Client Component | Importação CSV em 2 passos: upload + mapeamento de categorias |
+| `credit-card-invoice-dialog.tsx` | Client Component | Importação de fatura de cartão de crédito via CSV: cria cabeçalho is_invoice_header + itens detalhados com categoria |
 | `institution-combobox.tsx` | Client Component | Combobox especializado com criação de instituição via diálogo |
 | `export-buttons.tsx` | Client Component | Dropdown de exportação (CSV/PDF) — funcionalidade mock |
 | `financial-health.tsx` | Client Component | Indicador visual de saúde financeira com Progress |
@@ -93,6 +94,7 @@ postinstall → prisma generate
 | `dashboard.ts` | Server Action | `getDashboardData()` — agrega totais, deltas, health score, forecast, smart category grouping |
 | `dashboard-utils.ts` | Utilitário | `getCategoryGroupName()` — agrupamento inteligente de categorias |
 | `reports.ts` | Server Actions | `getReportData()` + `getCategories/PaymentMethods/Institutions()` |
+| `credit-card-actions.ts` | Server Actions | `importCreditCardInvoice()` — importa fatura CSV + `getInvoiceItems()` + `getInvoiceHeaders()` |
 | `csv-actions.ts` | Server Actions | `processBatchTransactions()`, `getMappingSuggestions()`, `saveMappingSuggestion()` |
 | `db.ts` | Singleton | Instância singleton do PrismaClient (cache em `globalThis`) |
 | `prisma.ts` | Singleton | Alternativa com log de queries habilitado |
@@ -133,10 +135,19 @@ Todos os schemas em `src/lib/validations.ts` aplicam transformações **antes** 
   - **O parcelamento só está disponível para `tipo === "SAIDA"`** e apenas na criação (não edição).
 - Status `ATRASADO` é **calculado dinamicamente** no servidor: se `status !== "PAGO" && dataVencimento < now()`, o status exibido é "ATRASADO" (não é persistido, apenas calculado na query).
 
+**CreditCardInvoiceItem (modelo auxiliar de fatura de cartão):**
+- Relacionamento 1:N com Transaction via `transactionId` — uma transação `is_invoice_header` pode conter N itens.
+- `data_vencimento_original` (opcional) armazena a data de vencimento individual do item (se diferente da fatura).
+- `categoria_id` vincula cada item a uma Category, permitindo agregação no gráfico de categorias.
+- **Liquidação unificada**: apenas a transação principal (is_invoice_header) é liquidada (status → PAGO). Os itens não possuem status próprio.
+- **Exclusão em cascata**: ao deletar a transação principal, todos os itens associados são removidos via `onDelete: Cascade`.
+- **Importação**: o CSV de fatura é processado pelo dialog `credit-card-invoice-dialog.tsx`, que cria o cabeçalho + itens em lote via `importCreditCardInvoice()`.
+
 **Category:**
 - Duplicidade verificada antes da criação via `findFirst({ where: { nome: { equals, mode: 'insensitive' }, userId, tipo } })` — case-insensitive.
 - Se já existir, retorna o registro existente (idempotência).
 - **Proteção de exclusão**: se `transactions.count > 0` vinculadas à categoria, o delete é bloqueado com mensagem específica.
+- Também referenciada por `CreditCardInvoiceItem.categoria_id`.
 
 **PaymentMethod & FinancialInstitution:**
 - Duplicidade verificada via `findUnique({ where: { nome_userId } })` — usa a unique constraint composta.
@@ -166,6 +177,8 @@ Todas as mutações seguem o mesmo padrão:
 - Após importação, cria automaticamente `MappingSuggestion` para aprendizado de categorização futura.
 
 ### 3.5 Cálculos do Dashboard
+
+- Ao processar `categoryData`, o dashboard separa transações com `is_invoice_header === true` e as exclui do agrupamento, evitando duplicidade no gráfico. Em vez disso, busca os registros de `CreditCardInvoiceItem` e os mescla na agregação via `aggregateByCategory()`, garantindo que os gastos do cartão apareçam nas categorias corretas.
 
 **`getDashboardData()` — `src/lib/dashboard.ts`:**
 

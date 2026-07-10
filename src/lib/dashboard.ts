@@ -45,23 +45,41 @@ export async function getDashboardData(userId: string, month: number, year: numb
 
     const saldoTotal = currentSummary.totalEntradas - currentSummary.totalSaidas;
 
+    // Fetch invoice items for invoice headers in the current period
+    const invoiceHeaderIds = transactions
+        .filter((t: any) => t.is_invoice_header)
+        .map((t: any) => t.id);
+
+    const invoiceItems = invoiceHeaderIds.length > 0
+        ? await db.creditCardInvoiceItem.findMany({
+            where: { transactionId: { in: invoiceHeaderIds } },
+            include: { category: true },
+        })
+        : [];
+
     // Intelligent Category Grouping
-    const categoryData = transactions
-        .filter((t: any) => t.tipo === "SAIDA")
-        .reduce((acc: any[], t: any) => {
-            const name = getCategoryGroupName(t.category.nome);
-            const valor = Number(t.valor);
-            const existing = acc.find((item: any) => item.name === name);
+    // Merge regular SAIDA transactions (excluding invoice headers) with invoice items
+    const categoryData: { name: string; value: number; fill: string }[] = [];
 
-            let fill = t.category.cor;
-
+    const aggregateByCategory = (entries: any[]) => {
+        for (const entry of entries) {
+            const name = getCategoryGroupName(entry.category.nome);
+            const valor = Number(entry.valor);
+            const existing = categoryData.find(item => item.name === name);
             if (existing) {
                 existing.value += valor;
             } else {
-                acc.push({ name, value: valor, fill });
+                categoryData.push({ name, value: valor, fill: entry.category.cor });
             }
-            return acc;
-        }, [] as { name: string; value: number; fill: string }[]);
+        }
+    };
+
+    // 1. Regular transactions (skip invoice headers to avoid double-count in chart)
+    const regularSaidas = transactions.filter((t: any) => t.tipo === "SAIDA" && !t.is_invoice_header);
+    aggregateByCategory(regularSaidas);
+
+    // 2. Invoice items (detailed breakdown of credit card invoices)
+    aggregateByCategory(invoiceItems);
 
     // Monthly Forecast & Health
     const today = new Date();

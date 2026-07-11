@@ -99,7 +99,13 @@ export function CreditCardInvoiceDialog({ userId, className }: { userId: string;
                         const title = row.title || row.descricao || row.description || row.Title || Object.values(row)[0] || "Sem título";
                         const rawAmount = row.amount || row.valor || row.Value || row.Amount || "0";
                         const amount = parseFloat(String(rawAmount).replace(/[R$\s]/g, '').replace(',', '.'));
-                        const date = row.date || row.data || row.Date || row.Data || row.data_compra || new Date().toISOString();
+                        const rawDate = row.date || row.data || row.Date || row.Data || row.data_compra || "";
+                        const parsed = new Date(rawDate);
+                        const date = !isNaN(parsed.getTime())
+                            ? parsed.toISOString().split('T')[0]
+                            : rawDate.includes('/')
+                                ? rawDate.split('/').reverse().join('-')
+                                : new Date().toISOString().split('T')[0];
 
                         const guess = suggestions.find((s: any) => title.toLowerCase().includes(s.search_term));
 

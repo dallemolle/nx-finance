@@ -27,25 +27,23 @@ RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nextjs
 
 COPY --from=builder /app/public ./public
-COPY --from=builder /app/.next/standalone ./
-COPY --from=builder /app/.next/static ./.next/static
-
-# Copy Prisma files for db push at startup
+COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
+COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
+COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
 COPY --from=builder /app/prisma ./prisma
-COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/package.json ./package.json
+COPY --from=deps /app/node_modules/prisma ./node_modules/prisma
 
 # Copy entrypoint
-COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+COPY --chown=nextjs:nodejs docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
-
-# Clean unnecessary files (optional)
-RUN rm -rf node_modules/.cache
 
 USER nextjs
 
 EXPOSE 3000
 
 ENV PORT 3000
+# set hostname to localhost
 ENV HOSTNAME "0.0.0.0"
 
 ENTRYPOINT ["docker-entrypoint.sh"]

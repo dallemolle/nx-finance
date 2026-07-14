@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { ReportFilters } from "./report-filters";
+import { ChevronRight, ChevronDown, CreditCard } from "lucide-react";
 
 interface ReportContentProps {
     transactions: any[];
@@ -17,6 +18,15 @@ export function ReportContent({ transactions, categories, institutions, paymentM
     const [categoryFilter, setCategoryFilter] = useState("ALL");
     const [institutionFilter, setInstitutionFilter] = useState("ALL");
     const [paymentMethodFilter, setPaymentMethodFilter] = useState("ALL");
+    const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
+
+    const toggleExpand = (id: string) => {
+        setExpandedRows(prev => {
+            const next = new Set(prev);
+            if (next.has(id)) next.delete(id); else next.add(id);
+            return next;
+        });
+    };
 
     // Filtragem Instantânea
     const filteredTransactions = useMemo(() => {
@@ -108,42 +118,105 @@ export function ReportContent({ transactions, categories, institutions, paymentM
                         </TableRow>
                     </TableHeader>
                     <TableBody>
-                        {filteredTransactions.map((t) => (
-                            <TableRow key={t.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/50 transition-colors">
-                                <TableCell className="font-medium capitalize">{t.descricao}</TableCell>
-                                <TableCell>
-                                    {t.institution ? (
-                                        <div className="flex items-center gap-2">
-                                            {t.institution.cor && <div className="w-2 h-2 rounded-full" style={{ backgroundColor: t.institution.cor }} />}
-                                            <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">{t.institution.nome}</span>
-                                        </div>
-                                    ) : (
-                                        <span className="text-muted-foreground italic text-xs">-</span>
-                                    )}
-                                </TableCell>
-                                <TableCell>
-                                    <span className="text-xs font-medium text-muted-foreground">{t.paymentMethod?.nome || "-"}</span>
-                                </TableCell>
-                                <TableCell>
-                                    <div className="flex items-center gap-2">
-                                        <div className="w-3 h-3 rounded-full" style={{ backgroundColor: t.category.cor }} />
-                                        <span className="text-sm font-medium">{t.category.nome}</span>
-                                    </div>
-                                </TableCell>
-                                <TableCell className="text-sm text-muted-foreground">{t.displayDate}</TableCell>
-                                <TableCell className={`text-sm font-black tracking-tight ${t.tipo === 'ENTRADA' ? 'text-emerald-600' : 'text-rose-600'}`}>
-                                    {t.tipo === 'ENTRADA' ? '+' : '-'} {t.formattedAmount}
-                                </TableCell>
-                                <TableCell>{getStatusBadge(t.status)}</TableCell>
-                            </TableRow>
-                        ))}
-                        {filteredTransactions.length === 0 && (
+                        {filteredTransactions.length === 0 ? (
                             <TableRow>
                                 <TableCell colSpan={7} className="h-48 text-center text-muted-foreground italic">
                                     Nenhuma transação encontrada para os filtros selecionados.
                                 </TableCell>
                             </TableRow>
-                        )}
+                        ) : filteredTransactions.flatMap((t) => {
+                            const isExpanded = expandedRows.has(t.id);
+                            const hasInvoiceItems = t.is_invoice_header && t.invoiceItems?.length > 0;
+
+                            // Filtra subitens pela categoria selecionada
+                            const filteredItems = hasInvoiceItems && categoryFilter !== "ALL"
+                                ? t.invoiceItems.filter((item: any) => item.categoria_id === categoryFilter)
+                                : t.invoiceItems || [];
+
+                            const rows: any[] = [];
+
+                            // Main row
+                            rows.push(
+                                <TableRow key={t.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/50 transition-colors">
+                                    <TableCell className="font-medium capitalize">
+                                        <div className="flex items-center gap-2">
+                                            {hasInvoiceItems && (
+                                                <button
+                                                    onClick={() => toggleExpand(t.id)}
+                                                    className="p-0.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded transition-colors"
+                                                >
+                                                    {isExpanded ? (
+                                                        <ChevronDown className="w-4 h-4 text-slate-400" />
+                                                    ) : (
+                                                        <ChevronRight className="w-4 h-4 text-slate-400" />
+                                                    )}
+                                                </button>
+                                            )}
+                                            {t.is_invoice_header && (
+                                                <CreditCard className="w-4 h-4 text-indigo-500 shrink-0" />
+                                            )}
+                                            {t.descricao}
+                                        </div>
+                                    </TableCell>
+                                    <TableCell>
+                                        {t.institution ? (
+                                            <div className="flex items-center gap-2">
+                                                {t.institution.cor && <div className="w-2 h-2 rounded-full" style={{ backgroundColor: t.institution.cor }} />}
+                                                <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">{t.institution.nome}</span>
+                                            </div>
+                                        ) : (
+                                            <span className="text-muted-foreground italic text-xs">-</span>
+                                        )}
+                                    </TableCell>
+                                    <TableCell>
+                                        <span className="text-xs font-medium text-muted-foreground">{t.paymentMethod?.nome || "-"}</span>
+                                    </TableCell>
+                                    <TableCell>
+                                        <div className="flex items-center gap-2">
+                                            <div className="w-3 h-3 rounded-full" style={{ backgroundColor: t.category.cor }} />
+                                            <span className="text-sm font-medium">{t.category.nome}</span>
+                                        </div>
+                                    </TableCell>
+                                    <TableCell className="text-sm text-muted-foreground">{t.displayDate}</TableCell>
+                                    <TableCell className={`text-sm font-black tracking-tight ${t.tipo === 'ENTRADA' ? 'text-emerald-600' : 'text-rose-600'}`}>
+                                        {t.tipo === 'ENTRADA' ? '+' : '-'} {t.formattedAmount}
+                                    </TableCell>
+                                    <TableCell>{getStatusBadge(t.status)}</TableCell>
+                                </TableRow>
+                            );
+
+                            // Sub-rows (diretamente abaixo da linha principal)
+                            if (isExpanded && filteredItems.length > 0) {
+                                filteredItems.forEach((item: any, idx: number) => {
+                                    rows.push(
+                                        <TableRow key={`${t.id}-item-${idx}`} className="bg-slate-50/50 dark:bg-slate-900/50 text-sm">
+                                            <TableCell className="pl-10">
+                                                <div className="flex items-center gap-2">
+                                                    <span className="w-1.5 h-1.5 rounded-full bg-slate-300 dark:bg-slate-600" />
+                                                    <span className="text-slate-600 dark:text-slate-400">{item.descricao}</span>
+                                                </div>
+                                            </TableCell>
+                                            <TableCell colSpan={2}>
+                                                <span className="text-xs italic text-muted-foreground">Item de fatura</span>
+                                            </TableCell>
+                                            <TableCell>
+                                                <div className="flex items-center gap-2">
+                                                    <div className="w-2 h-2 rounded-full" style={{ backgroundColor: item.category.cor }} />
+                                                    <span className="text-xs font-medium text-muted-foreground">{item.category.nome}</span>
+                                                </div>
+                                            </TableCell>
+                                            <TableCell className="text-xs text-muted-foreground">{item.displayDate}</TableCell>
+                                            <TableCell className="text-xs font-semibold text-rose-500">
+                                                - {item.formattedAmount}
+                                            </TableCell>
+                                            <TableCell />
+                                        </TableRow>
+                                    );
+                                });
+                            }
+
+                            return rows;
+                        })}
                     </TableBody>
                 </Table>
             </div>

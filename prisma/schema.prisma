@@ -11,18 +11,18 @@ datasource db {
 }
 
 model User {
-  id              String          @id @default(cuid())
-  email           String          @unique
-  password        String
-  status_2fa      Boolean         @default(false)
-  secret_2fa      String?
-  transactions    Transaction[]
-  categories      Category[]
-  paymentMethods  PaymentMethod[]
-  institutions    FinancialInstitution[]
+  id                 String                 @id @default(cuid())
+  email              String                 @unique
+  password           String
+  status_2fa         Boolean                @default(false)
+  secret_2fa         String?
+  transactions       Transaction[]
+  categories         Category[]
+  paymentMethods     PaymentMethod[]
+  institutions       FinancialInstitution[]
   mappingSuggestions MappingSuggestion[]
-  createdAt       DateTime        @default(now())
-  updatedAt       DateTime        @updatedAt
+  createdAt          DateTime               @default(now())
+  updatedAt          DateTime               @updatedAt
 }
 
 enum TransactionStatus {
@@ -45,42 +45,63 @@ model Transaction {
   data_pagamento    DateTime?
   status            TransactionStatus @default(PENDENTE)
   tipo              TransactionType
-  
-  userId            String
-  user              User              @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
-  categoria_id      String
-  category          Category          @relation(fields: [categoria_id], references: [id])
-  
+  is_invoice_header Boolean           @default(false)
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  categoria_id String
+  category     Category @relation(fields: [categoria_id], references: [id])
+
   tipo_pagamento_id String
-  paymentMethod     PaymentMethod     @relation(fields: [tipo_pagamento_id], references: [id])
+  paymentMethod     PaymentMethod @relation(fields: [tipo_pagamento_id], references: [id])
 
-  institution_id    String
-  institution       FinancialInstitution @relation(fields: [institution_id], references: [id])
+  institution_id String
+  institution    FinancialInstitution @relation(fields: [institution_id], references: [id])
 
-  createdAt         DateTime          @default(now())
-  updatedAt         DateTime          @updatedAt
+  invoiceItems CreditCardInvoiceItem[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model CreditCardInvoiceItem {
+  id                       String    @id @default(cuid())
+  descricao                String
+  valor                    Decimal   @db.Decimal(10, 2)
+  data_compra              DateTime
+  data_vencimento_original DateTime?
+
+  transactionId String
+  transaction   Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+
+  categoria_id String
+  category     Category @relation(fields: [categoria_id], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model Category {
-  id           String          @id @default(cuid())
-  nome         String
-  cor          String
-  icone        String
-  tipo         TransactionType
-  
-  userId       String
-  user         User            @relation(fields: [userId], references: [id], onDelete: Cascade)
-  transactions Transaction[]
-  mappingSuggestions MappingSuggestion[]
+  id    String          @id @default(cuid())
+  nome  String
+  cor   String
+  icone String
+  tipo  TransactionType
+
+  userId                 String
+  user                   User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transactions           Transaction[]
+  mappingSuggestions     MappingSuggestion[]
+  creditCardInvoiceItems CreditCardInvoiceItem[]
 
   @@unique([nome, userId, tipo])
 }
 
 model PaymentMethod {
-  id           String        @id @default(cuid())
-  nome         String
-  
+  id   String @id @default(cuid())
+  nome String
+
   userId       String
   user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   transactions Transaction[]
@@ -89,33 +110,33 @@ model PaymentMethod {
 }
 
 model MappingSuggestion {
-  id           String        @id @default(cuid())
-  search_term  String
-  
-  userId       String
-  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
-  categoria_id String
-  category     Category      @relation(fields: [categoria_id], references: [id], onDelete: Cascade)
+  id          String @id @default(cuid())
+  search_term String
 
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  categoria_id String
+  category     Category @relation(fields: [categoria_id], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@unique([search_term, userId])
 }
 
 model FinancialInstitution {
-  id           String        @id @default(cuid())
-  nome         String
-  cor          String?
-  metadata     Json?         @default("{}")
-  
+  id       String  @id @default(cuid())
+  nome     String
+  cor      String?
+  metadata Json?   @default("{}")
+
   userId       String
   user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   transactions Transaction[]
 
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@unique([nome, userId])
 }

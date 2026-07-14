@@ -50,3 +50,18 @@ export const loginSchema = z.object({
 export const registerSchema = loginSchema.extend({
     // Add other registration fields if needed
 });
+
+export const creditCardInvoiceItemSchema = z.object({
+    descricao: z.string().min(1, "Descrição é obrigatória"),
+    valor: z.coerce.number().positive("Valor deve ser positivo"),
+    categoria_id: z.string().min(1, "Categoria é obrigatória"),
+    data_compra: z.coerce.date(),
+});
+
+export const creditCardInvoiceSchema = z.object({
+    descricao: z.string().min(1, "Descrição da fatura é obrigatória").transform(val => val.trim().charAt(0).toUpperCase() + val.slice(1).toLowerCase()),
+    data_vencimento: z.coerce.date(),
+    institution_id: z.string().min(1, "Instituição é obrigatória"),
+    tipo_pagamento_id: z.string().min(1, "Meio de pagamento é obrigatório"),
+    items: z.array(creditCardInvoiceItemSchema).min(1, "Adicione ao menos um item à fatura"),
+});

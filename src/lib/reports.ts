@@ -32,6 +32,30 @@ export async function getReportData(userId: string, month: number, year: number,
         },
     });
 
+    // Busca invoice items para transações is_invoice_header
+    const invoiceHeaderIds = transactions
+        .filter(t => t.is_invoice_header)
+        .map(t => t.id);
+
+    const invoiceItems = invoiceHeaderIds.length > 0
+        ? await db.creditCardInvoiceItem.findMany({
+            where: { transactionId: { in: invoiceHeaderIds } },
+            include: { category: true },
+          })
+        : [];
+
+    const itemsByHeader = new Map<string, any[]>();
+    for (const item of invoiceItems) {
+        const list = itemsByHeader.get(item.transactionId) || [];
+        list.push({
+            ...item,
+            valor: Number(item.valor),
+            formattedAmount: new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(Number(item.valor)),
+            displayDate: format(item.data_compra, "dd/MM/yyyy", { locale: ptBR }),
+        });
+        itemsByHeader.set(item.transactionId, list);
+    }
+
     return transactions.map((t: any) => {
         const isOverdue = t.status !== "PAGO" && t.data_vencimento < new Date();
         return {
@@ -39,7 +63,8 @@ export async function getReportData(userId: string, month: number, year: number,
             valor: Number(t.valor),
             status: isOverdue ? "ATRASADO" : t.status,
             formattedAmount: new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(Number(t.valor)),
-            displayDate: format(t.data_vencimento, "dd/MM/yyyy", { locale: ptBR })
+            displayDate: format(t.data_vencimento, "dd/MM/yyyy", { locale: ptBR }),
+            invoiceItems: itemsByHeader.get(t.id) || [],
         };
     });
 }

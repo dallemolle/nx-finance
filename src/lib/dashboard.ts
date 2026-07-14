@@ -45,23 +45,41 @@ export async function getDashboardData(userId: string, month: number, year: numb
 
     const saldoTotal = currentSummary.totalEntradas - currentSummary.totalSaidas;
 
+    // Fetch invoice items for invoice headers in the current period
+    const invoiceHeaderIds = transactions
+        .filter((t: any) => t.is_invoice_header)
+        .map((t: any) => t.id);
+
+    const invoiceItems = invoiceHeaderIds.length > 0
+        ? await db.creditCardInvoiceItem.findMany({
+            where: { transactionId: { in: invoiceHeaderIds } },
+            include: { category: true },
+        })
+        : [];
+
     // Intelligent Category Grouping
-    const categoryData = transactions
-        .filter((t: any) => t.tipo === "SAIDA")
-        .reduce((acc: any[], t: any) => {
-            const name = getCategoryGroupName(t.category.nome);
-            const valor = Number(t.valor);
-            const existing = acc.find((item: any) => item.name === name);
+    // Merge regular SAIDA transactions (excluding invoice headers) with invoice items
+    const categoryData: { name: string; value: number; fill: string }[] = [];
 
-            let fill = t.category.cor;
-
+    const aggregateByCategory = (entries: any[]) => {
+        for (const entry of entries) {
+            const name = getCategoryGroupName(entry.category.nome);
+            const valor = Number(entry.valor);
+            const existing = categoryData.find(item => item.name === name);
             if (existing) {
                 existing.value += valor;
             } else {
-                acc.push({ name, value: valor, fill });
+                categoryData.push({ name, value: valor, fill: entry.category.cor });
             }
-            return acc;
-        }, [] as { name: string; value: number; fill: string }[]);
+        }
+    };
+
+    // 1. Regular transactions (skip invoice headers to avoid double-count in chart)
+    const regularSaidas = transactions.filter((t: any) => t.tipo === "SAIDA" && !t.is_invoice_header);
+    aggregateByCategory(regularSaidas);
+
+    // 2. Invoice items (detailed breakdown of credit card invoices)
+    aggregateByCategory(invoiceItems);
 
     // Monthly Forecast & Health
     const today = new Date();
@@ -74,12 +92,46 @@ export async function getDashboardData(userId: string, month: number, year: numb
         ? (currentSummary.totalSaidas / currentSummary.totalEntradas) * 100
         : currentSummary.totalSaidas > 0 ? 100 : 0;
 
+    // Agrupa invoiceItems por transactionId
+    const itemsByHeader = new Map<string, any[]>();
+    for (const item of invoiceItems) {
+        const list = itemsByHeader.get(item.transactionId) || [];
+        list.push({ ...item, valor: Number(item.valor) });
+        itemsByHeader.set(item.transactionId, list);
+    }
+
     const monthlyTransactions = transactions.map((t: any) => {
         const isOverdue = t.status !== "PAGO" && isBefore(t.data_vencimento, new Date());
         return {
             ...t,
             valor: Number(t.valor),
-            status: isOverdue ? "ATRASADO" : t.status
+            status: isOverdue ? "ATRASADO" : t.status,
+            invoiceItems: itemsByHeader.get(t.id)?.map((item: any) => ({
+                ...item,
+                id: `inv-${item.id}`,
+                data_vencimento: item.data_compra,
+            })) || [],
+        };
+    });
+
+    // Mapa de transactions pai para referência ao montar invoiceItems como transações avulsas
+    const transactionMap = new Map(transactions.map(t => [t.id, t]));
+
+    // Mapeia invoiceItems para estrutura similar a transação (para o CategoryChart dialog)
+    const invoiceItemsAsTransactions = invoiceItems.map((item: any) => {
+        const parent = transactionMap.get(item.transactionId);
+        return {
+            id: `inv-${item.id}`,
+            descricao: item.descricao,
+            valor: Number(item.valor),
+            data_vencimento: item.data_compra,
+            status: parent?.status === "PAGO" ? "PAGO" : "PENDENTE",
+            tipo: "SAIDA" as const,
+            categoria_id: item.categoria_id,
+            category: item.category,
+            institution: parent?.institution || null,
+            paymentMethod: null,
+            isInvoiceItem: true,
         };
     });
 
@@ -93,7 +145,7 @@ export async function getDashboardData(userId: string, month: number, year: numb
             deltaSaldo: calculateDelta(saldoTotal, prevSummary.totalEntradas - prevSummary.totalSaidas),
         },
         categoryData,
-        monthlyTransactions,
+        monthlyTransactions: [...monthlyTransactions, ...invoiceItemsAsTransactions],
         metrics: {
             forecast,
             healthScore,

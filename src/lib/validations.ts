@@ -56,6 +56,18 @@ export const creditCardInvoiceItemSchema = z.object({
     valor: z.coerce.number().positive("Valor deve ser positivo"),
     categoria_id: z.string().min(1, "Categoria é obrigatória"),
     data_compra: z.coerce.date(),
+    is_installment: z.boolean().optional().default(false),
+    total_installments: z.coerce.number().int().min(2).max(48).optional().nullable(),
+    current_installment: z.coerce.number().int().min(1).optional().nullable(),
+    unique_installment_group: z.string().optional().nullable(),
+}).refine((data) => {
+    if (data.is_installment && (!data.total_installments || !data.current_installment)) {
+        return false;
+    }
+    return true;
+}, {
+    message: "Parcelamento requer total_installments e current_installment",
+    path: ["total_installments"],
 });
 
 export const creditCardInvoiceSchema = z.object({

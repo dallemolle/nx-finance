@@ -1,13 +1,16 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { EditTransactionDialog } from "./edit-transaction-dialog";
 import { QuickPayButton } from "./quick-pay-button";
-import { ChevronRight, ChevronDown, CreditCard } from "lucide-react";
+import { ChevronRight, ChevronDown, CreditCard, Trash2, AlertTriangle, Loader2 } from "lucide-react";
+import { deleteCreditCardInvoice } from "@/lib/credit-card-actions";
+import { toast } from "sonner";
 
 interface Transaction {
     id: string;
@@ -29,6 +32,8 @@ interface RecentTransactionsProps {
 
 export function RecentTransactions({ transactions, userId }: RecentTransactionsProps) {
     const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
+    const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+    const [isPending, startTransition] = useTransition();
 
     const toggleExpand = (id: string) => {
         setExpandedRows(prev => {
@@ -119,6 +124,17 @@ export function RecentTransactions({ transactions, userId }: RecentTransactionsP
                         <div className="flex items-center">
                             {t.status !== "PAGO" && <QuickPayButton transactionId={t.id} />}
                             <EditTransactionDialog transaction={t} userId={userId} />
+                            {t.is_invoice_header && (
+                                <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-7 w-7 md:h-8 md:w-8 text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30"
+                                    onClick={() => setConfirmDeleteId(t.id)}
+                                    title="Excluir fatura"
+                                >
+                                    <Trash2 className="h-3.5 w-3.5 md:h-4 md:w-4" />
+                                </Button>
+                            )}
                         </div>
                     </div>
                 </div>
@@ -162,29 +178,81 @@ export function RecentTransactions({ transactions, userId }: RecentTransactionsP
     };
 
     return (
-        <Card className="col-span-1 border-none shadow-xl bg-white dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-800 md:col-span-2 flex flex-col h-[520px] max-h-[520px]">
-            <CardHeader className="pb-3 shrink-0">
-                <CardTitle className="text-lg font-bold text-slate-800 dark:text-slate-200 tracking-tight">Lançamentos do Mês</CardTitle>
-            </CardHeader>
-            <CardContent className="flex-1 min-h-0 overflow-hidden pb-4">
-                <div className="space-y-4 h-full overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-slate-200 dark:scrollbar-thumb-slate-800">
-                    <div>
-                        <div className="flex items-center gap-2 mb-2">
-                             <h3 className="text-[10px] uppercase font-black text-emerald-600 tracking-[0.2em] bg-emerald-50 dark:bg-emerald-950/30 px-2 py-0.5 rounded">Entradas / Receitas</h3>
-                             <div className="h-[1px] flex-1 bg-emerald-100 dark:bg-emerald-900/30" />
+        <>
+            <Card className="col-span-1 border-none shadow-xl bg-white dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-800 md:col-span-2 flex flex-col h-[520px] max-h-[520px]">
+                <CardHeader className="pb-3 shrink-0">
+                    <CardTitle className="text-lg font-bold text-slate-800 dark:text-slate-200 tracking-tight">Lançamentos do Mês</CardTitle>
+                </CardHeader>
+                <CardContent className="flex-1 min-h-0 overflow-hidden pb-4">
+                    <div className="space-y-4 h-full overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-slate-200 dark:scrollbar-thumb-slate-800">
+                        <div>
+                            <div className="flex items-center gap-2 mb-2">
+                                 <h3 className="text-[10px] uppercase font-black text-emerald-600 tracking-[0.2em] bg-emerald-50 dark:bg-emerald-950/30 px-2 py-0.5 rounded">Entradas / Receitas</h3>
+                                 <div className="h-[1px] flex-1 bg-emerald-100 dark:bg-emerald-900/30" />
+                            </div>
+                            {renderTransactionList(entradas, "Nenhuma receita este mês.", "ENTRADA")}
                         </div>
-                        {renderTransactionList(entradas, "Nenhuma receita este mês.", "ENTRADA")}
-                    </div>
 
-                    <div>
-                        <div className="flex items-center gap-2 mb-2">
-                             <h3 className="text-[10px] uppercase font-black text-rose-600 tracking-[0.2em] bg-rose-50 dark:bg-rose-950/30 px-2 py-0.5 rounded">Saídas / Despesas</h3>
-                             <div className="h-[1px] flex-1 bg-rose-100 dark:bg-rose-900/30" />
+                        <div>
+                            <div className="flex items-center gap-2 mb-2">
+                                 <h3 className="text-[10px] uppercase font-black text-rose-600 tracking-[0.2em] bg-rose-50 dark:bg-rose-950/30 px-2 py-0.5 rounded">Saídas / Despesas</h3>
+                                 <div className="h-[1px] flex-1 bg-rose-100 dark:bg-rose-900/30" />
+                            </div>
+                            {renderTransactionList(saidas, "Nenhuma despesa este mês.", "SAIDA")}
                         </div>
-                        {renderTransactionList(saidas, "Nenhuma despesa este mês.", "SAIDA")}
+                    </div>
+                </CardContent>
+            </Card>
+
+            {confirmDeleteId && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+                    <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl ring-1 ring-slate-200 dark:ring-slate-800 p-6 max-w-sm w-full mx-4 space-y-4">
+                        <div className="flex items-center gap-3">
+                            <div className="p-2 rounded-full bg-red-50 dark:bg-red-950/40">
+                                <AlertTriangle className="w-5 h-5 text-red-500" />
+                            </div>
+                            <div>
+                                <h3 className="font-bold text-sm">Excluir Fatura</h3>
+                                <p className="text-xs text-muted-foreground">
+                                    Itens parcelados que ainda não foram reconciliados com faturas futuras serão preservados como provisões.
+                                </p>
+                            </div>
+                        </div>
+                        <div className="flex gap-2 justify-end pt-2">
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => setConfirmDeleteId(null)}
+                                disabled={isPending}
+                            >
+                                Cancelar
+                            </Button>
+                            <Button
+                                variant="destructive"
+                                size="sm"
+                                disabled={isPending}
+                                onClick={() => {
+                                    startTransition(async () => {
+                                        try {
+                                            await deleteCreditCardInvoice(confirmDeleteId);
+                                            toast.success("Fatura excluída com sucesso");
+                                            setConfirmDeleteId(null);
+                                        } catch (err: any) {
+                                            toast.error(err.message);
+                                        }
+                                    });
+                                }}
+                            >
+                                {isPending ? (
+                                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                ) : (
+                                    "Excluir"
+                                )}
+                            </Button>
+                        </div>
                     </div>
                 </div>
-            </CardContent>
-        </Card>
+            )}
+        </>
     );
 }

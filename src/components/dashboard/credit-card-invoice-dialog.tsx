@@ -109,12 +109,24 @@ export function CreditCardInvoiceDialog({ userId, className }: { userId: string;
 
                         const guess = suggestions.find((s: any) => title.toLowerCase().includes(s.search_term));
 
+                        // Detect installment info from CSV columns or description
+                        const csvInstallments = parseInt(row.parcelas || row.installments || row.total_parcelas || "");
+                        const csvCurrent = parseInt(row.parcela_atual || row.current_installment || "");
+                        const installmentPattern = title.match(/(\d+)\s*\/\s*(\d+)/);
+                        const isInstallmentDetected = !!(csvInstallments || installmentPattern);
+                        const totalInst = csvInstallments || (installmentPattern ? parseInt(installmentPattern[2]) : 0);
+                        const currentInst = csvCurrent || (installmentPattern ? parseInt(installmentPattern[1]) : 0);
+
                         return {
                             id: index,
                             title: title,
                             amount: isNaN(amount) ? 0 : Math.abs(amount),
                             date: date,
                             category_id: guess ? guess.categoria_id : "",
+                            is_installment: isInstallmentDetected,
+                            total_installments: totalInst || null,
+                            current_installment: currentInst || null,
+                            unique_installment_group: isInstallmentDetected ? crypto.randomUUID() : null,
                         };
                     });
 
@@ -189,6 +201,12 @@ export function CreditCardInvoiceDialog({ userId, className }: { userId: string;
                     valor: Math.abs(row.amount),
                     categoria_id: row.category_id,
                     data_compra: row.date,
+                    ...(row.is_installment ? {
+                        is_installment: true,
+                        total_installments: row.total_installments,
+                        current_installment: row.current_installment,
+                        unique_installment_group: row.unique_installment_group,
+                    } : {}),
                 })),
             });
 
@@ -299,13 +317,14 @@ export function CreditCardInvoiceDialog({ userId, className }: { userId: string;
                                     <span className="font-black text-rose-600">{formatCurrency(totalAmount)}</span>
                                 </div>
                             </div>
-                            <div className="border rounded-lg overflow-hidden">
+                            <div className="border rounded-lg overflow-x-auto">
                                 <Table>
                                     <TableHeader className="bg-muted/50">
                                         <TableRow>
                                             <TableHead className="font-bold">Item</TableHead>
                                             <TableHead className="font-bold">Valor</TableHead>
                                             <TableHead className="font-bold">Data</TableHead>
+                                            <TableHead className="font-bold">Parcelas</TableHead>
                                             <TableHead className="font-bold">Categoria</TableHead>
                                             <TableHead className="w-[50px]"></TableHead>
                                         </TableRow>
@@ -313,11 +332,11 @@ export function CreditCardInvoiceDialog({ userId, className }: { userId: string;
                                     <TableBody>
                                         {parsedData.map((row) => (
                                             <TableRow key={row.id}>
-                                                <TableCell className="p-2">
+                                                <TableCell className="p-2 min-w-[250px]">
                                                     <Input
                                                         value={row.title}
                                                         onChange={(e) => handleRowChange(row.id, "title", e.target.value)}
-                                                        className="h-8 text-sm"
+                                                        className="h-8 text-sm w-full"
                                                     />
                                                 </TableCell>
                                                 <TableCell className="p-2">
@@ -336,6 +355,60 @@ export function CreditCardInvoiceDialog({ userId, className }: { userId: string;
                                                         onChange={(e) => handleRowChange(row.id, "date", e.target.value)}
                                                         className="h-8 text-sm w-[140px]"
                                                     />
+                                                </TableCell>
+                                                <TableCell className="p-2 min-w-[140px]">
+                                                    {row.is_installment ? (
+                                                        <div className="flex items-center gap-1.5">
+                                                            <Input
+                                                                type="number"
+                                                                min={1}
+                                                                value={row.current_installment || ""}
+                                                                onChange={(e) => handleRowChange(row.id, "current_installment", parseInt(e.target.value) || null)}
+                                                                className="h-8 text-sm w-16 text-center"
+                                                            />
+                                                            <span className="text-xs text-muted-foreground font-bold">/</span>
+                                                            <Input
+                                                                type="number"
+                                                                min={2}
+                                                                max={48}
+                                                                value={row.total_installments || ""}
+                                                                onChange={(e) => {
+                                                                    handleRowChange(row.id, "total_installments", parseInt(e.target.value) || null);
+                                                                    handleRowChange(row.id, "is_installment", true);
+                                                                    handleRowChange(row.id, "unique_installment_group", crypto.randomUUID());
+                                                                }}
+                                                                className="h-8 text-sm w-16 text-center"
+                                                            />
+                                                            <span className="text-[10px] text-indigo-500 font-bold ml-1">x</span>
+                                                            <Button
+                                                                variant="ghost"
+                                                                size="icon"
+                                                                className="h-6 w-6 ml-1"
+                                                                onClick={() => handleRowChange(row.id, "is_installment", false)}
+                                                                title="Remover parcelamento"
+                                                            >
+                                                                <X className="w-3 h-3" />
+                                                            </Button>
+                                                        </div>
+                                                    ) : (
+                                                        <Button
+                                                            variant="outline"
+                                                            size="sm"
+                                                            className="h-8 text-xs"
+                                                            onClick={() => {
+                                                                const total = parseInt(prompt("Quantas parcelas?", "10") || "10");
+                                                                const current = parseInt(prompt("Qual parcela atual?", "1") || "1");
+                                                                if (total >= 2 && current >= 1 && current <= total) {
+                                                                    handleRowChange(row.id, "is_installment", true);
+                                                                    handleRowChange(row.id, "total_installments", total);
+                                                                    handleRowChange(row.id, "current_installment", current);
+                                                                    handleRowChange(row.id, "unique_installment_group", crypto.randomUUID());
+                                                                }
+                                                            }}
+                                                        >
+                                                            + Parcelas
+                                                        </Button>
+                                                    )}
                                                 </TableCell>
                                                 <TableCell className="p-2">
                                                     <Select

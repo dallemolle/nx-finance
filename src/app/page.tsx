@@ -9,6 +9,7 @@ import { redirect } from "next/navigation";
 import { NewTransactionDialog } from "../components/dashboard/new-transaction-dialog";
 import { FinancialHealth } from "../components/dashboard/financial-health";
 import { Forecast } from "../components/dashboard/forecast";
+import { CommittedBudget } from "../components/dashboard/committed-budget";
 import { ExportButtons } from "../components/dashboard/export-buttons";
 import { ThemeToggle } from "../components/theme-toggle";
 import { TopNav } from "@/components/layout/top-nav";
@@ -78,6 +79,10 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                         daysPassed={data.metrics.daysPassed}
                         totalDays={data.metrics.totalDays}
                     />
+                </div>
+
+                <div className="grid gap-6 md:grid-cols-1">
+                    <CommittedBudget />
                 </div>
             </div>
         </>

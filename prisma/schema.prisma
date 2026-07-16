@@ -16,11 +16,12 @@ model User {
   password           String
   status_2fa         Boolean                @default(false)
   secret_2fa         String?
-  transactions       Transaction[]
-  categories         Category[]
-  paymentMethods     PaymentMethod[]
-  institutions       FinancialInstitution[]
-  mappingSuggestions MappingSuggestion[]
+  transactions           Transaction[]
+  creditCardInvoiceItems CreditCardInvoiceItem[]
+  categories             Category[]
+  paymentMethods         PaymentMethod[]
+  institutions           FinancialInstitution[]
+  mappingSuggestions     MappingSuggestion[]
   createdAt          DateTime               @default(now())
   updatedAt          DateTime               @updatedAt
 }
@@ -72,14 +73,26 @@ model CreditCardInvoiceItem {
   data_compra              DateTime
   data_vencimento_original DateTime?
 
-  transactionId String
-  transaction   Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  transactionId String?
+  transaction   Transaction? @relation(fields: [transactionId], references: [id], onDelete: Cascade)
 
   categoria_id String
   category     Category @relation(fields: [categoria_id], references: [id])
 
+  userId String
+  user   User   @relation(fields: [userId], references: [id])
+
+  is_installment           Boolean  @default(false)
+  total_installments       Int?
+  current_installment      Int?
+  is_provisioned           Boolean  @default(false)
+  unique_installment_group String?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@index([userId, is_provisioned, data_compra])
+  @@index([unique_installment_group])
 }
 
 model Category {

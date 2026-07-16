@@ -1,10 +1,13 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useTransition } from "react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { ReportFilters } from "./report-filters";
-import { ChevronRight, ChevronDown, CreditCard } from "lucide-react";
+import { ChevronRight, ChevronDown, CreditCard, Trash2, AlertTriangle, Loader2 } from "lucide-react";
+import { deleteCreditCardInvoice } from "@/lib/credit-card-actions";
+import { toast } from "sonner";
 
 interface ReportContentProps {
     transactions: any[];
@@ -19,6 +22,8 @@ export function ReportContent({ transactions, categories, institutions, paymentM
     const [institutionFilter, setInstitutionFilter] = useState("ALL");
     const [paymentMethodFilter, setPaymentMethodFilter] = useState("ALL");
     const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
+    const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+    const [isPending, startTransition] = useTransition();
 
     const toggleExpand = (id: string) => {
         setExpandedRows(prev => {
@@ -115,12 +120,13 @@ export function ReportContent({ transactions, categories, institutions, paymentM
                             <TableHead className="font-bold">Data</TableHead>
                             <TableHead className="font-bold">Valor</TableHead>
                             <TableHead className="font-bold">Status</TableHead>
+                            <TableHead className="font-bold w-[80px]">Ações</TableHead>
                         </TableRow>
                     </TableHeader>
                     <TableBody>
                         {filteredTransactions.length === 0 ? (
                             <TableRow>
-                                <TableCell colSpan={7} className="h-48 text-center text-muted-foreground italic">
+                                <TableCell colSpan={8} className="h-48 text-center text-muted-foreground italic">
                                     Nenhuma transação encontrada para os filtros selecionados.
                                 </TableCell>
                             </TableRow>
@@ -182,6 +188,19 @@ export function ReportContent({ transactions, categories, institutions, paymentM
                                         {t.tipo === 'ENTRADA' ? '+' : '-'} {t.formattedAmount}
                                     </TableCell>
                                     <TableCell>{getStatusBadge(t.status)}</TableCell>
+                                    <TableCell>
+                                        {t.is_invoice_header && (
+                                            <Button
+                                                variant="ghost"
+                                                size="icon"
+                                                className="h-7 w-7 text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30"
+                                                onClick={() => setConfirmDeleteId(t.id)}
+                                                title="Excluir fatura"
+                                            >
+                                                <Trash2 className="h-3.5 w-3.5" />
+                                            </Button>
+                                        )}
+                                    </TableCell>
                                 </TableRow>
                             );
 
@@ -241,6 +260,57 @@ export function ReportContent({ transactions, categories, institutions, paymentM
                     </span>
                 </div>
             </div>
+
+            {/* Confirmação de exclusão */}
+            {confirmDeleteId && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+                    <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl ring-1 ring-slate-200 dark:ring-slate-800 p-6 max-w-sm w-full mx-4 space-y-4">
+                        <div className="flex items-center gap-3">
+                            <div className="p-2 rounded-full bg-red-50 dark:bg-red-950/40">
+                                <AlertTriangle className="w-5 h-5 text-red-500" />
+                            </div>
+                            <div>
+                                <h3 className="font-bold text-sm">Excluir Fatura</h3>
+                                <p className="text-xs text-muted-foreground">
+                                    Itens parcelados que ainda não foram reconciliados com faturas futuras serão preservados como provisões.
+                                </p>
+                            </div>
+                        </div>
+                        <div className="flex gap-2 justify-end pt-2">
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => setConfirmDeleteId(null)}
+                                disabled={isPending}
+                            >
+                                Cancelar
+                            </Button>
+                            <Button
+                                variant="destructive"
+                                size="sm"
+                                disabled={isPending}
+                                onClick={() => {
+                                    startTransition(async () => {
+                                        try {
+                                            await deleteCreditCardInvoice(confirmDeleteId);
+                                            toast.success("Fatura excluída com sucesso");
+                                            setConfirmDeleteId(null);
+                                        } catch (err: any) {
+                                            toast.error(err.message);
+                                        }
+                                    });
+                                }}
+                            >
+                                {isPending ? (
+                                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                ) : (
+                                    "Excluir"
+                                )}
+                            </Button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

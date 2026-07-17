@@ -5,8 +5,7 @@ import { revalidatePath } from "next/cache";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { creditCardInvoiceSchema } from "@/lib/validations";
-import { addMonths } from "date-fns";
-import { Decimal } from "decimal.js";
+import { addMonths, startOfMonth, endOfMonth } from "date-fns";
 
 async function getUserId() {
     const session = await getServerSession(authOptions);
@@ -14,7 +13,7 @@ async function getUserId() {
     return session.user.id;
 }
 
-export async function importCreditCardInvoice(data: any) {
+export async function importCreditCardInvoice(data: any, reconciliationMap?: Record<number, string>) {
     try {
         const userId = await getUserId();
         const validatedData = creditCardInvoiceSchema.parse(data);
@@ -51,33 +50,27 @@ export async function importCreditCardInvoice(data: any) {
         const createdItems: any[] = [];
 
         for (const item of validatedData.items) {
-            if (item.is_installment && item.unique_installment_group && item.current_installment) {
-                // Try to reconcile with an existing provision
-                const existingProvision = await db.creditCardInvoiceItem.findFirst({
-                    where: {
-                        unique_installment_group: item.unique_installment_group,
-                        current_installment: item.current_installment,
-                        is_provisioned: true,
-                        userId,
+            const itemKey = (item as any)._key;
+            const reconciledProvisionId = reconciliationMap?.[itemKey];
+
+            if (reconciledProvisionId) {
+                // User-confirmed reconciliation: update existing provision
+                const reconciled = await db.creditCardInvoiceItem.update({
+                    where: { id: reconciledProvisionId },
+                    data: {
+                        transactionId: transaction.id,
+                        descricao: item.descricao,
+                        valor: Math.abs(item.valor),
+                        categoria_id: item.categoria_id,
+                        data_compra: item.data_compra,
+                        is_provisioned: false,
                     },
                 });
+                createdItems.push(reconciled);
+                continue;
+            }
 
-                if (existingProvision) {
-                    const reconciled = await db.creditCardInvoiceItem.update({
-                        where: { id: existingProvision.id },
-                        data: {
-                            transactionId: transaction.id,
-                            descricao: item.descricao,
-                            valor: Math.abs(item.valor),
-                            categoria_id: item.categoria_id,
-                            data_compra: item.data_compra,
-                            is_provisioned: false,
-                        },
-                    });
-                    createdItems.push(reconciled);
-                    continue;
-                }
-
+            if (item.is_installment && item.unique_installment_group && item.current_installment) {
                 // New installment purchase — create current + future provisions
                 const currentItem = await db.creditCardInvoiceItem.create({
                     data: {
@@ -96,27 +89,19 @@ export async function importCreditCardInvoice(data: any) {
                 });
                 createdItems.push(currentItem);
 
-                const totalValue = new Decimal(Math.abs(item.valor));
-                const installmentValue = totalValue
-                    .dividedBy(item.total_installments!)
-                    .toDecimalPlaces(2, Decimal.ROUND_DOWN);
-                const lastInstallmentValue = totalValue.minus(
-                    installmentValue.times(item.total_installments! - 1)
-                );
-
+                // CSV value IS the individual installment value (not total)
+                const installmentValue = Math.abs(item.valor);
                 const remainingCount = item.total_installments! - item.current_installment!;
+
                 const futurePromises = Array.from({ length: remainingCount }, (_, i) => {
                     const installmentIndex = item.current_installment! + 1 + i;
                     const dueDate = addMonths(item.data_compra, installmentIndex - 1);
-                    const provisionValue = installmentIndex === item.total_installments!
-                        ? lastInstallmentValue
-                        : installmentValue;
 
                     return db.creditCardInvoiceItem.create({
                         data: {
                             transactionId: null,
                             descricao: `${item.descricao} (${String(installmentIndex).padStart(2, "0")}/${String(item.total_installments!).padStart(2, "0")})`,
-                            valor: provisionValue.toNumber(),
+                            valor: installmentValue,
                             categoria_id: item.categoria_id,
                             data_compra: item.data_compra,
                             data_vencimento_original: dueDate,
@@ -166,6 +151,79 @@ export async function importCreditCardInvoice(data: any) {
     } catch (error: any) {
         console.error("Error importing credit card invoice:", error);
         throw new Error(error.message || "Erro ao importar fatura de cartão de crédito");
+    }
+}
+
+export interface ReconciliationSuggestion {
+    itemIndex: number;
+    itemDescription: string;
+    itemValue: number;
+    provisionId: string;
+    provisionDescription: string;
+    provisionValue: number;
+    provisionDueDate: Date;
+    provisionCurrentInstallment: number;
+    provisionTotalInstallments: number;
+    uniqueInstallmentGroup: string;
+}
+
+export async function previewReconciliation(items: any[]): Promise<ReconciliationSuggestion[]> {
+    try {
+        const userId = await getUserId();
+        const suggestions: ReconciliationSuggestion[] = [];
+
+        for (const item of items) {
+            if (!item.is_installment || !item.amount || !item.date) continue;
+
+            const itemDate = new Date(item.date);
+            const itemValue = Math.abs(item.amount);
+            const monthStart = startOfMonth(itemDate);
+            const monthEnd = endOfMonth(itemDate);
+
+            const candidates = await db.creditCardInvoiceItem.findMany({
+                where: {
+                    userId,
+                    is_provisioned: true,
+                    data_vencimento_original: { gte: monthStart, lte: monthEnd },
+                    valor: { gte: itemValue - 0.01, lte: itemValue + 0.01 },
+                },
+            });
+
+            if (candidates.length === 0) continue;
+
+            const itemWords = item.title.toLowerCase().split(/\s+/).filter((w: string) => w.length > 3);
+            const bestMatch = candidates.reduce<{ candidate: typeof candidates[0] | null; score: number }>(
+                (best, candidate) => {
+                    const desc = candidate.descricao.toLowerCase();
+                    const groupMatch = candidate.unique_installment_group === item.unique_installment_group ? 100 : 0;
+                    const wordMatches = itemWords.filter((w: string) => desc.includes(w)).length;
+                    const score = groupMatch + wordMatches;
+                    return score > best.score ? { candidate, score } : best;
+                },
+                { candidate: null, score: -1 }
+            );
+
+            if (bestMatch.candidate) {
+                const p = bestMatch.candidate;
+                suggestions.push({
+                    itemIndex: item.id,
+                    itemDescription: item.title,
+                    itemValue,
+                    provisionId: p.id,
+                    provisionDescription: p.descricao,
+                    provisionValue: Number(p.valor),
+                    provisionDueDate: p.data_vencimento_original || p.data_compra,
+                    provisionCurrentInstallment: p.current_installment || 0,
+                    provisionTotalInstallments: p.total_installments || 0,
+                    uniqueInstallmentGroup: p.unique_installment_group || "",
+                });
+            }
+        }
+
+        return suggestions;
+    } catch (error: any) {
+        console.error("Error previewing reconciliation:", error);
+        return [];
     }
 }
 

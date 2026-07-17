@@ -12,7 +12,7 @@ import { CreditCard, Upload, ChevronRight, X, AlertCircle, Loader2 } from "lucid
 import Papa from "papaparse";
 import { getCategories, getPaymentMethods, getFinancialInstitutions } from "@/lib/reports";
 import { InstitutionCombobox } from "@/components/dashboard/institution-combobox";
-import { importCreditCardInvoice } from "@/lib/credit-card-actions";
+import { importCreditCardInvoice, previewReconciliation, type ReconciliationSuggestion } from "@/lib/credit-card-actions";
 import { getMappingSuggestions } from "@/lib/csv-actions";
 import { cn } from "@/lib/utils";
 import { createCategory, createPaymentMethod } from "@/lib/actions";
@@ -39,6 +39,8 @@ export function CreditCardInvoiceDialog({ userId, className }: { userId: string;
     const [suggestions, setSuggestions] = useState<any[]>([]);
 
     const [parsedData, setParsedData] = useState<any[]>([]);
+    const [reconciliationSuggestions, setReconciliationSuggestions] = useState<ReconciliationSuggestion[]>([]);
+    const [confirmedReconciliationItems, setConfirmedReconciliationItems] = useState<Set<number>>(new Set());
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
@@ -51,6 +53,8 @@ export function CreditCardInvoiceDialog({ userId, className }: { userId: string;
             setPaymentMethodId("none");
             setInstitutionId("");
             setParsedData([]);
+            setReconciliationSuggestions([]);
+            setConfirmedReconciliationItems(new Set());
             setError(null);
 
             getCategories(userId).then(setCategories);
@@ -119,6 +123,7 @@ export function CreditCardInvoiceDialog({ userId, className }: { userId: string;
 
                         return {
                             id: index,
+                            _key: index,
                             title: title,
                             amount: isNaN(amount) ? 0 : Math.abs(amount),
                             date: date,
@@ -131,6 +136,10 @@ export function CreditCardInvoiceDialog({ userId, className }: { userId: string;
                     });
 
                     setParsedData(mapped);
+                    previewReconciliation(mapped).then((suggestions) => {
+                        setReconciliationSuggestions(suggestions);
+                        setConfirmedReconciliationItems(new Set(suggestions.map(s => s.itemIndex)));
+                    }).catch(console.error);
                     setStep(2);
                     setError(null);
                 } catch (e) {
@@ -148,6 +157,14 @@ export function CreditCardInvoiceDialog({ userId, className }: { userId: string;
 
     const handleRowChange = (id: number, field: string, value: any) => {
         setParsedData(prev => prev.map(row => row.id === id ? { ...row, [field]: value } : row));
+        // Clear reconciliation confirmation if relevant field changes
+        if (["title", "amount", "date", "is_installment"].includes(field)) {
+            setConfirmedReconciliationItems(prev => {
+                const next = new Set(prev);
+                next.delete(id);
+                return next;
+            });
+        }
     };
 
     const handleCategoryCreate = async (id: number, catName: string) => {
@@ -191,12 +208,23 @@ export function CreditCardInvoiceDialog({ userId, className }: { userId: string;
         setError(null);
 
         try {
+            const reconfMap: Record<number, string> = {};
+            for (const row of parsedData) {
+                if (confirmedReconciliationItems.has(row.id)) {
+                    const suggestion = reconciliationSuggestions.find(s => s.itemIndex === row.id);
+                    if (suggestion) {
+                        reconfMap[row.id] = suggestion.provisionId;
+                    }
+                }
+            }
+
             const result = await importCreditCardInvoice({
                 descricao: invoiceDescription,
                 data_vencimento: dueDate,
                 institution_id: institutionId,
                 tipo_pagamento_id: paymentMethodId,
                 items: parsedData.map(row => ({
+                    _key: row.id,
                     descricao: row.title,
                     valor: Math.abs(row.amount),
                     categoria_id: row.category_id,
@@ -208,7 +236,7 @@ export function CreditCardInvoiceDialog({ userId, className }: { userId: string;
                         unique_installment_group: row.unique_installment_group,
                     } : {}),
                 })),
-            });
+            }, reconfMap);
 
             if (result.success) {
                 setOpen(false);
@@ -326,6 +354,7 @@ export function CreditCardInvoiceDialog({ userId, className }: { userId: string;
                                             <TableHead className="font-bold">Data</TableHead>
                                             <TableHead className="font-bold">Parcelas</TableHead>
                                             <TableHead className="font-bold">Categoria</TableHead>
+                                            <TableHead className="font-bold text-indigo-600 text-center">Reconciliar</TableHead>
                                             <TableHead className="w-[50px]"></TableHead>
                                         </TableRow>
                                     </TableHeader>
@@ -439,6 +468,39 @@ export function CreditCardInvoiceDialog({ userId, className }: { userId: string;
                                                             <SelectItem value="NEW" className="font-bold text-blue-600">+ Nova Categoria</SelectItem>
                                                         </SelectContent>
                                                     </Select>
+                                                </TableCell>
+                                                <TableCell className="p-2 text-center min-w-[100px]">
+                                                    {(() => {
+                                                        const suggestion = reconciliationSuggestions.find(s => s.itemIndex === row.id);
+                                                        const isConfirmed = confirmedReconciliationItems.has(row.id);
+                                                        if (!suggestion) {
+                                                            return <span className="text-[10px] text-slate-400 italic">—</span>;
+                                                        }
+                                                        return (
+                                                            <div className="flex flex-col items-center gap-0.5">
+                                                                <span className="text-[8px] text-indigo-500 font-bold leading-tight text-center truncate max-w-[90px]">
+                                                                    {suggestion.provisionDescription}
+                                                                </span>
+                                                                <button
+                                                                    type="button"
+                                                                    className={`text-[10px] px-2 py-0.5 rounded-full font-bold transition-colors ${
+                                                                        isConfirmed
+                                                                            ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300'
+                                                                            : 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400'
+                                                                    }`}
+                                                                    onClick={() => {
+                                                                        setConfirmedReconciliationItems(prev => {
+                                                                            const next = new Set(prev);
+                                                                            if (next.has(row.id)) next.delete(row.id); else next.add(row.id);
+                                                                            return next;
+                                                                        });
+                                                                    }}
+                                                                >
+                                                                    {isConfirmed ? '✔ Vincular' : 'Ignorar'}
+                                                                </button>
+                                                            </div>
+                                                        );
+                                                    })()}
                                                 </TableCell>
                                                 <TableCell className="p-2 text-center">
                                                     <Button

@@ -26,7 +26,7 @@ export interface MonthlyCommitment {
     grandTotal: number;
 }
 
-export async function getProvisionedBudget(monthsAhead: number = 12): Promise<MonthlyCommitment[]> {
+export async function getProvisionedBudget(monthsAhead: number = 12, includeAllExpenses: boolean = true): Promise<MonthlyCommitment[]> {
     try {
         const userId = await getUserId();
         const now = new Date();
@@ -34,6 +34,7 @@ export async function getProvisionedBudget(monthsAhead: number = 12): Promise<Mo
         const startDate = startOfMonth(now);
         const endDate = endOfMonth(addMonths(now, monthsAhead));
 
+        // 1. Fetch provisioned items (future installments)
         const provisionedItems = await db.creditCardInvoiceItem.findMany({
             where: {
                 userId,
@@ -45,6 +46,28 @@ export async function getProvisionedBudget(monthsAhead: number = 12): Promise<Mo
             },
             include: { category: true },
         });
+
+        // 2. Fetch realized installment items (already reconciled/paid)
+        const realizedInstallments = await db.creditCardInvoiceItem.findMany({
+            where: {
+                userId,
+                is_provisioned: false,
+                is_installment: true,
+                data_compra: { gte: startDate, lte: endDate },
+            },
+        });
+
+        // 3. Fetch regular SAIDA transactions (non-invoice, non-installment)
+        const regularExpenses = includeAllExpenses
+            ? await db.transaction.findMany({
+                where: {
+                    userId,
+                    tipo: "SAIDA",
+                    is_invoice_header: false,
+                    data_vencimento: { gte: startDate, lte: endDate },
+                },
+              })
+            : [];
 
         const monthlyMap = new Map<string, MonthlyCommitment>();
 
@@ -61,6 +84,7 @@ export async function getProvisionedBudget(monthsAhead: number = 12): Promise<Mo
             });
         }
 
+        // Aggregate provisioned items
         for (const item of provisionedItems) {
             const dueDate = item.data_vencimento_original || item.data_compra;
             const key = `${dueDate.getFullYear()}-${dueDate.getMonth()}`;
@@ -68,6 +92,28 @@ export async function getProvisionedBudget(monthsAhead: number = 12): Promise<Mo
             if (entry) {
                 const valor = Number(item.valor);
                 entry.totalProvisioned += valor;
+                entry.grandTotal += valor;
+            }
+        }
+
+        // Aggregate realized installment items
+        for (const item of realizedInstallments) {
+            const key = `${item.data_compra.getFullYear()}-${item.data_compra.getMonth()}`;
+            const entry = monthlyMap.get(key);
+            if (entry) {
+                const valor = Number(item.valor);
+                entry.totalRealized += valor;
+                entry.grandTotal += valor;
+            }
+        }
+
+        // Aggregate regular SAIDA transactions
+        for (const t of regularExpenses) {
+            const key = `${t.data_vencimento.getFullYear()}-${t.data_vencimento.getMonth()}`;
+            const entry = monthlyMap.get(key);
+            if (entry) {
+                const valor = Number(t.valor);
+                entry.totalRealized += valor;
                 entry.grandTotal += valor;
             }
         }

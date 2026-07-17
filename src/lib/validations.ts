@@ -68,7 +68,7 @@ export const creditCardInvoiceItemSchema = z.object({
 }, {
     message: "Parcelamento requer total_installments e current_installment",
     path: ["total_installments"],
-});
+}).passthrough();
 
 export const creditCardInvoiceSchema = z.object({
     descricao: z.string().min(1, "Descrição da fatura é obrigatória").transform(val => val.trim().charAt(0).toUpperCase() + val.slice(1).toLowerCase()),

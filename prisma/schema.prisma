@@ -71,15 +71,24 @@ model CreditCardInvoiceItem {
   valor                    Decimal   @db.Decimal(10, 2)
   data_compra              DateTime
   data_vencimento_original DateTime?
+  is_installment           Boolean   @default(false)
+  total_installments       Int?
+  current_installment      Int?
+  is_provisioned           Boolean   @default(false)
+  unique_installment_group String?
 
-  transactionId String
-  transaction   Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  transactionId String?
+  transaction   Transaction? @relation(fields: [transactionId], references: [id], onDelete: SetNull)
 
   categoria_id String
   category     Category @relation(fields: [categoria_id], references: [id])
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@index([unique_installment_group])
+  @@index([is_provisioned])
+  @@index([data_vencimento_original])
 }
 
 model Category {

@@ -1,7 +1,8 @@
 "use server";
 
 import { db } from "@/lib/db";
-import { startOfMonth, endOfMonth, isBefore, subMonths, getDaysInMonth } from "date-fns";
+import { startOfMonth, endOfMonth, isBefore, subMonths, addMonths, getDaysInMonth, getMonth, getYear, format } from "date-fns";
+import { ptBR } from "date-fns/locale";
 import { getCategoryGroupName } from "./dashboard-utils";
 
 export async function getDashboardData(userId: string, month: number, year: number) {
@@ -92,9 +93,10 @@ export async function getDashboardData(userId: string, month: number, year: numb
         ? (currentSummary.totalSaidas / currentSummary.totalEntradas) * 100
         : currentSummary.totalSaidas > 0 ? 100 : 0;
 
-    // Agrupa invoiceItems por transactionId
+    // Agrupa invoiceItems por transactionId (apenas itens com header ativo)
     const itemsByHeader = new Map<string, any[]>();
     for (const item of invoiceItems) {
+        if (!item.transactionId) continue;
         const list = itemsByHeader.get(item.transactionId) || [];
         list.push({ ...item, valor: Number(item.valor) });
         itemsByHeader.set(item.transactionId, list);
@@ -153,4 +155,53 @@ export async function getDashboardData(userId: string, month: number, year: numb
             totalDays: getDaysInMonth(targetDate)
         }
     };
+}
+
+export async function getBudgetCommitmentData(userId: string, monthsAhead: number = 12) {
+    const now = new Date();
+    const startDate = startOfMonth(now);
+    const endDate = endOfMonth(addMonths(now, monthsAhead));
+
+    const items = await db.creditCardInvoiceItem.findMany({
+        where: {
+            data_vencimento_original: {
+                gte: startDate,
+                lte: endDate,
+            },
+            category: { userId },
+        },
+        include: { category: true },
+        orderBy: { data_vencimento_original: "asc" },
+    });
+
+    const monthMap = new Map<string, { month: number; year: number; label: string; efetivado: number; provisionado: number }>();
+
+    for (let i = 0; i <= monthsAhead; i++) {
+        const date = addMonths(startDate, i);
+        const m = getMonth(date);
+        const y = getYear(date);
+        const key = `${y}-${String(m + 1).padStart(2, "0")}`;
+        const label = format(date, "MMM/yy", { locale: ptBR });
+        monthMap.set(key, { month: m + 1, year: y, label, efetivado: 0, provisionado: 0 });
+    }
+
+    for (const item of items) {
+        const d = item.data_vencimento_original || item.data_compra;
+        const key = `${getYear(d)}-${String(getMonth(d) + 1).padStart(2, "0")}`;
+        const entry = monthMap.get(key);
+        if (entry) {
+            const v = Number(item.valor);
+            if (item.is_provisioned) {
+                entry.provisionado += v;
+            } else {
+                entry.efetivado += v;
+            }
+        }
+    }
+
+    return Array.from(monthMap.values()).map((entry) => ({
+        ...entry,
+        efetivado: Math.round(entry.efetivado * 100) / 100,
+        provisionado: Math.round(entry.provisionado * 100) / 100,
+    }));
 }

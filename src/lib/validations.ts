@@ -56,6 +56,10 @@ export const creditCardInvoiceItemSchema = z.object({
     valor: z.coerce.number().positive("Valor deve ser positivo"),
     categoria_id: z.string().min(1, "Categoria é obrigatória"),
     data_compra: z.coerce.date(),
+    isInstallment: z.boolean().default(false),
+    totalInstallments: z.coerce.number().int().min(2).max(120).optional().nullable(),
+    currentInstallment: z.coerce.number().int().min(1).optional().nullable(),
+    uniqueInstallmentGroup: z.string().optional().nullable(),
 });
 
 export const creditCardInvoiceSchema = z.object({
@@ -63,5 +67,6 @@ export const creditCardInvoiceSchema = z.object({
     data_vencimento: z.coerce.date(),
     institution_id: z.string().min(1, "Instituição é obrigatória"),
     tipo_pagamento_id: z.string().min(1, "Meio de pagamento é obrigatório"),
+    isReconciliation: z.boolean().default(false),
     items: z.array(creditCardInvoiceItemSchema).min(1, "Adicione ao menos um item à fatura"),
 });

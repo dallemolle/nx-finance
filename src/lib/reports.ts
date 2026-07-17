@@ -46,6 +46,7 @@ export async function getReportData(userId: string, month: number, year: number,
 
     const itemsByHeader = new Map<string, any[]>();
     for (const item of invoiceItems) {
+        if (!item.transactionId) continue;
         const list = itemsByHeader.get(item.transactionId) || [];
         list.push({
             ...item,

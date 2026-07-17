@@ -2,7 +2,7 @@ import { SummaryCards } from "../components/dashboard/summary-cards";
 import { CategoryChart } from "../components/dashboard/category-chart";
 import { RecentTransactions } from "../components/dashboard/recent-transactions";
 import { MonthPicker } from "../components/dashboard/month-picker";
-import { getDashboardData } from "@/lib/dashboard";
+import { getDashboardData, getBudgetCommitmentData } from "@/lib/dashboard";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { redirect } from "next/navigation";
@@ -14,6 +14,7 @@ import { ThemeToggle } from "../components/theme-toggle";
 import { TopNav } from "@/components/layout/top-nav";
 import { CsvImportDialog } from "@/components/dashboard/csv-import-dialog";
 import { CreditCardInvoiceDialog } from "@/components/dashboard/credit-card-invoice-dialog";
+import { BudgetCommitmentChart } from "@/components/dashboard/budget-commitment-chart";
 
 interface DashboardPageProps {
     searchParams: Promise<{ month?: string; year?: string }>;
@@ -31,6 +32,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     const year = yearParam ? parseInt(yearParam) : now.getFullYear();
 
     const data = await getDashboardData(session.user.id, month, year);
+    const commitmentData = await getBudgetCommitmentData(session.user.id, 12);
 
     return (
         <>
@@ -79,6 +81,8 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                         totalDays={data.metrics.totalDays}
                     />
                 </div>
+
+                <BudgetCommitmentChart data={commitmentData} />
             </div>
         </>
     );

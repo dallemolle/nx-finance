@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { CreditCard, Upload, ChevronRight, X, AlertCircle, Loader2 } from "lucide-react";
+import { CreditCard, Upload, ChevronRight, X, AlertCircle, Loader2, ToggleLeft, Repeat } from "lucide-react";
 import Papa from "papaparse";
 import { getCategories, getPaymentMethods, getFinancialInstitutions } from "@/lib/reports";
 import { InstitutionCombobox } from "@/components/dashboard/institution-combobox";
@@ -17,6 +17,19 @@ import { getMappingSuggestions } from "@/lib/csv-actions";
 import { cn } from "@/lib/utils";
 import { createCategory, createPaymentMethod } from "@/lib/actions";
 import { Combobox } from "@/components/ui/combobox";
+import { Switch } from "@/components/ui/switch";
+
+interface ParsedRow {
+    id: number;
+    title: string;
+    amount: number;
+    date: string;
+    category_id: string;
+    isInstallment: boolean;
+    totalInstallments: number;
+    currentInstallment: number;
+    uniqueInstallmentGroup: string;
+}
 
 export function CreditCardInvoiceDialog({ userId, className }: { userId: string; className?: string }) {
     const [open, setOpen] = useState(false);
@@ -31,6 +44,7 @@ export function CreditCardInvoiceDialog({ userId, className }: { userId: string;
     const [dueDate, setDueDate] = useState<string>("");
     const [paymentMethodId, setPaymentMethodId] = useState<string>("none");
     const [institutionId, setInstitutionId] = useState<string>("");
+    const [isReconciliation, setIsReconciliation] = useState(false);
 
     // Data
     const [categories, setCategories] = useState<any[]>([]);
@@ -38,7 +52,7 @@ export function CreditCardInvoiceDialog({ userId, className }: { userId: string;
     const [institutions, setInstitutions] = useState<any[]>([]);
     const [suggestions, setSuggestions] = useState<any[]>([]);
 
-    const [parsedData, setParsedData] = useState<any[]>([]);
+    const [parsedData, setParsedData] = useState<ParsedRow[]>([]);
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
@@ -52,6 +66,7 @@ export function CreditCardInvoiceDialog({ userId, className }: { userId: string;
             setInstitutionId("");
             setParsedData([]);
             setError(null);
+            setIsReconciliation(false);
 
             getCategories(userId).then(setCategories);
             getPaymentMethods(userId).then(setPaymentMethods);
@@ -95,7 +110,7 @@ export function CreditCardInvoiceDialog({ userId, className }: { userId: string;
             skipEmptyLines: true,
             complete: (results: any) => {
                 try {
-                    const mapped = results.data.map((row: any, index: number) => {
+                    const mapped: ParsedRow[] = results.data.map((row: any, index: number) => {
                         const title = row.title || row.descricao || row.description || row.Title || Object.values(row)[0] || "Sem título";
                         const rawAmount = row.amount || row.valor || row.Value || row.Amount || "0";
                         const amount = parseFloat(String(rawAmount).replace(/[R$\s]/g, '').replace(',', '.'));
@@ -109,12 +124,25 @@ export function CreditCardInvoiceDialog({ userId, className }: { userId: string;
 
                         const guess = suggestions.find((s: any) => title.toLowerCase().includes(s.search_term));
 
+                        // Try to detect installment info from CSV columns
+                        const rawTotal = row.total_installments || row.total_parcelas || "";
+                        const rawCurrent = row.current_installment || row.parcela_atual || "";
+                        const rawGroup = row.installment_group || row.grupo_parcelamento || "";
+
+                        const totalInst = parseInt(rawTotal) || 0;
+                        const currentInst = parseInt(rawCurrent) || 0;
+                        const isInst = totalInst >= 2;
+
                         return {
                             id: index,
-                            title: title,
+                            title,
                             amount: isNaN(amount) ? 0 : Math.abs(amount),
-                            date: date,
+                            date,
                             category_id: guess ? guess.categoria_id : "",
+                            isInstallment: isInst,
+                            totalInstallments: isInst ? totalInst : 0,
+                            currentInstallment: isInst ? currentInst : 1,
+                            uniqueInstallmentGroup: rawGroup || "",
                         };
                     });
 
@@ -184,11 +212,16 @@ export function CreditCardInvoiceDialog({ userId, className }: { userId: string;
                 data_vencimento: dueDate,
                 institution_id: institutionId,
                 tipo_pagamento_id: paymentMethodId,
+                isReconciliation,
                 items: parsedData.map(row => ({
                     descricao: row.title,
                     valor: Math.abs(row.amount),
                     categoria_id: row.category_id,
                     data_compra: row.date,
+                    isInstallment: row.isInstallment,
+                    totalInstallments: row.isInstallment ? row.totalInstallments : null,
+                    currentInstallment: row.isInstallment ? row.currentInstallment : null,
+                    uniqueInstallmentGroup: row.isInstallment && row.uniqueInstallmentGroup ? row.uniqueInstallmentGroup : null,
                 })),
             });
 
@@ -215,7 +248,7 @@ export function CreditCardInvoiceDialog({ userId, className }: { userId: string;
                     Importar Fatura
                 </Button>
             </DialogTrigger>
-            <DialogContent className="sm:max-w-[800px] h-[80vh] flex flex-col">
+            <DialogContent className="sm:max-w-[900px] h-[85vh] flex flex-col">
                 <DialogHeader className="shrink-0">
                     <DialogTitle>Importar Fatura de Cartão de Crédito</DialogTitle>
                 </DialogHeader>
@@ -235,6 +268,7 @@ export function CreditCardInvoiceDialog({ userId, className }: { userId: string;
                                 <h3 className="text-sm font-semibold mb-1">Upload do CSV da Fatura</h3>
                                 <p className="text-xs text-muted-foreground mb-4">
                                     O CSV deve conter as colunas: <strong>title, amount, date</strong> (ou descricao, valor, data).
+                                    <br />Para parcelamentos, adicione: <strong>total_installments, current_installment, installment_group</strong>.
                                 </p>
                                 <Input
                                     type="file"
@@ -289,12 +323,34 @@ export function CreditCardInvoiceDialog({ userId, className }: { userId: string;
                                     />
                                 </div>
                             </div>
+
+                            <div className="flex items-center gap-3 p-3 rounded-lg bg-indigo-50/50 dark:bg-indigo-950/20 border border-indigo-100 dark:border-indigo-900/30">
+                                <Repeat className="w-5 h-5 text-indigo-500" />
+                                <div className="flex-1">
+                                    <Label className="text-sm font-medium text-indigo-700 dark:text-indigo-300">
+                                        Reconciliação Inteligente
+                                    </Label>
+                                    <p className="text-xs text-indigo-500/70">
+                                        Ative para buscar provisões existentes e vincular automaticamente aos itens desta fatura.
+                                    </p>
+                                </div>
+                                <Switch
+                                    checked={isReconciliation}
+                                    onCheckedChange={setIsReconciliation}
+                                />
+                            </div>
                         </div>
                     ) : (
                         <div className="space-y-4">
                             <div className="flex justify-between items-center text-sm font-medium">
                                 <span>Revisão dos Itens da Fatura</span>
                                 <div className="flex items-center gap-4">
+                                    {isReconciliation && (
+                                        <span className="flex items-center gap-1 text-xs text-indigo-600 bg-indigo-50 dark:bg-indigo-950/30 px-2 py-1 rounded-full">
+                                            <Repeat className="w-3 h-3" />
+                                            Reconciliação ativa
+                                        </span>
+                                    )}
                                     <span className="text-muted-foreground">{parsedData.length} itens</span>
                                     <span className="font-black text-rose-600">{formatCurrency(totalAmount)}</span>
                                 </div>
@@ -307,12 +363,14 @@ export function CreditCardInvoiceDialog({ userId, className }: { userId: string;
                                             <TableHead className="font-bold">Valor</TableHead>
                                             <TableHead className="font-bold">Data</TableHead>
                                             <TableHead className="font-bold">Categoria</TableHead>
+                                            <TableHead className="font-bold">Parcelado</TableHead>
+                                            <TableHead className="font-bold w-[100px]">Parcela</TableHead>
                                             <TableHead className="w-[50px]"></TableHead>
                                         </TableRow>
                                     </TableHeader>
                                     <TableBody>
                                         {parsedData.map((row) => (
-                                            <TableRow key={row.id}>
+                                            <TableRow key={row.id} className={row.isInstallment ? "bg-amber-50/30 dark:bg-amber-950/10" : ""}>
                                                 <TableCell className="p-2">
                                                     <Input
                                                         value={row.title}
@@ -366,6 +424,45 @@ export function CreditCardInvoiceDialog({ userId, className }: { userId: string;
                                                             <SelectItem value="NEW" className="font-bold text-blue-600">+ Nova Categoria</SelectItem>
                                                         </SelectContent>
                                                     </Select>
+                                                </TableCell>
+                                                <TableCell className="p-2 text-center">
+                                                    <div className="flex items-center justify-center">
+                                                        <Switch
+                                                            checked={row.isInstallment}
+                                                            onCheckedChange={(checked) => {
+                                                                handleRowChange(row.id, "isInstallment", checked);
+                                                                if (checked && !row.totalInstallments) {
+                                                                    handleRowChange(row.id, "totalInstallments", 2);
+                                                                    handleRowChange(row.id, "currentInstallment", 1);
+                                                                }
+                                                            }}
+                                                        />
+                                                    </div>
+                                                </TableCell>
+                                                <TableCell className="p-2">
+                                                    {row.isInstallment ? (
+                                                        <div className="flex items-center gap-1">
+                                                            <Input
+                                                                type="number"
+                                                                min={1}
+                                                                max={120}
+                                                                value={row.currentInstallment}
+                                                                onChange={(e) => handleRowChange(row.id, "currentInstallment", parseInt(e.target.value) || 1)}
+                                                                className="h-8 text-sm w-[40px] text-center px-1"
+                                                            />
+                                                            <span className="text-xs text-muted-foreground">/</span>
+                                                            <Input
+                                                                type="number"
+                                                                min={2}
+                                                                max={120}
+                                                                value={row.totalInstallments}
+                                                                onChange={(e) => handleRowChange(row.id, "totalInstallments", parseInt(e.target.value) || 2)}
+                                                                className="h-8 text-sm w-[40px] text-center px-1"
+                                                            />
+                                                        </div>
+                                                    ) : (
+                                                        <span className="text-xs text-muted-foreground italic">—</span>
+                                                    )}
                                                 </TableCell>
                                                 <TableCell className="p-2 text-center">
                                                     <Button

@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { creditCardInvoiceSchema } from "@/lib/validations";
-import { addMonths, getMonth, getYear } from "date-fns";
+import { addMonths, getMonth, getYear, startOfMonth, endOfMonth, isBefore, isAfter } from "date-fns";
 
 const VALUE_TOLERANCE = 0.02;
 
@@ -23,13 +23,46 @@ function slugify(text: string): string {
         .replace(/^-|-$/g, "");
 }
 
+function normalizeDescription(desc: string): string {
+    return desc
+        .replace(/\s*\(\d+\/\d+\)\s*$/, "")
+        .trim()
+        .toLowerCase();
+}
+
 function generateInstallmentGroup(descricao: string, userId: string): string {
-    const slug = slugify(descricao);
+    const slug = slugify(normalizeDescription(descricao));
     return `${slug}-${userId}`;
 }
 
 function valuesMatch(a: number, b: number): boolean {
     return Math.abs(a - b) <= VALUE_TOLERANCE;
+}
+
+async function cleanupOrphanProvisions(userId: string, currentMonth: number, currentYear: number) {
+    const currentMonthStart = startOfMonth(new Date(currentYear, currentMonth - 1, 1));
+    const currentMonthEnd = endOfMonth(currentMonthStart);
+
+    const orphanProvisions = await db.creditCardInvoiceItem.findMany({
+        where: {
+            is_provisioned: true,
+            transactionId: null,
+            data_vencimento_original: {
+                lte: currentMonthEnd,
+            },
+        },
+    });
+
+    if (orphanProvisions.length > 0) {
+        await db.creditCardInvoiceItem.deleteMany({
+            where: {
+                id: { in: orphanProvisions.map(p => p.id) },
+            },
+        });
+        console.log(`[cleanupOrphanProvisions] Deleted ${orphanProvisions.length} orphan provisions`);
+    }
+
+    return orphanProvisions.length;
 }
 
 export async function importCreditCardInvoice(data: any) {
@@ -68,22 +101,33 @@ export async function importCreditCardInvoice(data: any) {
 
         const processedItems: any[] = [];
         const createdProvisions: any[] = [];
+        const matchedProvisionIds: string[] = [];
+
+        const invoiceDate = new Date(validatedData.data_vencimento);
+        const invoiceMonth = getMonth(invoiceDate) + 1;
+        const invoiceYear = getYear(invoiceDate);
 
         for (const item of validatedData.items) {
             const descricao = item.descricao;
             const valorItem = Math.abs(item.valor);
             const dataCompra = new Date(item.data_compra);
-            const itemMonth = getMonth(dataCompra);
+            const itemMonth = getMonth(dataCompra) + 1;
             const itemYear = getYear(dataCompra);
+
+            const isInstallment = item.isInstallment ?? false;
+            const totalInstallments = item.totalInstallments ?? null;
+            const currentInstallment = item.currentInstallment ?? null;
 
             let matchedProvision = false;
 
-            if (validatedData.isReconciliation) {
+            if (validatedData.isReconciliation && isInstallment && totalInstallments && currentInstallment) {
+                const normalizedDesc = normalizeDescription(descricao);
                 const group = item.uniqueInstallmentGroup || generateInstallmentGroup(descricao, userId);
 
                 const candidates = await db.creditCardInvoiceItem.findMany({
                     where: {
                         is_provisioned: true,
+                        transactionId: null,
                         unique_installment_group: group,
                     },
                 });
@@ -91,9 +135,11 @@ export async function importCreditCardInvoice(data: any) {
                 const match = candidates.find((p) => {
                     const pDate = p.data_vencimento_original || p.data_compra;
                     return (
-                        getMonth(pDate) === itemMonth &&
+                        getMonth(pDate) + 1 === itemMonth &&
                         getYear(pDate) === itemYear &&
-                        valuesMatch(Number(p.valor), valorItem)
+                        valuesMatch(Number(p.valor), valorItem) &&
+                        p.current_installment === currentInstallment &&
+                        p.total_installments === totalInstallments
                     );
                 });
 
@@ -106,9 +152,11 @@ export async function importCreditCardInvoice(data: any) {
                             descricao,
                             categoria_id: item.categoria_id,
                             data_compra: dataCompra,
+                            unique_installment_group: group,
                         },
                     });
                     processedItems.push({ ...match, descricao, valor: valorItem, is_provisioned: false });
+                    matchedProvisionIds.push(match.id);
                     matchedProvision = true;
                 }
 
@@ -118,17 +166,19 @@ export async function importCreditCardInvoice(data: any) {
                             is_provisioned: true,
                             transactionId: null,
                             data_vencimento_original: {
-                                gte: new Date(itemYear, itemMonth, 1),
-                                lte: new Date(itemYear, itemMonth + 1, 0, 23, 59, 59, 999),
+                                gte: new Date(itemYear, itemMonth - 1, 1),
+                                lte: new Date(itemYear, itemMonth, 0, 23, 59, 59, 999),
                             },
                         },
                     });
 
                     const fallbackMatch = fallbackCandidates.find((p) => {
-                        return valuesMatch(Number(p.valor), valorItem) && (
-                            group === p.unique_installment_group ||
-                            slugify(p.descricao).includes(slugify(descricao)) ||
-                            slugify(descricao).includes(slugify(p.descricao))
+                        const pNormDesc = normalizeDescription(p.descricao);
+                        return (
+                            valuesMatch(Number(p.valor), valorItem) &&
+                            p.current_installment === currentInstallment &&
+                            p.total_installments === totalInstallments &&
+                            (group === p.unique_installment_group || pNormDesc === normalizedDesc)
                         );
                     });
 
@@ -145,13 +195,16 @@ export async function importCreditCardInvoice(data: any) {
                             },
                         });
                         processedItems.push({ ...fallbackMatch, descricao, valor: valorItem, is_provisioned: false, unique_installment_group: group });
+                        matchedProvisionIds.push(fallbackMatch.id);
                         matchedProvision = true;
                     }
                 }
             }
 
             if (!matchedProvision) {
-                const group = item.uniqueInstallmentGroup || generateInstallmentGroup(descricao, userId);
+                const group = isInstallment && totalInstallments && currentInstallment
+                    ? (item.uniqueInstallmentGroup || generateInstallmentGroup(descricao, userId))
+                    : null;
 
                 const newItem = await db.creditCardInvoiceItem.create({
                     data: {
@@ -160,32 +213,32 @@ export async function importCreditCardInvoice(data: any) {
                         valor: valorItem,
                         categoria_id: item.categoria_id,
                         data_compra: dataCompra,
-                        is_installment: item.isInstallment || false,
-                        total_installments: item.totalInstallments || null,
-                        current_installment: item.currentInstallment || null,
+                        is_installment: isInstallment,
+                        total_installments: totalInstallments,
+                        current_installment: currentInstallment,
                         is_provisioned: false,
-                        unique_installment_group: item.isInstallment ? group : null,
+                        unique_installment_group: group,
                     },
                 });
 
                 processedItems.push(newItem);
 
-                if (item.isInstallment && item.totalInstallments && item.currentInstallment) {
-                    const remaining = item.totalInstallments - item.currentInstallment;
+                if (isInstallment && totalInstallments && currentInstallment) {
+                    const remaining = totalInstallments - currentInstallment;
                     const provisionsData: any[] = [];
 
                     for (let i = 1; i <= remaining; i++) {
-                        const futureMonthOffset = item.currentInstallment + i;
+                        const futureMonthOffset = currentInstallment + i;
                         const provisionDate = addMonths(dataCompra, i);
 
                         provisionsData.push({
-                            descricao: `${descricao} (${futureMonthOffset}/${item.totalInstallments})`,
+                            descricao: `${descricao} (${futureMonthOffset}/${totalInstallments})`,
                             valor: valorItem,
                             data_compra: dataCompra,
                             data_vencimento_original: provisionDate,
                             categoria_id: item.categoria_id,
                             is_installment: true,
-                            total_installments: item.totalInstallments,
+                            total_installments: totalInstallments,
                             current_installment: futureMonthOffset,
                             is_provisioned: true,
                             transactionId: null,
@@ -199,6 +252,10 @@ export async function importCreditCardInvoice(data: any) {
                     }
                 }
             }
+        }
+
+        if (validatedData.isReconciliation) {
+            await cleanupOrphanProvisions(userId, invoiceMonth, invoiceYear);
         }
 
         revalidatePath("/dashboard");

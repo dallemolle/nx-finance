@@ -10,11 +10,12 @@
 | Banco | PostgreSQL | — | Provider configurado no `schema.prisma` |
 | UI Primitives | shadcn/ui | New York | Componentes via `@/components/ui/`, estilo `new-york` |
 | Estilização | Tailwind CSS | ^3.4.15 | Config com `tailwindcss-animate`, CSS variables via `globals.css` |
-| Autenticação | NextAuth | ^4.24.13 | Credentials Provider, JWT session strategy |
+| Autenticação | NextAuth | ^4.24.13 | Credentials Provider, JWT session strategy, adapter `@auth/prisma-adapter` |
 | Formulários | react-hook-form | ^7.71.2 | Integrado com `@hookform/resolvers` + Zod |
 | Validação | Zod | ^4.3.6 | Schemas em `src/lib/validations.ts` |
 | Gráficos | Recharts | ^2.13.3 | Pie/Donut charts no dashboard |
 | Datas | date-fns | ^4.1.0 | Locale `ptBR` para formatação em português |
+| Calendário | react-day-picker | ^9.14.0 | Componente DatePicker |
 | Cálculos | decimal.js | ^10.6.0 | Precisão financeira em parcelamentos |
 | Ícones | Lucide React | ^0.460.0 | Ícones nos componentes de UI |
 | Tabelas | @tanstack/react-table | ^8.21.3 | Tabela de relatórios |
@@ -23,7 +24,8 @@
 | CSV | PapaParse | ^5.5.3 | Importação em lote |
 | Email | Nodemailer | ^8.0.1 | Envio de tokens 2FA |
 | Senhas | bcryptjs | ^3.0.3 | Hash de senhas (salt rounds = 10) |
-| Outros | dompurify, cmdk, class-variance-authority, clsx, tailwind-merge | — | Sanitização, command palette, variants CSS |
+| Radix UI | @radix-ui/* | — | 8 componentes: avatar, dialog, dropdown-menu, label, popover, progress, select, slot, tabs |
+| Outros | dompurify, cmdk (^1.1.1), class-variance-authority, clsx, tailwind-merge, reflect-metadata | — | Sanitização, command palette, variants CSS, reflexão |
 
 **Scripts de build:**
 ```
@@ -38,6 +40,17 @@ postinstall → prisma generate
 - `tsconfig.json`: strict mode, path alias `@/` → `src/`, target ES2017, moduleResolution bundler
 - `next.config.ts`: output `standalone`
 - `components.json`: shadcn/ui style `new-york`, baseColor `neutral`, CSS variables habilitadas
+- `postcss.config.js`: Tailwind CSS + Autoprefixer
+- `prisma.config.ts`: engine `classic`
+
+**Infraestrutura:**
+- `Dockerfile`: multi-stage build (node:20-alpine, standalone output)
+- `docker-compose.yml`: serviço PostgreSQL 15 + app Next.js
+- `docker-entrypoint.sh`: executa `prisma db push --accept-data-loss` antes de iniciar
+- `.env.example`: template com variáveis DATABASE_URL, NEXTAUTH_SECRET, SMTP_*
+
+**CI/CD:**
+- `.github/workflows/db-sync.yml`: sincroniza schema Prisma ao fazer push em staging/main
 
 ---
 
@@ -48,15 +61,17 @@ postinstall → prisma generate
 | Arquivo | Tipo | Propósito |
 |---------|------|-----------|
 | `layout.tsx` | Server Component | RootLayout: `<html lang="pt-BR">`, Providers, EnvironmentBanner, Toaster Sonner |
-| `providers.tsx` | Client Component | Wrapper: SessionProvider + ThemeProvider (attribute="class", defaultTheme="system") |
-| `page.tsx` | Server Component | Dashboard principal: sessão → busca dados → renderiza cards, gráficos, transações |
+| `providers.tsx` | Client Component | Wrapper: SessionProvider + ThemeProvider (attribute="class", defaultTheme="system", enableSystem) |
+| `page.tsx` | Server Component | Dashboard principal (rota `/`): sessão → busca dados → renderiza cards, gráficos, transações |
 | `globals.css` | Estilos | Definição de CSS variables para `:root` (light) e `.dark`; `@tailwind base/components/utilities` |
 | `auth/login/page.tsx` | Client Component | Formulário de login com suporte a 2FA (campo `code` aparece condicionalmente) |
 | `auth/register/page.tsx` | Client Component | Formulário de registro → chama `registerUser()` Server Action |
 | `reports/page.tsx` | Server Component | Página de relatórios: busca dados + renderiza `ReportContent` + `MonthPicker` |
 | `reports/report-content.tsx` | Client Component | Tabela com filtragem por status/categoria/instituição/meio de pagamento |
-| `reports/report-filters.tsx` | Client Component | Filtros combinados com Selects |
-| `dashboard/settings/page.tsx` | Server Component | Tabs de configuração: Instituições, Categorias, Meios de Pagamento |
+| `reports/report-filters.tsx` | Client Component | Filtros combinados com Selects com totais por meio de pagamento |
+| `dashboard/settings/page.tsx` | Server Component | Tabs de configuração: Instituições (default), Categorias, Meios de Pagamento |
+| `dashboard/page.tsx` | Client Component | **(Legacy/Stale)** Dashboard mock com MOCK_DATA — não utilizado pela navegação real |
+| `api/auth/[...nextauth]/route.ts` | Route Handler | Catch-all NextAuth: exporta GET/POST handler |
 
 ### `src/components/dashboard/` — Componentes de Negócio
 
@@ -78,6 +93,19 @@ postinstall → prisma generate
 | `forecast.tsx` | Client Component | Projeção mensal baseada em média diária |
 | `settings-forms.tsx` | Client Component | Linhas editáveis para renomear/excluir registros auxiliares |
 
+### `src/components/layout/` — Componentes de Layout
+
+| Arquivo | Tipo | Propósito |
+|---------|------|-----------|
+| `top-nav.tsx` | Client Component | Barra de navegação superior fixa com backdrop-blur, botão "voltar", links Dashboard/Relatórios/Configurações |
+
+### `src/components/` — Outros Componentes
+
+| Arquivo | Tipo | Propósito |
+|---------|------|-----------|
+| `environment-banner.tsx` | Server Component | Banner "AMBIENTE DE HOMOLOGAÇÃO" laranja, oculto em produção com banco oficial (/nxfinance) |
+| `theme-toggle.tsx` | Client Component | Dropdown de tema (Claro/Escuro/Sistema) com ícones Sun/Moon |
+
 ### `src/components/ui/` — Primitivas shadcn/ui (20 componentes)
 
 `alert`, `avatar`, `badge`, `button`, `calendar`, `card`, `combobox`, `command`, `date-picker`, `dialog`, `dropdown-menu`, `input`, `label`, `popover`, `progress`, `select`, `skeleton`, `switch`, `table`, `tabs`
@@ -87,7 +115,7 @@ postinstall → prisma generate
 | Arquivo | Tipo | Propósito |
 |---------|------|-----------|
 | `utils.ts` | Utilitário | `cn()` — merge de classes Tailwind (clsx + tailwind-merge) |
-| `validations.ts` | Schema | Schemas Zod: `transactionSchema`, `categorySchema`, `paymentMethodSchema`, `financialInstitutionSchema`, `loginSchema`, `registerSchema` |
+| `validations.ts` | Schema | Schemas Zod: `transactionSchema`, `categorySchema`, `paymentMethodSchema`, `financialInstitutionSchema`, `loginSchema`, `registerSchema`, `creditCardInvoiceSchema`, `creditCardInvoiceItemSchema` |
 | `actions.ts` | Server Actions | CRUD de transações, categorias, métodos de pagamento, instituições financeiras |
 | `auth-actions.ts` | Server Action | `registerUser()` — registro + seed de categorias padrão |
 | `auth.ts` | Config | `authOptions` — NextAuth config com Credentials Provider + callbacks JWT/Session |
@@ -98,8 +126,15 @@ postinstall → prisma generate
 | `csv-actions.ts` | Server Actions | `processBatchTransactions()`, `getMappingSuggestions()`, `saveMappingSuggestion()` |
 | `db.ts` | Singleton | Instância singleton do PrismaClient (cache em `globalThis`) |
 | `prisma.ts` | Singleton | Alternativa com log de queries habilitado |
-| `mail.ts` / `mail.js` | Serviço | Envio de email 2FA (console.log + Nodemailer) |
-| `proxy.ts` | Middleware | `withAuth` — proteção de rotas, lógica 2FA, redirects |
+| `mail.ts` / `mail.js` | Serviço | Envio de email 2FA: `mail.ts` (console.log + placeholder), `mail.js` (Nodemailer real) |
+
+### `src/proxy.ts` — Middleware
+
+| Arquivo | Propósito |
+|---------|-----------|
+| `src/proxy.ts` | Middleware NextAuth `withAuth`: protege `/` e `/dashboard/*`; redireciona usuários logados para fora de `/auth/login`; verifica 2FA pendente (`/auth/verify-2fa`) |
+
+**Matcher:** `["/", "/dashboard/:path*", "/auth/:path*"]`
 
 ### `src/types/` — Extensões de Tipo
 
@@ -118,8 +153,9 @@ Todos os schemas em `src/lib/validations.ts` aplicam transformações **antes** 
 - **Capitalização automática**: campos `nome` e `descricao` sofrem `.transform(val => val.trim().charAt(0).toUpperCase() + val.slice(1).toLowerCase())` — isso garante que "ALUGUEL" → "Aluguel", "mercado" → "Mercado".
 - **Valor monetário**: `z.coerce.number().positive("Valor deve ser positivo")` — rejeita zero e negativos.
 - **Datas**: `z.coerce.date()` — aceita strings ISO e converte.
-- **Cores**: `z.string().regex(/^#[0-9A-F]{6}$/i)` — valida formato hexadecimal (ex: `#10b981`).
+- **Cores**: `z.string().regex(/^#[0-9A-F]{6}$/i)` — valida formato hexadecimal (ex: `#10b981`). `financialInstitutionSchema` permite cor vazia opcional.
 - **Unique constraints**: `@@unique([nome, userId, tipo])` no Prisma para categorias; `@@unique([nome, userId])` para métodos de pagamento e instituições.
+- **Refinements**: `transactionSchema` usa `.refine()` para exigir `installmentsCount` quando `isInstallment === true`.
 
 ### 3.2 Comportamento Específico por Entidade
 
@@ -131,9 +167,9 @@ Todos os schemas em `src/lib/validations.ts` aplicam transformações **antes** 
   - O valor total é dividido usando `decimal.js` com `ROUND_DOWN` e precisão de 2 casas decimais.
   - A última parcela absorve o centavo residual: `lastInstallmentValue = totalValue.minus(installmentValue.times(installmentsCount - 1))`.
   - Cada parcela recebe data de vencimento incremental: `addMonths(dataVencimento, index)`.
-  - Nomes das parcelas seguem o padrão `"Descrição (01/12)"` editável pelo usuário.
+  - Nomes das parcelas seguem o padrão `"Descrição (01/12)"` editável pelo usuário via `installmentDescriptions`.
   - **O parcelamento só está disponível para `tipo === "SAIDA"`** e apenas na criação (não edição).
-- Status `ATRASADO` é **calculado dinamicamente** no servidor: se `status !== "PAGO" && dataVencimento < now()`, o status exibido é "ATRASADO" (não é persistido, apenas calculado na query).
+- Status `ATRASADO` é **calculado dinamicamente** no servidor: se `status !== "PAGO" && dataVencimento < now()`, o status exibido é "ATRASADO" (não é persistido, apenas calculado na query em `dashboard.ts` e `reports.ts`).
 
 **CreditCardInvoiceItem (modelo auxiliar de fatura de cartão):**
 - Relacionamento 1:N com Transaction via `transactionId` — uma transação `is_invoice_header` pode conter N itens.
@@ -141,7 +177,8 @@ Todos os schemas em `src/lib/validations.ts` aplicam transformações **antes** 
 - `categoria_id` vincula cada item a uma Category, permitindo agregação no gráfico de categorias.
 - **Liquidação unificada**: apenas a transação principal (is_invoice_header) é liquidada (status → PAGO). Os itens não possuem status próprio.
 - **Exclusão em cascata**: ao deletar a transação principal, todos os itens associados são removidos via `onDelete: Cascade`.
-- **Importação**: o CSV de fatura é processado pelo dialog `credit-card-invoice-dialog.tsx`, que cria o cabeçalho + itens em lote via `importCreditCardInvoice()`.
+- **Importação**: o CSV de fatura é processado pelo dialog `credit-card-invoice-dialog.tsx`, que cria cabeçalho + itens em lote via `importCreditCardInvoice()`. A categoria "Fatura Cartão" (#6366f1, ícone CreditCard) é auto-criada se não existir.
+- **Exibição em relatórios/dashboard**: invoice items são expandidos como sub-linhas na tabela de relatórios e mesclados no gráfico de categorias (evitando dupla contagem da transação `is_invoice_header`).
 
 **Category:**
 - Duplicidade verificada antes da criação via `findFirst({ where: { nome: { equals, mode: 'insensitive' }, userId, tipo } })` — case-insensitive.
@@ -152,6 +189,7 @@ Todos os schemas em `src/lib/validations.ts` aplicam transformações **antes** 
 **PaymentMethod & FinancialInstitution:**
 - Duplicidade verificada via `findUnique({ where: { nome_userId } })` — usa a unique constraint composta.
 - Mesma proteção de exclusão que categorias.
+- `FinancialInstitution` possui campo `metadata` (JSON, default `{}`) e `cor` opcional.
 
 ### 3.3 Agrupamento Inteligente de Categorias (`dashboard-utils.ts`)
 
@@ -166,7 +204,7 @@ Isso permite que "mercado extra", "mercado da esquina" e "mercadinho" sejam agre
 
 Todas as mutações seguem o mesmo padrão:
 
-1. Verificar sessão via `getServerSession(authOptions)`.
+1. Verificar sessão via `getServerSession(authOptions)` (ou `getUserId()` helper).
 2. Validar entrada com schema Zod (`.parse()`).
 3. Executar operação no Prisma.
 4. Chamar `revalidatePath("/dashboard")` e `revalidatePath("/reports")`.
@@ -176,9 +214,15 @@ Todas as mutações seguem o mesmo padrão:
 - Usa `db.$transaction()` para criar múltiplos registros atomicamente.
 - Após importação, cria automaticamente `MappingSuggestion` para aprendizado de categorização futura.
 
+**MappingSuggestion:**
+- Modelo auxiliar com unique `@@unique([search_term, userId])`.
+- Usa `upsert` para criar ou atualizar sugestão (`saveMappingSuggestion`).
+- Busca por `search_term` contido no título da transação durante importação CSV.
+
 ### 3.5 Cálculos do Dashboard
 
 - Ao processar `categoryData`, o dashboard separa transações com `is_invoice_header === true` e as exclui do agrupamento, evitando duplicidade no gráfico. Em vez disso, busca os registros de `CreditCardInvoiceItem` e os mescla na agregação via `aggregateByCategory()`, garantindo que os gastos do cartão apareçam nas categorias corretas.
+- Invoice items também são mapeados para estrutura similar a transação (`invoiceItemsAsTransactions`) para inclusão em `monthlyTransactions` e exibição no gráfico.
 
 **`getDashboardData()` — `src/lib/dashboard.ts`:**
 
@@ -193,11 +237,12 @@ Todas as mutações seguem o mesmo padrão:
 ### 3.6 Autenticação e Segurança
 
 - **Credentials Provider** com email + senha + código 2FA opcional.
-- **2FA**: campo `status_2fa: Boolean` + `secret_2fa: String?` no modelo User. Se ativo, login exige segundo passo.
+- **2FA**: campo `status_2fa: Boolean` + `secret_2fa: String?` no modelo User. Se ativo, login retorna erro `"2FA_REQUIRED"` e exibe campo `code`.
 - **Registro**: email único verificado; senha hash com bcryptjs salt rounds = 10.
-- **Seed automático**: ao registrar, cria 4 categorias padrão: Salário (ENTRADA), Alimentação, Transporte, Lazer (SAÍDAS).
-- **Middleware** (`proxy.ts`): protege `/` e `/dashboard/*`; redireciona usuários logados para fora de `/auth/login`; verifica 2FA pendente.
-- **Session strategy**: `jwt` — token armazena `id` do usuário, injetado na sessão via callbacks.
+- **Seed automático**: ao registrar, cria 4 categorias padrão: Salário (ENTRADA, `#10b981`, Wallet), Alimentação (SAIDA, `#f43f5e`, Utensils), Transporte (SAIDA, `#3b82f6`, Car), Lazer (SAIDA, `#f59e0b`, Gamepad2).
+- **Middleware** (`src/proxy.ts`): protege `/` e `/dashboard/*`; redireciona usuários logados para fora de `/auth/login`; verifica 2FA pendente (`/auth/verify-2fa`).
+- **Session strategy**: `jwt` — token armazena `id` do usuário e campos `isTwoFactorVerified`/`needsTwoFactor`, injetado na sessão via callbacks.
+- **API Route**: `src/app/api/auth/[...nextauth]/route.ts` — handler NextAuth (GET/POST).
 
 ### 3.7 Navegação por URL Search Params
 
@@ -240,7 +285,7 @@ O card de "Saldo Disponível" quebra o padrão: `bg-slate-950 text-white` com í
 
 ### 4.3 Navegação
 
-- **TopNav**: barra fixa com backdrop-blur, botão "voltar" à esquerda, links Dashboard/Relatórios/Configurações à direita.
+- **TopNav** (`src/components/layout/top-nav.tsx`): barra fixa com backdrop-blur, botão "voltar" à esquerda, links Dashboard/Relatórios/Configurações à direita com active state via `pathname`.
 - **MonthPicker**: agrupado visualmente em container com background `slate-100/50` e bordas, com botões ChevronLeft/Right e Selects para mês/ano.
 - **Responsividade**: padrão `flex flex-col md:flex-row` + `grid grid-cols-1 md:grid-cols-3`.
 
@@ -279,6 +324,12 @@ Erros de unique constraint no Prisma (código `P2002`) são tratados especificam
 - Dropdown com opções CSV e PDF.
 - Atualmente **mock** (`alert()`), estrutura preparada para implementação futura.
 
+### 4.8 Banner de Ambiente
+
+`EnvironmentBanner` (`src/components/environment-banner.tsx`):
+- Exibe banner laranja "AMBIENTE DE HOMOLOGAÇÃO - OS DADOS NÃO SÃO REAIS" quando `NODE_ENV !== "production"` OU banco não contém `/nxfinance`.
+- Oculta em produção com banco oficial.
+
 ---
 
 ## 5. Convenções de Código
@@ -292,18 +343,20 @@ Erros de unique constraint no Prisma (código `P2002`) são tratados especificam
 
 ### 5.2 Imports
 
-- Path alias `@/` → `src/` para todos os imports internos.
+- Path alias `@/` → `src/` para todos os imports internos (preferência). **Nota:** alguns arquivos (ex: login page, root dashboard page) ainda usam imports relativos — inconsistência conhecida.
 - Componentes de UI importados de `@/components/ui/...`.
 - Server Actions importadas de `@/lib/actions` (ou específicas como `@/lib/csv-actions`).
 - Schemas de `@/lib/validations`.
 
 ### 5.3 Separação Server/Client
 
-| Critério | Server Component | Client Component |
-|----------|-----------------|------------------|
+| Característica | Server Component | Client Component |
+|----------------|-----------------|------------------|
 | Busca de dados | ✅ `async` + `getServerSession()` | ❌ |
-| Server Actions | ✅ `"use server"` | ❌ |
+| Server Actions (chamada) | ✅ import e call direto | ✅ via transition/hook |
 | Interatividade (onClick, useState, useEffect) | ❌ | ✅ `"use client"` |
 | Hooks (useRouter, useForm, useTransition) | ❌ | ✅ |
 | Recharts, Sonner | ❌ | ✅ |
+| *Directiva de arquivo* | *nenhuma* | `"use client"` |
 
+> **Nota:** Server Actions são funções assíncronas com `"use server"` no topo do arquivo. Elas podem ser importadas e chamadas tanto por Server Components quanto por Client Components.

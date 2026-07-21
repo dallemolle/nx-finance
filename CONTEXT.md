@@ -1,5 +1,7 @@
 # Contexto do Projeto: NxFinance
 
+> Documento técnico de referência para IAs e desenvolvedores. Reflete o estado real do código na branch atual (`feature/2026-07-21_ajustes_claude`, derivada de `staging`). Não documenta features de outras branches não mergeadas — ver seção 6.
+
 ## 1. Stack Tecnológica Principal
 
 | Camada | Tecnologia | Versão | Observação |
@@ -7,10 +9,10 @@
 | Framework | Next.js (App Router) | ^16.2.2 | `src/app/` com Server Components por padrão |
 | Linguagem | TypeScript | ^5.6.3 | Strict mode, path alias `@/` → `src/` |
 | ORM | Prisma | ^6.0.1 | PostgreSQL via `DATABASE_URL`, engine classic |
-| Banco | PostgreSQL | — | Provider configurado no `schema.prisma` |
+| Banco | PostgreSQL | — | Provider configurado no `schema.prisma`; sync via `prisma db push` (sem `migrate deploy` em produção) |
 | UI Primitives | shadcn/ui | New York | Componentes via `@/components/ui/`, estilo `new-york` |
 | Estilização | Tailwind CSS | ^3.4.15 | Config com `tailwindcss-animate`, CSS variables via `globals.css` |
-| Autenticação | NextAuth | ^4.24.13 | Credentials Provider, JWT session strategy, adapter `@auth/prisma-adapter` |
+| Autenticação | NextAuth | ^4.24.13 | Credentials Provider, JWT session strategy. **Sem adapter** — `@auth/prisma-adapter` está no `package.json` mas não é referenciado em `auth.ts` (dependência não utilizada) |
 | Formulários | react-hook-form | ^7.71.2 | Integrado com `@hookform/resolvers` + Zod |
 | Validação | Zod | ^4.3.6 | Schemas em `src/lib/validations.ts` |
 | Gráficos | Recharts | ^2.13.3 | Pie/Donut charts no dashboard |
@@ -22,17 +24,17 @@
 | Tema | next-themes | ^0.4.3 | dark/light/system via classe `.dark` |
 | Notificações | Sonner | ^2.0.7 | Toasts rich colors, posição top-right |
 | CSV | PapaParse | ^5.5.3 | Importação em lote |
-| Email | Nodemailer | ^8.0.1 | Envio de tokens 2FA |
+| Email | Nodemailer | ^8.0.1 | Instalado para envio de tokens 2FA — **não conectado** (ver seção 6) |
 | Senhas | bcryptjs | ^3.0.3 | Hash de senhas (salt rounds = 10) |
 | Radix UI | @radix-ui/* | — | 8 componentes: avatar, dialog, dropdown-menu, label, popover, progress, select, slot, tabs |
 | Outros | dompurify, cmdk (^1.1.1), class-variance-authority, clsx, tailwind-merge, reflect-metadata | — | Sanitização, command palette, variants CSS, reflexão |
 
 **Scripts de build:**
 ```
-dev        → next dev
-build      → prisma generate && next build
-start      → next start
-lint       → next lint
+dev         → next dev
+build       → prisma generate && next build
+start       → next start
+lint        → next lint
 postinstall → prisma generate
 ```
 
@@ -42,12 +44,13 @@ postinstall → prisma generate
 - `components.json`: shadcn/ui style `new-york`, baseColor `neutral`, CSS variables habilitadas
 - `postcss.config.js`: Tailwind CSS + Autoprefixer
 - `prisma.config.ts`: engine `classic`
+- `prisma/migrations/`: contém apenas uma pasta vazia (`20260717041037_add_provisionamento_fatura`, sem `migration.sql`) — resíduo de uma feature branch não mergeada. Não afeta o deploy, pois o fluxo usa `prisma db push`, não `prisma migrate deploy`.
 
 **Infraestrutura:**
 - `Dockerfile`: multi-stage build (node:20-alpine, standalone output)
 - `docker-compose.yml`: serviço PostgreSQL 15 + app Next.js
 - `docker-entrypoint.sh`: executa `prisma db push --accept-data-loss` antes de iniciar
-- `.env.example`: template com variáveis DATABASE_URL, NEXTAUTH_SECRET, SMTP_*
+- `.env.example`: template com variáveis `DATABASE_URL`, `NEXTAUTH_SECRET`, `NEXTAUTH_URL`, `SMTP_*`, `EMAIL_FROM`
 
 **CI/CD:**
 - `.github/workflows/db-sync.yml`: sincroniza schema Prisma ao fazer push em staging/main
@@ -86,7 +89,7 @@ postinstall → prisma generate
 | `edit-transaction-dialog.tsx` | Client Component | Diálogo de edição com `initialData` |
 | `quick-pay-button.tsx` | Client Component | Botão de pagamento rápido (altera status para PAGO) |
 | `csv-import-dialog.tsx` | Client Component | Importação CSV em 2 passos: upload + mapeamento de categorias |
-| `credit-card-invoice-dialog.tsx` | Client Component | Importação de fatura de cartão de crédito via CSV: cria cabeçalho is_invoice_header + itens detalhados com categoria |
+| `credit-card-invoice-dialog.tsx` | Client Component | Importação de fatura de cartão de crédito via CSV: cria cabeçalho `is_invoice_header` + itens detalhados com categoria |
 | `institution-combobox.tsx` | Client Component | Combobox especializado com criação de instituição via diálogo |
 | `export-buttons.tsx` | Client Component | Dropdown de exportação (CSV/PDF) — funcionalidade mock |
 | `financial-health.tsx` | Client Component | Indicador visual de saúde financeira com Progress |
@@ -103,7 +106,7 @@ postinstall → prisma generate
 
 | Arquivo | Tipo | Propósito |
 |---------|------|-----------|
-| `environment-banner.tsx` | Server Component | Banner "AMBIENTE DE HOMOLOGAÇÃO" laranja, oculto em produção com banco oficial (/nxfinance) |
+| `environment-banner.tsx` | Server Component | Banner "AMBIENTE DE HOMOLOGAÇÃO" laranja; oculto apenas quando `NODE_ENV === "production"` (ou `NEXT_PUBLIC_VERCEL_ENV === "production"`) **e** `DATABASE_URL` contém `/nxfinance` |
 | `theme-toggle.tsx` | Client Component | Dropdown de tema (Claro/Escuro/Sistema) com ícones Sun/Moon |
 
 ### `src/components/ui/` — Primitivas shadcn/ui (20 componentes)
@@ -124,15 +127,15 @@ postinstall → prisma generate
 | `reports.ts` | Server Actions | `getReportData()` + `getCategories/PaymentMethods/Institutions()` |
 | `credit-card-actions.ts` | Server Actions | `importCreditCardInvoice()` — importa fatura CSV + `getInvoiceItems()` + `getInvoiceHeaders()` |
 | `csv-actions.ts` | Server Actions | `processBatchTransactions()`, `getMappingSuggestions()`, `saveMappingSuggestion()` |
-| `db.ts` | Singleton | Instância singleton do PrismaClient (cache em `globalThis`) |
-| `prisma.ts` | Singleton | Alternativa com log de queries habilitado |
-| `mail.ts` / `mail.js` | Serviço | Envio de email 2FA: `mail.ts` (console.log + placeholder), `mail.js` (Nodemailer real) |
+| `db.ts` | Singleton | Instância singleton do PrismaClient (cache em `globalThis`) — **usado pelas Server Actions** |
+| `prisma.ts` | Singleton | Alternativa com log de queries habilitado — **não importado em nenhum lugar do código atual** |
+| `mail.ts` / `mail.js` | Serviço (não conectado) | `mail.ts` exporta `sendTwoFactorTokenEmail()` (apenas `console.log`); `mail.js` exporta `sendTwoFactorEmail()` (Nodemailer real). **Nenhum dos dois é importado por nenhum arquivo** — envio de 2FA por e-mail não está de fato acionado no fluxo de login |
 
 ### `src/proxy.ts` — Middleware
 
 | Arquivo | Propósito |
 |---------|-----------|
-| `src/proxy.ts` | Middleware NextAuth `withAuth`: protege `/` e `/dashboard/*`; redireciona usuários logados para fora de `/auth/login`; verifica 2FA pendente (`/auth/verify-2fa`) |
+| `src/proxy.ts` | Middleware NextAuth `withAuth`: protege `/` e `/dashboard/*`; redireciona usuários logados para fora de `/auth/login`/`/auth/register`; contém lógica (atualmente inerte — ver seção 6) para redirecionar a `/auth/verify-2fa` quando 2FA pendente |
 
 **Matcher:** `["/", "/dashboard/:path*", "/auth/:path*"]`
 
@@ -140,7 +143,7 @@ postinstall → prisma generate
 
 | Arquivo | Propósito |
 |---------|-----------|
-| `next-auth.d.ts` | Estende `Session.user.id`, `User.id`, `JWT.id` |
+| `next-auth.d.ts` | Estende `Session.user.id`, `User.id`, `JWT.id`. **Não declara** `isTwoFactorVerified`/`needsTwoFactor`, referenciados em `proxy.ts` |
 
 ---
 
@@ -161,24 +164,25 @@ Todos os schemas em `src/lib/validations.ts` aplicam transformações **antes** 
 
 **Transaction:**
 - `data_lancamento` tem `@default(now())` — sempre registra a data de criação automaticamente.
-- `data_pagamento` é opcional (`DateTime?`) — só preenchida ao liquidar.
+- `data_pagamento` é opcional (`DateTime?`) — só preenchida ao liquidar (nota: `payTransaction()` em `actions.ts` atualiza apenas `status`, não popula `data_pagamento`).
 - Status padrão é `PENDENTE`.
 - Ao criar uma transação parcelada (`isInstallment === true`):
   - O valor total é dividido usando `decimal.js` com `ROUND_DOWN` e precisão de 2 casas decimais.
   - A última parcela absorve o centavo residual: `lastInstallmentValue = totalValue.minus(installmentValue.times(installmentsCount - 1))`.
   - Cada parcela recebe data de vencimento incremental: `addMonths(dataVencimento, index)`.
   - Nomes das parcelas seguem o padrão `"Descrição (01/12)"` editável pelo usuário via `installmentDescriptions`.
-  - **O parcelamento só está disponível para `tipo === "SAIDA"`** e apenas na criação (não edição).
+  - **O parcelamento só está disponível para `tipo === "SAIDA"`** e apenas na criação (não edição — `updateTransaction` descarta `isInstallment`/`installmentsCount`).
 - Status `ATRASADO` é **calculado dinamicamente** no servidor: se `status !== "PAGO" && dataVencimento < now()`, o status exibido é "ATRASADO" (não é persistido, apenas calculado na query em `dashboard.ts` e `reports.ts`).
 
 **CreditCardInvoiceItem (modelo auxiliar de fatura de cartão):**
 - Relacionamento 1:N com Transaction via `transactionId` — uma transação `is_invoice_header` pode conter N itens.
-- `data_vencimento_original` (opcional) armazena a data de vencimento individual do item (se diferente da fatura).
+- `data_vencimento_original` (opcional) armazena a data de vencimento individual do item (se diferente da fatura) — campo existe no schema mas não é preenchido pelo fluxo de importação atual (`importCreditCardInvoice` não define esse valor).
 - `categoria_id` vincula cada item a uma Category, permitindo agregação no gráfico de categorias.
-- **Liquidação unificada**: apenas a transação principal (is_invoice_header) é liquidada (status → PAGO). Os itens não possuem status próprio.
+- **Liquidação unificada**: apenas a transação principal (`is_invoice_header`) é liquidada (status → PAGO). Os itens não possuem status próprio.
 - **Exclusão em cascata**: ao deletar a transação principal, todos os itens associados são removidos via `onDelete: Cascade`.
-- **Importação**: o CSV de fatura é processado pelo dialog `credit-card-invoice-dialog.tsx`, que cria cabeçalho + itens em lote via `importCreditCardInvoice()`. A categoria "Fatura Cartão" (#6366f1, ícone CreditCard) é auto-criada se não existir.
+- **Importação**: o CSV de fatura é processado pelo dialog `credit-card-invoice-dialog.tsx`, que cria cabeçalho + itens em lote via `importCreditCardInvoice()`. A categoria "Fatura Cartão" (`#6366f1`, ícone CreditCard) é auto-criada se não existir, apenas para satisfazer a FK do cabeçalho (é excluída da agregação do gráfico).
 - **Exibição em relatórios/dashboard**: invoice items são expandidos como sub-linhas na tabela de relatórios e mesclados no gráfico de categorias (evitando dupla contagem da transação `is_invoice_header`).
+- **Não há conciliação automática de parcelamentos** contra a fatura importada (sem regex/matching por descrição, sem tolerância de valor) — cada item da fatura é lançado manualmente com sua própria categoria no momento da importação.
 
 **Category:**
 - Duplicidade verificada antes da criação via `findFirst({ where: { nome: { equals, mode: 'insensitive' }, userId, tipo } })` — case-insensitive.
@@ -204,7 +208,7 @@ Isso permite que "mercado extra", "mercado da esquina" e "mercadinho" sejam agre
 
 Todas as mutações seguem o mesmo padrão:
 
-1. Verificar sessão via `getServerSession(authOptions)` (ou `getUserId()` helper).
+1. Verificar sessão via `getServerSession(authOptions)` (ou `getUserId()` helper local a cada arquivo).
 2. Validar entrada com schema Zod (`.parse()`).
 3. Executar operação no Prisma.
 4. Chamar `revalidatePath("/dashboard")` e `revalidatePath("/reports")`.
@@ -217,12 +221,12 @@ Todas as mutações seguem o mesmo padrão:
 **MappingSuggestion:**
 - Modelo auxiliar com unique `@@unique([search_term, userId])`.
 - Usa `upsert` para criar ou atualizar sugestão (`saveMappingSuggestion`).
-- Busca por `search_term` contido no título da transação durante importação CSV.
+- Busca por `search_term` contido no título da transação durante importação CSV (`title.toLowerCase().includes(s.search_term)`).
 
 ### 3.5 Cálculos do Dashboard
 
 - Ao processar `categoryData`, o dashboard separa transações com `is_invoice_header === true` e as exclui do agrupamento, evitando duplicidade no gráfico. Em vez disso, busca os registros de `CreditCardInvoiceItem` e os mescla na agregação via `aggregateByCategory()`, garantindo que os gastos do cartão apareçam nas categorias corretas.
-- Invoice items também são mapeados para estrutura similar a transação (`invoiceItemsAsTransactions`) para inclusão em `monthlyTransactions` e exibição no gráfico.
+- Invoice items também são mapeados para estrutura similar a transação (`invoiceItemsAsTransactions`) para inclusão em `monthlyTransactions` e exibição no gráfico/diálogo de detalhes.
 
 **`getDashboardData()` — `src/lib/dashboard.ts`:**
 
@@ -237,12 +241,11 @@ Todas as mutações seguem o mesmo padrão:
 ### 3.6 Autenticação e Segurança
 
 - **Credentials Provider** com email + senha + código 2FA opcional.
-- **2FA**: campo `status_2fa: Boolean` + `secret_2fa: String?` no modelo User. Se ativo, login retorna erro `"2FA_REQUIRED"` e exibe campo `code`.
 - **Registro**: email único verificado; senha hash com bcryptjs salt rounds = 10.
 - **Seed automático**: ao registrar, cria 4 categorias padrão: Salário (ENTRADA, `#10b981`, Wallet), Alimentação (SAIDA, `#f43f5e`, Utensils), Transporte (SAIDA, `#3b82f6`, Car), Lazer (SAIDA, `#f59e0b`, Gamepad2).
-- **Middleware** (`src/proxy.ts`): protege `/` e `/dashboard/*`; redireciona usuários logados para fora de `/auth/login`; verifica 2FA pendente (`/auth/verify-2fa`).
-- **Session strategy**: `jwt` — token armazena `id` do usuário e campos `isTwoFactorVerified`/`needsTwoFactor`, injetado na sessão via callbacks.
+- **Session strategy**: `jwt` — callback `jwt()` só injeta `token.id`; callback `session()` só injeta `session.user.id`.
 - **API Route**: `src/app/api/auth/[...nextauth]/route.ts` — handler NextAuth (GET/POST).
+- **2FA — implementação incompleta** (ver seção 6 para detalhes): campos `status_2fa`/`secret_2fa` existem no modelo `User`, mas nenhum fluxo do código atual os define como `true`/preenche `secret_2fa`, o código informado no login não é validado contra `secret_2fa`, e o e-mail com o token nunca é efetivamente enviado.
 
 ### 3.7 Navegação por URL Search Params
 
@@ -252,13 +255,14 @@ O componente `MonthPicker` gerencia estado de navegação exclusivamente via URL
 - Server Components lêem os search params para buscar dados corretos.
 - Isso garante que links possam ser compartilhados e bookmarked.
 
-### 3.8 Processamento de CSV
+### 3.8 Processamento de CSV (genérico, `csv-import-dialog.tsx`)
 
-- Parse com PapaParse (header: true, skipEmptyLines: true).
-- Tenta mapear colunas por nome: `title/descricao`, `amount/valor`, `date/data`.
+- Parse com PapaParse (`header: true`, `skipEmptyLines: true`).
+- Tenta mapear colunas por nome: `title/descricao/description`, `amount/valor/Value`, `date/data/Date`.
 - Sugestão automática de categoria usando `MappingSuggestion` — busca por `search_term` contido no título.
-- Valor usa `Math.abs()` para forçar positivo; sinal determina `tipo` (positivo = SAIDA, negativo = ENTRADA — note: comportamento invertido intencionalmente na lógica do CSV).
+- Valor usa `Math.abs()` para forçar positivo; **sinal do valor bruto define `tipo`**: `amount >= 0 → SAIDA`, `amount < 0 → ENTRADA` (`csv-import-dialog.tsx:176`).
 - **Bloqueio de submissão**: todas as linhas devem ter categoria atribuída.
+- Este fluxo é independente do de fatura de cartão (`credit-card-invoice-dialog.tsx`), que tem seu próprio schema (`creditCardInvoiceSchema`) e sempre grava `is_invoice_header = true` + itens.
 
 ---
 
@@ -317,7 +321,7 @@ console.error("Error creating transaction:", error);
 throw new Error(error.message || "Erro ao criar transação");
 ```
 
-Erros de unique constraint no Prisma (código `P2002`) são tratados especificamente com mensagem amigável em português.
+Erros de unique constraint no Prisma (código `P2002`) são tratados especificamente com mensagem amigável em português (nas Server Actions de update; não em todos os creates).
 
 ### 4.7 Exportação
 
@@ -327,8 +331,8 @@ Erros de unique constraint no Prisma (código `P2002`) são tratados especificam
 ### 4.8 Banner de Ambiente
 
 `EnvironmentBanner` (`src/components/environment-banner.tsx`):
-- Exibe banner laranja "AMBIENTE DE HOMOLOGAÇÃO - OS DADOS NÃO SÃO REAIS" quando `NODE_ENV !== "production"` OU banco não contém `/nxfinance`.
-- Oculta em produção com banco oficial.
+- Exibe banner laranja "AMBIENTE DE HOMOLOGAÇÃO - OS DADOS NÃO SÃO REAIS" quando **não** (`produção` E banco oficial `/nxfinance`) — ver condição exata em 2.
+- Oculta apenas em produção com banco oficial.
 
 ---
 
@@ -360,3 +364,19 @@ Erros de unique constraint no Prisma (código `P2002`) são tratados especificam
 | *Directiva de arquivo* | *nenhuma* | `"use client"` |
 
 > **Nota:** Server Actions são funções assíncronas com `"use server"` no topo do arquivo. Elas podem ser importadas e chamadas tanto por Server Components quanto por Client Components.
+
+---
+
+## 6. Gaps e Inconsistências Conhecidas
+
+Seção para evitar que futuras sessões assumam que algo funciona apenas porque há código relacionado no repositório.
+
+- **2FA não está funcional de ponta a ponta**: `status_2fa` nunca é setado como `true` (não há UI/Server Action para ativar 2FA), `authorize()` em `auth.ts` só verifica se `credentials.code` foi enviado — **não valida** o valor contra `secret_2fa`; o callback `jwt()` não seta `isTwoFactorVerified`/`needsTwoFactor` (apesar de `proxy.ts` checar esses campos, que ficam sempre `undefined`); a rota `/auth/verify-2fa` referenciada pelo middleware **não existe** em `src/app/auth/`; `mail.ts`/`mail.js` (envio do token por e-mail) não são importados por nenhum arquivo.
+- **`prisma.ts` é código morto**: singleton alternativo do PrismaClient, não importado em lugar nenhum — todas as Server Actions usam `db.ts`.
+- **`dashboard/page.tsx` é mock legado**: usa `MOCK_DATA` hardcoded, não faz parte do fluxo de navegação real (a rota ativa do dashboard é `src/app/page.tsx`).
+- **`export-buttons.tsx`** é um mock (`alert()`), sem exportação real de CSV/PDF implementada.
+- **`data_pagamento`** nunca é preenchido por `payTransaction()` — o campo existe no schema mas fica sempre `null`.
+- **`CreditCardInvoiceItem.data_vencimento_original`** existe no schema mas não é escrito pelo fluxo de importação atual.
+- **Sem conciliação assistida de fatura de cartão**: não há matching automático (regex/tolerância) entre itens de fatura importados e parcelamentos futuros já lançados — cada item da fatura é categorizado manualmente na importação.
+- **Sem provisão de despesas fixas → despesa real**: não existe, na branch atual, fluxo de "provisão" com transição de status para lançamento efetivo. Essas duas últimas features (conciliação assistida e provisão de despesas) existem implementadas na branch `feature/2026-07-18_prev-desc-new_table` (não mergeada) — consultar essa branch antes de reimplementar do zero.
+- **`@auth/prisma-adapter`** é dependência instalada mas não usada em `authOptions` (sessão é 100% JWT, sem persistência de sessão/conta via Prisma Adapter).

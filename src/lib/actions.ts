@@ -178,6 +178,7 @@ export async function createCategory(data: any) {
 
         revalidatePath("/dashboard");
         revalidatePath("/reports");
+        revalidatePath("/dashboard/settings");
         return category;
     } catch (error: any) {
         console.error("Error creating category:", error);
@@ -197,6 +198,7 @@ export async function updateCategory(id: string, data: any) {
 
         revalidatePath("/dashboard");
         revalidatePath("/reports");
+        revalidatePath("/dashboard/settings");
         return category;
     } catch (error: any) {
         if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
@@ -225,6 +227,7 @@ export async function deleteCategory(id: string) {
 
         revalidatePath("/dashboard");
         revalidatePath("/reports");
+        revalidatePath("/dashboard/settings");
         return { success: true };
     } catch (error: any) {
         console.error("Error deleting category:", error);
@@ -259,6 +262,7 @@ export async function createPaymentMethod(data: any) {
 
         revalidatePath("/dashboard");
         revalidatePath("/reports");
+        revalidatePath("/dashboard/settings");
         return paymentMethod;
     } catch (error: any) {
         console.error("Error creating payment method:", error);
@@ -278,6 +282,7 @@ export async function updatePaymentMethod(id: string, data: any) {
 
         revalidatePath("/dashboard");
         revalidatePath("/reports");
+        revalidatePath("/dashboard/settings");
         return paymentMethod;
     } catch (error: any) {
         if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
@@ -306,6 +311,7 @@ export async function deletePaymentMethod(id: string) {
 
         revalidatePath("/dashboard");
         revalidatePath("/reports");
+        revalidatePath("/dashboard/settings");
         return { success: true };
     } catch (error: any) {
         console.error("Error deleting payment method:", error);
@@ -340,6 +346,7 @@ export async function createFinancialInstitution(data: any) {
 
         revalidatePath("/dashboard");
         revalidatePath("/reports");
+        revalidatePath("/dashboard/settings");
         return financialInstitution;
     } catch (error: any) {
         console.error("Error creating financial institution:", error);
@@ -359,6 +366,7 @@ export async function updateFinancialInstitution(id: string, data: any) {
 
         revalidatePath("/dashboard");
         revalidatePath("/reports");
+        revalidatePath("/dashboard/settings");
         return financialInstitution;
     } catch (error: any) {
         if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
@@ -394,6 +402,7 @@ export async function deleteFinancialInstitution(id: string) {
 
         revalidatePath("/dashboard");
         revalidatePath("/reports");
+        revalidatePath("/dashboard/settings");
         return { success: true };
     } catch (error: any) {
         console.error("Error deleting financial institution:", error);

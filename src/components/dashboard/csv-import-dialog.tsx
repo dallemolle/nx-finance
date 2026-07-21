@@ -16,6 +16,7 @@ import { processBatchTransactions, getMappingSuggestions } from "@/lib/csv-actio
 import { cn } from "@/lib/utils";
 import { createCategory, createPaymentMethod } from "@/lib/actions";
 import { Combobox } from "@/components/ui/combobox";
+import { toast } from "sonner";
 
 export function CsvImportDialog({ userId, className }: { userId: string, className?: string }) {
     const [open, setOpen] = useState(false);
@@ -146,9 +147,10 @@ export function CsvImportDialog({ userId, className }: { userId: string, classNa
             handleRowChange(id, "category_id", newCat.id);
         } catch (e: any) {
             console.error(e);
+            toast.error(e.message || "Erro ao criar categoria");
         }
     };
-    
+
     const handlePaymentMethodAdd = async (name: string) => {
         try {
             const newPM = await createPaymentMethod({ nome: name });
@@ -156,6 +158,7 @@ export function CsvImportDialog({ userId, className }: { userId: string, classNa
             setPaymentMethodId(newPM.id);
         } catch (e: any) {
             console.error(e);
+            toast.error(e.message || "Erro ao criar meio de pagamento");
         }
     };
 

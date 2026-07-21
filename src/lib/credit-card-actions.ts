@@ -49,20 +49,16 @@ export async function importCreditCardInvoice(data: any) {
             },
         });
 
-        // Bulk create invoice items
-        const items = await Promise.all(
-            validatedData.items.map(item =>
-                db.creditCardInvoiceItem.create({
-                    data: {
-                        transactionId: transaction.id,
-                        descricao: item.descricao,
-                        valor: Math.abs(item.valor),
-                        categoria_id: item.categoria_id,
-                        data_compra: item.data_compra,
-                    },
-                })
-            )
-        );
+        // Bulk create invoice items in a single query
+        const { count: itemsCount } = await db.creditCardInvoiceItem.createMany({
+            data: validatedData.items.map(item => ({
+                transactionId: transaction.id,
+                descricao: item.descricao,
+                valor: Math.abs(item.valor),
+                categoria_id: item.categoria_id,
+                data_compra: item.data_compra,
+            })),
+        });
 
         revalidatePath("/dashboard");
         revalidatePath("/reports");
@@ -74,7 +70,7 @@ export async function importCreditCardInvoice(data: any) {
                     ...transaction,
                     valor: Number(transaction.valor),
                 },
-                itemsCount: items.length,
+                itemsCount,
             },
         };
     } catch (error: any) {

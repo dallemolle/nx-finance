@@ -17,6 +17,7 @@ import { getMappingSuggestions } from "@/lib/csv-actions";
 import { cn } from "@/lib/utils";
 import { createCategory, createPaymentMethod } from "@/lib/actions";
 import { Combobox } from "@/components/ui/combobox";
+import { toast } from "sonner";
 
 export function CreditCardInvoiceDialog({ userId, className }: { userId: string; className?: string }) {
     const [open, setOpen] = useState(false);
@@ -150,6 +151,7 @@ export function CreditCardInvoiceDialog({ userId, className }: { userId: string;
             handleRowChange(id, "category_id", newCat.id);
         } catch (e: any) {
             console.error(e);
+            toast.error(e.message || "Erro ao criar categoria");
         }
     };
 
@@ -160,6 +162,7 @@ export function CreditCardInvoiceDialog({ userId, className }: { userId: string;
             setPaymentMethodId(newPM.id);
         } catch (e: any) {
             console.error(e);
+            toast.error(e.message || "Erro ao criar meio de pagamento");
         }
     };
 

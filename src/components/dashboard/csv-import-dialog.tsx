@@ -12,11 +12,21 @@ import { Upload, ChevronRight, X, AlertCircle } from "lucide-react";
 import Papa from "papaparse";
 import { getCategories, getPaymentMethods, getFinancialInstitutions } from "@/lib/reports";
 import { InstitutionCombobox } from "@/components/dashboard/institution-combobox";
-import { processBatchTransactions, getMappingSuggestions } from "@/lib/csv-actions";
-import { cn } from "@/lib/utils";
+import { processBatchTransactions, getMappingSuggestions, type BatchTransactionInput } from "@/lib/csv-actions";
+import { cn, getErrorMessage } from "@/lib/utils";
 import { createCategory, createPaymentMethod } from "@/lib/actions";
 import { Combobox } from "@/components/ui/combobox";
 import { toast } from "sonner";
+import type { Category, PaymentMethod, FinancialInstitution } from "@/types/models";
+
+interface ParsedRow {
+    id: number;
+    original_title: string;
+    title: string;
+    amount: number;
+    date: string;
+    category_id: string;
+}
 
 export function CsvImportDialog({ userId, className }: { userId: string, className?: string }) {
     const [open, setOpen] = useState(false);
@@ -32,12 +42,12 @@ export function CsvImportDialog({ userId, className }: { userId: string, classNa
     const [institutionId, setInstitutionId] = useState<string>("");
 
     // Data
-    const [categories, setCategories] = useState<any[]>([]);
-    const [paymentMethods, setPaymentMethods] = useState<any[]>([]);
-    const [institutions, setInstitutions] = useState<any[]>([]);
-    const [suggestions, setSuggestions] = useState<any[]>([]);
+    const [categories, setCategories] = useState<Category[]>([]);
+    const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
+    const [institutions, setInstitutions] = useState<FinancialInstitution[]>([]);
+    const [suggestions, setSuggestions] = useState<Awaited<ReturnType<typeof getMappingSuggestions>>>([]);
 
-    const [parsedData, setParsedData] = useState<any[]>([]);
+    const [parsedData, setParsedData] = useState<ParsedRow[]>([]);
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
@@ -84,12 +94,12 @@ export function CsvImportDialog({ userId, className }: { userId: string, classNa
         }
 
         setIsLoading(true);
-        Papa.parse(file, {
+        Papa.parse<Record<string, string>>(file, {
             header: true,
             skipEmptyLines: true,
-            complete: (results: any) => {
+            complete: (results) => {
                 try {
-                    const mapped = results.data.map((row: any, index: number) => {
+                    const mapped = results.data.map((row, index): ParsedRow => {
                         // Attempt to extract title, amount, date based on common headers
                         const title = row.title || row.descricao || row.description || row.Title || Object.values(row)[0] || "Sem título";
                         const rawAmount = row.amount || row.valor || row.Value || row.Amount || "0";
@@ -118,20 +128,20 @@ export function CsvImportDialog({ userId, className }: { userId: string, classNa
                     setParsedData(mapped);
                     setStep(2);
                     setError(null);
-                } catch (e) {
+                } catch {
                     setError("Erro ao processar CSV. Verifique o formato das colunas (title, amount, date).");
                 } finally {
                     setIsLoading(false);
                 }
             },
-            error: (err: any) => {
+            error: (err: Error) => {
                 setError(err.message);
                 setIsLoading(false);
             }
         });
     };
 
-    const handleRowChange = (id: number, field: string, value: any) => {
+    const handleRowChange = <K extends keyof ParsedRow>(id: number, field: K, value: ParsedRow[K]) => {
         setParsedData(prev => prev.map(row => row.id === id ? { ...row, [field]: value } : row));
     };
 
@@ -145,9 +155,9 @@ export function CsvImportDialog({ userId, className }: { userId: string, classNa
             });
             setCategories(prev => [...prev, newCat]);
             handleRowChange(id, "category_id", newCat.id);
-        } catch (e: any) {
+        } catch (e: unknown) {
             console.error(e);
-            toast.error(e.message || "Erro ao criar categoria");
+            toast.error(getErrorMessage(e, "Erro ao criar categoria"));
         }
     };
 
@@ -156,9 +166,9 @@ export function CsvImportDialog({ userId, className }: { userId: string, classNa
             const newPM = await createPaymentMethod({ nome: name });
             setPaymentMethods(prev => [...prev, newPM]);
             setPaymentMethodId(newPM.id);
-        } catch (e: any) {
+        } catch (e: unknown) {
             console.error(e);
-            toast.error(e.message || "Erro ao criar meio de pagamento");
+            toast.error(getErrorMessage(e, "Erro ao criar meio de pagamento"));
         }
     };
 
@@ -172,13 +182,12 @@ export function CsvImportDialog({ userId, className }: { userId: string, classNa
         setIsLoading(true);
         setError(null);
 
-        const payload = parsedData.map(row => ({
+        const payload: BatchTransactionInput[] = parsedData.map(row => ({
             descricao: row.title,
             original_title: row.original_title,
             valor: Math.abs(row.amount),
-            tipo: row.amount >= 0 ? "SAIDA" : "ENTRADA", // Usually CSV amounts denote type. Let's assume positive is ENTRADA unless configured. But if amount is positive for expenses, let's treat all as SAIDA by default if it's a credit card import. Actually we'll base on amount sign if there is one. Assumed logic: if amount < 0, SAIDA. If positive, ENTRADA., 
+            tipo: row.amount >= 0 ? "SAIDA" : "ENTRADA", // Usually CSV amounts denote type. Let's assume positive is ENTRADA unless configured. But if amount is positive for expenses, let's treat all as SAIDA by default if it's a credit card import. Actually we'll base on amount sign if there is one. Assumed logic: if amount < 0, SAIDA. If positive, ENTRADA.,
             data_vencimento: dueDate,
-            data_lancamento: new Date().toISOString(),
             status: "PENDENTE", // Usually imported statements are paid
             categoria_id: row.category_id,
             tipo_pagamento_id: paymentMethodId === "none" ? null : paymentMethodId,
@@ -189,8 +198,8 @@ export function CsvImportDialog({ userId, className }: { userId: string, classNa
             await processBatchTransactions(payload);
             setOpen(false);
             router.refresh();
-        } catch (e: any) {
-            setError(e.message);
+        } catch (e: unknown) {
+            setError(getErrorMessage(e, "Erro ao importar transações"));
         } finally {
             setIsLoading(false);
         }

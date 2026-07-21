@@ -8,13 +8,14 @@ import { TransactionForm } from "./transaction-form";
 import { getCategories, getPaymentMethods, getFinancialInstitutions } from "@/lib/reports";
 import { Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
+import type { Category, PaymentMethod, FinancialInstitution } from "@/types/models";
 
 export function NewTransactionDialog({ userId, className }: { userId: string, className?: string }) {
     const [open, setOpen] = useState(false);
     const router = useRouter();
-    const [categories, setCategories] = useState<any[]>([]);
-    const [paymentMethods, setPaymentMethods] = useState<any[]>([]);
-    const [institutions, setInstitutions] = useState<any[]>([]);
+    const [categories, setCategories] = useState<Category[]>([]);
+    const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
+    const [institutions, setInstitutions] = useState<FinancialInstitution[]>([]);
 
     useEffect(() => {
         if (open) {

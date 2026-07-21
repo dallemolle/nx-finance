@@ -3,12 +3,19 @@
 import { db } from "@/lib/db";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import type { Prisma, TransactionStatus } from "@prisma/client";
 
-export async function getReportData(userId: string, month: number, year: number, filters?: any) {
+export interface ReportFilters {
+    status?: string;
+    categoria_id?: string;
+    institution_id?: string;
+}
+
+export async function getReportData(userId: string, month: number, year: number, filters?: ReportFilters) {
     const startDate = new Date(year, month - 1, 1);
     const endDate = new Date(year, month, 0);
 
-    const where: any = {
+    const where: Prisma.TransactionWhereInput = {
         userId,
         data_vencimento: {
             gte: startDate,
@@ -16,7 +23,7 @@ export async function getReportData(userId: string, month: number, year: number,
         },
     };
 
-    if (filters?.status && filters.status !== "ALL") where.status = filters.status;
+    if (filters?.status && filters.status !== "ALL") where.status = filters.status as TransactionStatus;
     if (filters?.categoria_id && filters.categoria_id !== "ALL") where.categoria_id = filters.categoria_id;
     if (filters?.institution_id && filters.institution_id !== "ALL") where.institution_id = filters.institution_id;
 
@@ -44,7 +51,7 @@ export async function getReportData(userId: string, month: number, year: number,
           })
         : [];
 
-    const itemsByHeader = new Map<string, any[]>();
+    const itemsByHeader = new Map<string, (Omit<typeof invoiceItems[number], "valor"> & { valor: number; formattedAmount: string; displayDate: string })[]>();
     for (const item of invoiceItems) {
         const list = itemsByHeader.get(item.transactionId) || [];
         list.push({
@@ -56,12 +63,12 @@ export async function getReportData(userId: string, month: number, year: number,
         itemsByHeader.set(item.transactionId, list);
     }
 
-    return transactions.map((t: any) => {
+    return transactions.map(t => {
         const isOverdue = t.status !== "PAGO" && t.data_vencimento < new Date();
         return {
             ...t,
             valor: Number(t.valor),
-            status: isOverdue ? "ATRASADO" : t.status,
+            status: isOverdue ? "ATRASADO" as const : t.status,
             formattedAmount: new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(Number(t.valor)),
             displayDate: format(t.data_vencimento, "dd/MM/yyyy", { locale: ptBR }),
             invoiceItems: itemsByHeader.get(t.id) || [],

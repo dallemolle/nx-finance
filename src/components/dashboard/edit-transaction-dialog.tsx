@@ -7,18 +7,19 @@ import { Button } from "@/components/ui/button";
 import { TransactionForm } from "./transaction-form";
 import { getCategories, getPaymentMethods, getFinancialInstitutions } from "@/lib/reports";
 import { Pencil } from "lucide-react";
+import type { Category, PaymentMethod, FinancialInstitution, TransactionDisplay } from "@/types/models";
 
 interface EditTransactionDialogProps {
-    transaction: any;
+    transaction: TransactionDisplay;
     userId: string;
 }
 
 export function EditTransactionDialog({ transaction, userId }: EditTransactionDialogProps) {
     const [open, setOpen] = useState(false);
     const router = useRouter();
-    const [categories, setCategories] = useState<any[]>([]);
-    const [paymentMethods, setPaymentMethods] = useState<any[]>([]);
-    const [institutions, setInstitutions] = useState<any[]>([]);
+    const [categories, setCategories] = useState<Category[]>([]);
+    const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
+    const [institutions, setInstitutions] = useState<FinancialInstitution[]>([]);
 
     useEffect(() => {
         if (open) {

@@ -2,9 +2,9 @@
 
 import { db } from "@/lib/db";
 import bcrypt from "bcryptjs";
-import { registerSchema } from "@/lib/validations";
+import { registerSchema, type RegisterInput } from "@/lib/validations";
 
-export async function registerUser(data: any) {
+export async function registerUser(data: RegisterInput) {
     const validatedData = registerSchema.parse(data);
 
     const existingUser = await db.user.findUnique({

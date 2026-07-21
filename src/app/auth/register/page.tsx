@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { registerUser } from "@/lib/auth-actions";
+import { getErrorMessage } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -24,8 +25,8 @@ export default function RegisterPage() {
         try {
             await registerUser(formData);
             router.push("/auth/login?registered=true");
-        } catch (err: any) {
-            setError(err.message || "Erro ao cadastrar. Tente novamente.");
+        } catch (err: unknown) {
+            setError(getErrorMessage(err, "Erro ao cadastrar. Tente novamente."));
         } finally {
             setLoading(false);
         }

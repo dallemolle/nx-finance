@@ -65,3 +65,18 @@ export const creditCardInvoiceSchema = z.object({
     tipo_pagamento_id: z.string().min(1, "Meio de pagamento é obrigatório"),
     items: z.array(creditCardInvoiceItemSchema).min(1, "Adicione ao menos um item à fatura"),
 });
+
+// Server Actions receive data *before* Zod coercion runs (e.g. dates/numbers
+// as raw strings from form inputs), so their parameter types use z.input
+// (pre-parse shape) rather than z.infer/z.output (post-parse shape).
+export type TransactionInput = z.input<typeof transactionSchema>;
+// Coerced/output shape used by react-hook-form + zodResolver client-side
+// (form state already holds real Date/number values, not raw strings).
+export type TransactionFormValues = z.infer<typeof transactionSchema>;
+export type CategoryInput = z.input<typeof categorySchema>;
+export type PaymentMethodInput = z.input<typeof paymentMethodSchema>;
+export type FinancialInstitutionInput = z.input<typeof financialInstitutionSchema>;
+export type LoginInput = z.input<typeof loginSchema>;
+export type RegisterInput = z.input<typeof registerSchema>;
+export type CreditCardInvoiceItemInput = z.input<typeof creditCardInvoiceItemSchema>;
+export type CreditCardInvoiceInput = z.input<typeof creditCardInvoiceSchema>;

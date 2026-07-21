@@ -4,7 +4,8 @@ import { db } from "@/lib/db";
 import { revalidatePath } from "next/cache";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { creditCardInvoiceSchema } from "@/lib/validations";
+import { creditCardInvoiceSchema, type CreditCardInvoiceInput } from "@/lib/validations";
+import { getErrorMessage } from "@/lib/utils";
 
 async function getUserId() {
     const session = await getServerSession(authOptions);
@@ -12,7 +13,7 @@ async function getUserId() {
     return session.user.id;
 }
 
-export async function importCreditCardInvoice(data: any) {
+export async function importCreditCardInvoice(data: CreditCardInvoiceInput) {
     try {
         const userId = await getUserId();
         const validatedData = creditCardInvoiceSchema.parse(data);
@@ -73,9 +74,9 @@ export async function importCreditCardInvoice(data: any) {
                 itemsCount,
             },
         };
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error("Error importing credit card invoice:", error);
-        throw new Error(error.message || "Erro ao importar fatura de cartão de crédito");
+        throw new Error(getErrorMessage(error, "Erro ao importar fatura de cartão de crédito"));
     }
 }
 
@@ -96,9 +97,9 @@ export async function getInvoiceItems(transactionId: string) {
             ...item,
             valor: Number(item.valor),
         }));
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error("Error fetching invoice items:", error);
-        throw new Error("Erro ao buscar itens da fatura");
+        throw new Error(getErrorMessage(error, "Erro ao buscar itens da fatura"));
     }
 }
 

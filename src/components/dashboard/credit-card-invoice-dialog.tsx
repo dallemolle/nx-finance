@@ -14,10 +14,19 @@ import { getCategories, getPaymentMethods, getFinancialInstitutions } from "@/li
 import { InstitutionCombobox } from "@/components/dashboard/institution-combobox";
 import { importCreditCardInvoice } from "@/lib/credit-card-actions";
 import { getMappingSuggestions } from "@/lib/csv-actions";
-import { cn } from "@/lib/utils";
+import { cn, getErrorMessage } from "@/lib/utils";
 import { createCategory, createPaymentMethod } from "@/lib/actions";
 import { Combobox } from "@/components/ui/combobox";
 import { toast } from "sonner";
+import type { Category, PaymentMethod, FinancialInstitution } from "@/types/models";
+
+interface ParsedInvoiceRow {
+    id: number;
+    title: string;
+    amount: number;
+    date: string;
+    category_id: string;
+}
 
 export function CreditCardInvoiceDialog({ userId, className }: { userId: string; className?: string }) {
     const [open, setOpen] = useState(false);
@@ -34,12 +43,12 @@ export function CreditCardInvoiceDialog({ userId, className }: { userId: string;
     const [institutionId, setInstitutionId] = useState<string>("");
 
     // Data
-    const [categories, setCategories] = useState<any[]>([]);
-    const [paymentMethods, setPaymentMethods] = useState<any[]>([]);
-    const [institutions, setInstitutions] = useState<any[]>([]);
-    const [suggestions, setSuggestions] = useState<any[]>([]);
+    const [categories, setCategories] = useState<Category[]>([]);
+    const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
+    const [institutions, setInstitutions] = useState<FinancialInstitution[]>([]);
+    const [suggestions, setSuggestions] = useState<Awaited<ReturnType<typeof getMappingSuggestions>>>([]);
 
-    const [parsedData, setParsedData] = useState<any[]>([]);
+    const [parsedData, setParsedData] = useState<ParsedInvoiceRow[]>([]);
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
@@ -91,12 +100,12 @@ export function CreditCardInvoiceDialog({ userId, className }: { userId: string;
         }
 
         setIsLoading(true);
-        Papa.parse(file, {
+        Papa.parse<Record<string, string>>(file, {
             header: true,
             skipEmptyLines: true,
-            complete: (results: any) => {
+            complete: (results) => {
                 try {
-                    const mapped = results.data.map((row: any, index: number) => {
+                    const mapped = results.data.map((row, index): ParsedInvoiceRow => {
                         const title = row.title || row.descricao || row.description || row.Title || Object.values(row)[0] || "Sem título";
                         const rawAmount = row.amount || row.valor || row.Value || row.Amount || "0";
                         const amount = parseFloat(String(rawAmount).replace(/[R$\s]/g, '').replace(',', '.'));
@@ -108,7 +117,7 @@ export function CreditCardInvoiceDialog({ userId, className }: { userId: string;
                                 ? rawDate.split('/').reverse().join('-')
                                 : new Date().toISOString().split('T')[0];
 
-                        const guess = suggestions.find((s: any) => title.toLowerCase().includes(s.search_term));
+                        const guess = suggestions.find(s => title.toLowerCase().includes(s.search_term));
 
                         return {
                             id: index,
@@ -122,20 +131,20 @@ export function CreditCardInvoiceDialog({ userId, className }: { userId: string;
                     setParsedData(mapped);
                     setStep(2);
                     setError(null);
-                } catch (e) {
+                } catch {
                     setError("Erro ao processar CSV. Verifique o formato das colunas (title, amount, date).");
                 } finally {
                     setIsLoading(false);
                 }
             },
-            error: (err: any) => {
+            error: (err: Error) => {
                 setError(err.message);
                 setIsLoading(false);
             }
         });
     };
 
-    const handleRowChange = (id: number, field: string, value: any) => {
+    const handleRowChange = <K extends keyof ParsedInvoiceRow>(id: number, field: K, value: ParsedInvoiceRow[K]) => {
         setParsedData(prev => prev.map(row => row.id === id ? { ...row, [field]: value } : row));
     };
 
@@ -149,9 +158,9 @@ export function CreditCardInvoiceDialog({ userId, className }: { userId: string;
             });
             setCategories(prev => [...prev, newCat]);
             handleRowChange(id, "category_id", newCat.id);
-        } catch (e: any) {
+        } catch (e: unknown) {
             console.error(e);
-            toast.error(e.message || "Erro ao criar categoria");
+            toast.error(getErrorMessage(e, "Erro ao criar categoria"));
         }
     };
 
@@ -160,9 +169,9 @@ export function CreditCardInvoiceDialog({ userId, className }: { userId: string;
             const newPM = await createPaymentMethod({ nome: name });
             setPaymentMethods(prev => [...prev, newPM]);
             setPaymentMethodId(newPM.id);
-        } catch (e: any) {
+        } catch (e: unknown) {
             console.error(e);
-            toast.error(e.message || "Erro ao criar meio de pagamento");
+            toast.error(getErrorMessage(e, "Erro ao criar meio de pagamento"));
         }
     };
 
@@ -199,8 +208,8 @@ export function CreditCardInvoiceDialog({ userId, className }: { userId: string;
                 setOpen(false);
                 router.refresh();
             }
-        } catch (e: any) {
-            setError(e.message);
+        } catch (e: unknown) {
+            setError(getErrorMessage(e, "Erro ao importar fatura"));
         } finally {
             setIsLoading(false);
         }
@@ -357,8 +366,8 @@ export function CreditCardInvoiceDialog({ userId, className }: { userId: string;
                                                         </SelectTrigger>
                                                         <SelectContent>
                                                             {categories
-                                                                .filter((c: any) => c.tipo === "SAIDA")
-                                                                .map((c: any) => (
+                                                                .filter((c) => c.tipo === "SAIDA")
+                                                                .map((c) => (
                                                                     <SelectItem key={c.id} value={c.id}>
                                                                         <div className="flex items-center gap-2">
                                                                             <div className="w-2 h-2 rounded-full" style={{ backgroundColor: c.cor }} />

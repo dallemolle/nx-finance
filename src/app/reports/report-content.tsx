@@ -1,16 +1,17 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { ReportFilters } from "./report-filters";
 import { ChevronRight, ChevronDown, CreditCard } from "lucide-react";
+import type { TransactionDisplay, InvoiceItemDisplay, Category, PaymentMethod, FinancialInstitution } from "@/types/models";
 
 interface ReportContentProps {
-    transactions: any[];
-    categories: any[];
-    institutions: any[];
-    paymentMethods: any[];
+    transactions: TransactionDisplay[];
+    categories: Category[];
+    institutions: FinancialInstitution[];
+    paymentMethods: PaymentMethod[];
 }
 
 export function ReportContent({ transactions, categories, institutions, paymentMethods }: ReportContentProps) {
@@ -126,14 +127,14 @@ export function ReportContent({ transactions, categories, institutions, paymentM
                             </TableRow>
                         ) : filteredTransactions.flatMap((t) => {
                             const isExpanded = expandedRows.has(t.id);
-                            const hasInvoiceItems = t.is_invoice_header && t.invoiceItems?.length > 0;
+                            const hasInvoiceItems = t.is_invoice_header && (t.invoiceItems?.length ?? 0) > 0;
 
                             // Filtra subitens pela categoria selecionada
                             const filteredItems = hasInvoiceItems && categoryFilter !== "ALL"
-                                ? t.invoiceItems.filter((item: any) => item.categoria_id === categoryFilter)
+                                ? (t.invoiceItems || []).filter((item: InvoiceItemDisplay) => item.categoria_id === categoryFilter)
                                 : t.invoiceItems || [];
 
-                            const rows: any[] = [];
+                            const rows: ReactNode[] = [];
 
                             // Main row
                             rows.push(
@@ -187,7 +188,7 @@ export function ReportContent({ transactions, categories, institutions, paymentM
 
                             // Sub-rows (diretamente abaixo da linha principal)
                             if (isExpanded && filteredItems.length > 0) {
-                                filteredItems.forEach((item: any, idx: number) => {
+                                filteredItems.forEach((item: InvoiceItemDisplay, idx: number) => {
                                     rows.push(
                                         <TableRow key={`${t.id}-item-${idx}`} className="bg-slate-50/50 dark:bg-slate-900/50 text-sm">
                                             <TableCell className="pl-10">

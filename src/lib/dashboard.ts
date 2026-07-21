@@ -3,6 +3,17 @@
 import { db } from "@/lib/db";
 import { startOfMonth, endOfMonth, isBefore, subMonths, getDaysInMonth } from "date-fns";
 import { getCategoryGroupName } from "./dashboard-utils";
+import type { Prisma, TransactionType } from "@prisma/client";
+
+interface TotalsEntry {
+    tipo: TransactionType;
+    valor: Prisma.Decimal;
+}
+
+interface CategorizedEntry {
+    valor: Prisma.Decimal;
+    category: { nome: string; cor: string };
+}
 
 export async function getDashboardData(userId: string, month: number, year: number) {
     const targetDate = new Date(year, month - 1);
@@ -25,7 +36,7 @@ export async function getDashboardData(userId: string, month: number, year: numb
         })
     ]);
 
-    const calculateTotals = (data: any[]) => data.reduce(
+    const calculateTotals = (data: TotalsEntry[]) => data.reduce(
         (acc, t) => {
             const valor = Number(t.valor);
             if (t.tipo === "ENTRADA") acc.totalEntradas += valor;
@@ -47,8 +58,8 @@ export async function getDashboardData(userId: string, month: number, year: numb
 
     // Fetch invoice items for invoice headers in the current period
     const invoiceHeaderIds = transactions
-        .filter((t: any) => t.is_invoice_header)
-        .map((t: any) => t.id);
+        .filter(t => t.is_invoice_header)
+        .map(t => t.id);
 
     const invoiceItems = invoiceHeaderIds.length > 0
         ? await db.creditCardInvoiceItem.findMany({
@@ -61,7 +72,7 @@ export async function getDashboardData(userId: string, month: number, year: numb
     // Merge regular SAIDA transactions (excluding invoice headers) with invoice items
     const categoryData: { name: string; value: number; fill: string }[] = [];
 
-    const aggregateByCategory = (entries: any[]) => {
+    const aggregateByCategory = (entries: CategorizedEntry[]) => {
         for (const entry of entries) {
             const name = getCategoryGroupName(entry.category.nome);
             const valor = Number(entry.valor);
@@ -75,7 +86,7 @@ export async function getDashboardData(userId: string, month: number, year: numb
     };
 
     // 1. Regular transactions (skip invoice headers to avoid double-count in chart)
-    const regularSaidas = transactions.filter((t: any) => t.tipo === "SAIDA" && !t.is_invoice_header);
+    const regularSaidas = transactions.filter(t => t.tipo === "SAIDA" && !t.is_invoice_header);
     aggregateByCategory(regularSaidas);
 
     // 2. Invoice items (detailed breakdown of credit card invoices)
@@ -93,20 +104,20 @@ export async function getDashboardData(userId: string, month: number, year: numb
         : currentSummary.totalSaidas > 0 ? 100 : 0;
 
     // Agrupa invoiceItems por transactionId
-    const itemsByHeader = new Map<string, any[]>();
+    const itemsByHeader = new Map<string, (Omit<typeof invoiceItems[number], "valor"> & { valor: number })[]>();
     for (const item of invoiceItems) {
         const list = itemsByHeader.get(item.transactionId) || [];
         list.push({ ...item, valor: Number(item.valor) });
         itemsByHeader.set(item.transactionId, list);
     }
 
-    const monthlyTransactions = transactions.map((t: any) => {
+    const monthlyTransactions = transactions.map(t => {
         const isOverdue = t.status !== "PAGO" && isBefore(t.data_vencimento, new Date());
         return {
             ...t,
             valor: Number(t.valor),
-            status: isOverdue ? "ATRASADO" : t.status,
-            invoiceItems: itemsByHeader.get(t.id)?.map((item: any) => ({
+            status: isOverdue ? "ATRASADO" as const : t.status,
+            invoiceItems: itemsByHeader.get(t.id)?.map(item => ({
                 ...item,
                 id: `inv-${item.id}`,
                 data_vencimento: item.data_compra,
@@ -118,14 +129,14 @@ export async function getDashboardData(userId: string, month: number, year: numb
     const transactionMap = new Map(transactions.map(t => [t.id, t]));
 
     // Mapeia invoiceItems para estrutura similar a transação (para o CategoryChart dialog)
-    const invoiceItemsAsTransactions = invoiceItems.map((item: any) => {
+    const invoiceItemsAsTransactions = invoiceItems.map(item => {
         const parent = transactionMap.get(item.transactionId);
         return {
             id: `inv-${item.id}`,
             descricao: item.descricao,
             valor: Number(item.valor),
             data_vencimento: item.data_compra,
-            status: parent?.status === "PAGO" ? "PAGO" : "PENDENTE",
+            status: parent?.status === "PAGO" ? "PAGO" as const : "PENDENTE" as const,
             tipo: "SAIDA" as const,
             categoria_id: item.categoria_id,
             category: item.category,

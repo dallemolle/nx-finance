@@ -13,16 +13,21 @@ export async function getDashboardData(userId: string, month: number, year: numb
     const prevStartDate = startOfMonth(prevMonthDate);
     const prevEndDate = endOfMonth(prevMonthDate);
 
-    // Fetch current and previous month transactions
-    const [transactions, prevTransactions] = await Promise.all([
+    // Fetch current and previous month transactions (exclude provisions from main totals)
+    const [transactions, prevTransactions, provisionedTransactions] = await Promise.all([
         db.transaction.findMany({
-            where: { userId, data_vencimento: { gte: startDate, lte: endDate } },
+            where: { userId, data_vencimento: { gte: startDate, lte: endDate }, is_provisioned: false },
             include: { category: true, institution: true },
             orderBy: { data_vencimento: "desc" },
         }),
         db.transaction.findMany({
-            where: { userId, data_vencimento: { gte: prevStartDate, lte: prevEndDate } },
-        })
+            where: { userId, data_vencimento: { gte: prevStartDate, lte: prevEndDate }, is_provisioned: false },
+        }),
+        db.transaction.findMany({
+            where: { userId, data_vencimento: { gte: startDate, lte: endDate }, is_provisioned: true },
+            include: { category: true, institution: true },
+            orderBy: { data_vencimento: "desc" },
+        }),
     ]);
 
     const calculateTotals = (data: any[]) => data.reduce(
@@ -95,6 +100,7 @@ export async function getDashboardData(userId: string, month: number, year: numb
     // Agrupa invoiceItems por transactionId
     const itemsByHeader = new Map<string, any[]>();
     for (const item of invoiceItems) {
+        if (!item.transactionId) continue;
         const list = itemsByHeader.get(item.transactionId) || [];
         list.push({ ...item, valor: Number(item.valor) });
         itemsByHeader.set(item.transactionId, list);
@@ -135,6 +141,9 @@ export async function getDashboardData(userId: string, month: number, year: numb
         };
     });
 
+    // Calculate provisioned total separately
+    const provisionedSummary = calculateTotals(provisionedTransactions);
+
     return {
         summary: {
             saldoTotal,
@@ -151,6 +160,13 @@ export async function getDashboardData(userId: string, month: number, year: numb
             healthScore,
             daysPassed,
             totalDays: getDaysInMonth(targetDate)
-        }
+        },
+        provisioned: {
+            total: provisionedSummary.totalSaidas,
+            transactions: provisionedTransactions.map((t: any) => ({
+                ...t,
+                valor: Number(t.valor),
+            })),
+        },
     };
 }

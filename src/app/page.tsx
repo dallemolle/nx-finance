@@ -14,6 +14,7 @@ import { ThemeToggle } from "../components/theme-toggle";
 import { TopNav } from "@/components/layout/top-nav";
 import { CsvImportDialog } from "@/components/dashboard/csv-import-dialog";
 import { CreditCardInvoiceDialog } from "@/components/dashboard/credit-card-invoice-dialog";
+import { ProvisionRecurringDialog } from "@/components/dashboard/provision-recurring-dialog";
 
 interface DashboardPageProps {
     searchParams: Promise<{ month?: string; year?: string }>;
@@ -51,6 +52,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
 
                         <div className="grid grid-cols-1 sm:grid-cols-2 md:flex md:flex-row gap-3 w-full md:w-auto">
                             <ExportButtons className="w-full" />
+                            <ProvisionRecurringDialog userId={session.user.id} className="w-full" />
                             <CsvImportDialog userId={session.user.id} className="w-full" />
                             <CreditCardInvoiceDialog userId={session.user.id} className="w-full" />
                             <NewTransactionDialog userId={session.user.id} className="w-full" />

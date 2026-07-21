@@ -47,6 +47,13 @@ model Transaction {
   tipo              TransactionType
   is_invoice_header Boolean           @default(false)
 
+  // --- Controle de Provisão e Parcelamento ---
+  is_provisioned           Boolean  @default(false)
+  is_installment           Boolean  @default(false)
+  current_installment      Int?
+  total_installments       Int?
+  unique_installment_group String?
+
   userId String
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -72,8 +79,20 @@ model CreditCardInvoiceItem {
   data_compra              DateTime
   data_vencimento_original DateTime?
 
-  transactionId String
-  transaction   Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  // --- Controle de Provisão e Parcelamento ---
+  is_provisioned           Boolean  @default(false)
+  is_installment           Boolean  @default(false)
+  current_installment      Int?
+  total_installments       Int?
+  unique_installment_group String?
+
+  // Vinculação estrita ao cartão/banco emissor (para filtro na conciliação)
+  institution_id String?
+  institution    FinancialInstitution? @relation(fields: [institution_id], references: [id])
+
+  // transactionId é opcional: itens provisionados existem sem fatura vinculada
+  transactionId String?
+  transaction   Transaction? @relation(fields: [transactionId], references: [id], onDelete: SetNull)
 
   categoria_id String
   category     Category @relation(fields: [categoria_id], references: [id])
@@ -134,6 +153,7 @@ model FinancialInstitution {
   userId       String
   user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   transactions Transaction[]
+  creditCardInvoiceItems CreditCardInvoiceItem[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

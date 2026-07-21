@@ -6,14 +6,17 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Upload, ChevronRight, X, AlertCircle } from "lucide-react";
+import { Upload, ChevronRight, X, AlertCircle, CheckCircle2, HelpCircle, Loader2 } from "lucide-react";
 import Papa from "papaparse";
 import { getCategories, getPaymentMethods, getFinancialInstitutions } from "@/lib/reports";
 import { InstitutionCombobox } from "@/components/dashboard/institution-combobox";
 import { processBatchTransactions, getMappingSuggestions } from "@/lib/csv-actions";
-import { cn } from "@/lib/utils";
+import { suggestMatches } from "@/lib/matching-actions";
+import { reconcileProvisionedTransaction, batchReconcile } from "@/lib/provision-actions";
+import { cn, normalizeCsvRow, parseCsvAmount, parseCsvDate, detectCsvHeaders } from "@/lib/utils";
 import { createCategory, createPaymentMethod } from "@/lib/actions";
 import { Combobox } from "@/components/ui/combobox";
 
@@ -37,6 +40,8 @@ export function CsvImportDialog({ userId, className }: { userId: string, classNa
     const [suggestions, setSuggestions] = useState<any[]>([]);
 
     const [parsedData, setParsedData] = useState<any[]>([]);
+    const [matchSuggestions, setMatchSuggestions] = useState<Map<number, any[]>>(new Map());
+    const [reconcileDecisions, setReconcileDecisions] = useState<Map<number, boolean>>(new Map());
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
@@ -48,6 +53,8 @@ export function CsvImportDialog({ userId, className }: { userId: string, classNa
             setPaymentMethodId("none");
             setInstitutionId("");
             setParsedData([]);
+            setMatchSuggestions(new Map());
+            setReconcileDecisions(new Map());
             setError(null);
 
             getCategories(userId).then(setCategories);
@@ -84,41 +91,67 @@ export function CsvImportDialog({ userId, className }: { userId: string, classNa
 
         setIsLoading(true);
         Papa.parse(file, {
-            header: true,
+            header: false,
             skipEmptyLines: true,
-            complete: (results: any) => {
+            complete: async (results: any) => {
                 try {
-                    const mapped = results.data.map((row: any, index: number) => {
-                        // Attempt to extract title, amount, date based on common headers
-                        const title = row.title || row.descricao || row.description || row.Title || Object.values(row)[0] || "Sem título";
-                        const rawAmount = row.amount || row.valor || row.Value || row.Amount || "0";
-                        const amount = parseFloat(String(rawAmount).replace(/[R$\s]/g, '').replace(',', '.'));
-                        const rawDate = row.date || row.data || row.Date || row.Data || "";
-                        const parsed = new Date(rawDate);
-                        const date = !isNaN(parsed.getTime())
-                            ? parsed.toISOString().split('T')[0]
-                            : rawDate.includes('/')
-                                ? rawDate.split('/').reverse().join('-')
-                                : new Date().toISOString().split('T')[0];
+                    const rawRows: string[][] = Array.isArray(results?.data) ? results.data : [];
+                    if (rawRows.length === 0) {
+                        setError("CSV vazio. Verifique o arquivo.");
+                        setIsLoading(false);
+                        return;
+                    }
 
-                        // Find category suggestion based on search_term
-                        const guess = suggestions.find(s => title.toLowerCase().includes(s.search_term));
+                    const rawHeaders = (rawRows[0] || []).map((c: string) => String(c ?? "").trim());
+                    const headerIndex = detectCsvHeaders(rawHeaders);
+                    const dataRows = rawRows.slice(1);
+
+                    const mapped = dataRows.map((row: any, index: number) => {
+                        const { title, rawAmount, rawDate } = normalizeCsvRow(row, headerIndex);
+                        const amount = parseCsvAmount(rawAmount);
+                        const date = parseCsvDate(rawDate);
+
+                        const guess = title ? suggestions.find((s: any) => title.toLowerCase().includes(s.search_term)) : undefined;
 
                         return {
                             id: index,
                             original_title: title,
-                            title: title,
-                            amount: isNaN(amount) ? 0 : amount,
+                            title: title || "Sem título",
+                            amount: amount,
                             date: date,
                             category_id: guess ? guess.categoria_id : "",
+                            reconcileProvisionId: null as string | null,
+                            autoMatched: false,
                         };
                     });
 
                     setParsedData(mapped);
+
+                    // Fetch matching suggestions for reconciliation
+                    const suggestionsRecord = await suggestMatches(
+                        mapped.map((r: any) => ({ id: r.id, description: r.title, amount: Math.abs(r.amount) })),
+                        userId,
+                        institutionId
+                    );
+                    const suggestionsMap = new Map(
+                        Object.entries(suggestionsRecord).map(([k, v]) => [Number(k), v])
+                    );
+                    setMatchSuggestions(suggestionsMap);
+
+                    // Auto-accept high-confidence matches (score >= 80)
+                    const autoDecisions = new Map<number, boolean>();
+                    for (const [rowId, matches] of suggestionsMap.entries()) {
+                        if (matches.length > 0 && matches[0].score >= 80) {
+                            autoDecisions.set(rowId, true);
+                        }
+                    }
+                    setReconcileDecisions(autoDecisions);
+
                     setStep(2);
                     setError(null);
-                } catch (e) {
-                    setError("Erro ao processar CSV. Verifique o formato das colunas (title, amount, date).");
+                } catch (e: any) {
+                    console.error("CSV parse error:", e, e?.message);
+                    setError("Erro ao processar CSV. Verifique o formato: title, amount, date.");
                 } finally {
                     setIsLoading(false);
                 }
@@ -138,9 +171,9 @@ export function CsvImportDialog({ userId, className }: { userId: string, classNa
         try {
             const newCat = await createCategory({
                 nome: catName,
-                cor: "#3b82f6", // Default blue
+                cor: "#3b82f6",
                 icone: "Wallet",
-                tipo: "SAIDA" // Default assumtion for imports
+                tipo: "SAIDA",
             });
             setCategories(prev => [...prev, newCat]);
             handleRowChange(id, "category_id", newCat.id);
@@ -148,7 +181,7 @@ export function CsvImportDialog({ userId, className }: { userId: string, classNa
             console.error(e);
         }
     };
-    
+
     const handlePaymentMethodAdd = async (name: string) => {
         try {
             const newPM = await createPaymentMethod({ nome: name });
@@ -157,6 +190,18 @@ export function CsvImportDialog({ userId, className }: { userId: string, classNa
         } catch (e: any) {
             console.error(e);
         }
+    };
+
+    const toggleReconcile = (rowId: number) => {
+        setReconcileDecisions(prev => {
+            const next = new Map(prev);
+            if (next.has(rowId)) {
+                next.delete(rowId);
+            } else {
+                next.set(rowId, true);
+            }
+            return next;
+        });
     };
 
     const handleSubmit = async () => {
@@ -169,21 +214,52 @@ export function CsvImportDialog({ userId, className }: { userId: string, classNa
         setIsLoading(true);
         setError(null);
 
-        const payload = parsedData.map(row => ({
-            descricao: row.title,
-            original_title: row.original_title,
-            valor: Math.abs(row.amount),
-            tipo: row.amount >= 0 ? "SAIDA" : "ENTRADA", // Usually CSV amounts denote type. Let's assume positive is ENTRADA unless configured. But if amount is positive for expenses, let's treat all as SAIDA by default if it's a credit card import. Actually we'll base on amount sign if there is one. Assumed logic: if amount < 0, SAIDA. If positive, ENTRADA., 
-            data_vencimento: dueDate,
-            data_lancamento: new Date().toISOString(),
-            status: "PENDENTE", // Usually imported statements are paid
-            categoria_id: row.category_id,
-            tipo_pagamento_id: paymentMethodId === "none" ? null : paymentMethodId,
-            institution_id: institutionId,
-        }));
-
         try {
-            await processBatchTransactions(payload);
+            // Separate items: reconcile vs create new
+            const toReconcile = parsedData.filter(r => reconcileDecisions.has(r.id));
+            const toCreate = parsedData.filter(r => !reconcileDecisions.has(r.id));
+
+            // Reconcile provisioned items
+            if (toReconcile.length > 0) {
+                const decisions = toReconcile.map(row => {
+                    const match = matchSuggestions.get(row.id)?.[0];
+                    if (!match) return null;
+                    return {
+                        provisionId: match.provisionId,
+                        type: "transaction" as const,
+                        updateData: {
+                            valor: Math.abs(row.amount),
+                            status: "PAGO" as const,
+                            data_pagamento: new Date(),
+                            categoria_id: row.category_id,
+                            descricao: row.title,
+                        },
+                    };
+                }).filter(Boolean);
+
+                if (decisions.length > 0) {
+                    await batchReconcile(decisions as any[]);
+                }
+            }
+
+            // Create new transactions for items without match
+            if (toCreate.length > 0) {
+                const payload = toCreate.map(row => ({
+                    descricao: row.title,
+                    original_title: row.original_title,
+                    valor: Math.abs(row.amount),
+                    tipo: row.amount >= 0 ? "SAIDA" : "ENTRADA",
+                    data_vencimento: dueDate,
+                    data_lancamento: new Date().toISOString(),
+                    status: "PENDENTE",
+                    categoria_id: row.category_id,
+                    tipo_pagamento_id: paymentMethodId === "none" ? null : paymentMethodId,
+                    institution_id: institutionId,
+                }));
+
+                await processBatchTransactions(payload);
+            }
+
             setOpen(false);
             router.refresh();
         } catch (e: any) {
@@ -197,6 +273,8 @@ export function CsvImportDialog({ userId, className }: { userId: string, classNa
         return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
     };
 
+    const getMatchForRow = (rowId: number) => matchSuggestions.get(rowId)?.[0] || null;
+
     return (
         <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
@@ -205,7 +283,7 @@ export function CsvImportDialog({ userId, className }: { userId: string, classNa
                     Importar CSV
                 </Button>
             </DialogTrigger>
-            <DialogContent className="sm:max-w-[800px] h-[80vh] flex flex-col">
+            <DialogContent className="sm:max-w-[900px] h-[85vh] flex flex-col">
                 <DialogHeader className="shrink-0">
                     <DialogTitle>Importar Transações</DialogTitle>
                 </DialogHeader>
@@ -271,7 +349,7 @@ export function CsvImportDialog({ userId, className }: { userId: string, classNa
                     ) : (
                         <div className="space-y-4">
                             <div className="flex justify-between items-center text-sm font-medium">
-                                <span>Revisão e Mapeamento</span>
+                                <span>Revisão e Conciliação</span>
                                 <span className="text-muted-foreground">{parsedData.length} registros</span>
                             </div>
                             <div className="border rounded-lg overflow-hidden shrink-0">
@@ -281,68 +359,118 @@ export function CsvImportDialog({ userId, className }: { userId: string, classNa
                                             <TableHead>Título</TableHead>
                                             <TableHead>Valor</TableHead>
                                             <TableHead>Categoria</TableHead>
+                                            <TableHead className="min-w-[180px]">Provisão</TableHead>
                                             <TableHead className="w-[50px]"></TableHead>
                                         </TableRow>
                                     </TableHeader>
                                     <TableBody>
-                                        {parsedData.map((row) => (
-                                            <TableRow key={row.id}>
-                                                <TableCell className="p-2">
-                                                    <Input
-                                                        value={row.title}
-                                                        onChange={(e) => handleRowChange(row.id, "title", e.target.value)}
-                                                        className="h-8 text-sm"
-                                                    />
-                                                </TableCell>
-                                                <TableCell className="p-2">
-                                                    <Input
-                                                        type="number"
-                                                        step="0.01"
-                                                        value={row.amount}
-                                                        onChange={(e) => handleRowChange(row.id, "amount", parseFloat(e.target.value))}
-                                                        className="h-8 text-sm w-[100px]"
-                                                    />
-                                                </TableCell>
-                                                <TableCell className="p-2">
-                                                    <Select value={row.category_id} onValueChange={(val) => {
-                                                        if (val === "NEW") {
-                                                            const catName = prompt("Nome da nova categoria (Saída):");
-                                                            if (catName) handleCategoryCreate(row.id, catName);
-                                                        } else {
-                                                            handleRowChange(row.id, "category_id", val);
-                                                        }
-                                                    }}>
-                                                        <SelectTrigger className="h-8 text-sm">
-                                                            <SelectValue placeholder="Categoria..." />
-                                                        </SelectTrigger>
-                                                        <SelectContent>
-                                                            {categories.map(c => (
-                                                                <SelectItem key={c.id} value={c.id}>
-                                                                    <div className="flex items-center gap-2">
-                                                                        <div className="w-2 h-2 rounded-full" style={{ backgroundColor: c.cor }} />
-                                                                        {c.nome}
-                                                                    </div>
-                                                                </SelectItem>
-                                                            ))}
-                                                            <SelectItem value="NEW" className="font-bold text-blue-600">+ Nova Categoria</SelectItem>
-                                                        </SelectContent>
-                                                    </Select>
-                                                </TableCell>
-                                                <TableCell className="p-2 text-center">
-                                                    <Button
-                                                        variant="ghost"
-                                                        size="icon"
-                                                        className="h-8 w-8 text-slate-400 hover:text-red-500"
-                                                        onClick={() => setParsedData(prev => prev.filter(r => r.id !== row.id))}
-                                                    >
-                                                        <X className="w-4 h-4" />
-                                                    </Button>
-                                                </TableCell>
-                                            </TableRow>
-                                        ))}
+                                        {parsedData.map((row) => {
+                                            const match = getMatchForRow(row.id);
+                                            const isReconciling = reconcileDecisions.has(row.id);
+
+                                            return (
+                                                <TableRow key={row.id} className={cn(isReconciling && "bg-emerald-50/50 dark:bg-emerald-950/20")}>
+                                                    <TableCell className="p-2">
+                                                        <Input
+                                                            value={row.title}
+                                                            onChange={(e) => handleRowChange(row.id, "title", e.target.value)}
+                                                            className="h-8 text-sm"
+                                                        />
+                                                    </TableCell>
+                                                    <TableCell className="p-2">
+                                                        <Input
+                                                            type="number"
+                                                            step="0.01"
+                                                            value={row.amount}
+                                                            onChange={(e) => handleRowChange(row.id, "amount", parseFloat(e.target.value))}
+                                                            className="h-8 text-sm w-[100px]"
+                                                        />
+                                                    </TableCell>
+                                                    <TableCell className="p-2">
+                                                        <Select value={row.category_id} onValueChange={(val) => {
+                                                            if (val === "NEW") {
+                                                                const catName = prompt("Nome da nova categoria (Saída):");
+                                                                if (catName) handleCategoryCreate(row.id, catName);
+                                                            } else {
+                                                                handleRowChange(row.id, "category_id", val);
+                                                            }
+                                                        }}>
+                                                            <SelectTrigger className="h-8 text-sm">
+                                                                <SelectValue placeholder="Categoria..." />
+                                                            </SelectTrigger>
+                                                            <SelectContent>
+                                                                {categories.map(c => (
+                                                                    <SelectItem key={c.id} value={c.id}>
+                                                                        <div className="flex items-center gap-2">
+                                                                            <div className="w-2 h-2 rounded-full" style={{ backgroundColor: c.cor }} />
+                                                                            {c.nome}
+                                                                        </div>
+                                                                    </SelectItem>
+                                                                ))}
+                                                                <SelectItem value="NEW" className="font-bold text-blue-600">+ Nova Categoria</SelectItem>
+                                                            </SelectContent>
+                                                        </Select>
+                                                    </TableCell>
+                                                    <TableCell className="p-2">
+                                                        {match ? (
+                                                            <div className="flex items-center gap-2">
+                                                                <Switch
+                                                                    checked={isReconciling}
+                                                                    onCheckedChange={() => toggleReconcile(row.id)}
+                                                                    className="data-[state=checked]:bg-emerald-500"
+                                                                />
+                                                                <div className="flex flex-col">
+                                                                    <span className={cn(
+                                                                        "text-xs font-medium flex items-center gap-1",
+                                                                        isReconciling ? "text-emerald-600 dark:text-emerald-400" : "text-slate-500"
+                                                                    )}>
+                                                                        {isReconciling ? (
+                                                                            <CheckCircle2 className="w-3 h-3" />
+                                                                        ) : (
+                                                                            <HelpCircle className="w-3 h-3" />
+                                                                        )}
+                                                                        {isReconciling ? "Vinculado" : "Sugerido"}
+                                                                    </span>
+                                                                    <span className="text-[10px] text-muted-foreground truncate max-w-[140px]">
+                                                                        {match.provisionDescription}
+                                                                    </span>
+                                                                </div>
+                                                            </div>
+                                                        ) : (
+                                                            <span className="text-[10px] text-muted-foreground italic flex items-center gap-1">
+                                                                <X className="w-3 h-3" />
+                                                                Nenhuma provisão
+                                                            </span>
+                                                        )}
+                                                    </TableCell>
+                                                    <TableCell className="p-2 text-center">
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="icon"
+                                                            className="h-8 w-8 text-slate-400 hover:text-red-500"
+                                                            onClick={() => setParsedData(prev => prev.filter(r => r.id !== row.id))}
+                                                        >
+                                                            <X className="w-4 h-4" />
+                                                        </Button>
+                                                    </TableCell>
+                                                </TableRow>
+                                            );
+                                        })}
                                     </TableBody>
                                 </Table>
                             </div>
+                            {matchSuggestions.size > 0 && (
+                                <div className="text-xs text-muted-foreground flex items-center gap-2 p-2 bg-slate-50 dark:bg-slate-900 rounded-lg">
+                                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
+                                    {matchSuggestions.size} {matchSuggestions.size === 1 ? "item possui" : "itens possuem"} provisão correspondente.
+                                    {reconcileDecisions.size > 0 && (
+                                        <span className="font-medium text-emerald-600 dark:text-emerald-400">
+                                            {reconcileDecisions.size} selecionado{reconcileDecisions.size > 1 ? "s" : ""} para vincular.
+                                        </span>
+                                    )}
+                                    Ative o switch para vincular à provisão.
+                                </div>
+                            )}
                         </div>
                     )}
                 </div>
@@ -351,7 +479,11 @@ export function CsvImportDialog({ userId, className }: { userId: string, classNa
                     <Button variant="outline" onClick={() => setOpen(false)}>Cancelar</Button>
                     {step === 1 ? (
                         <Button onClick={handleContinue} disabled={isLoading || !file || !dueDate}>
-                            Próximo <ChevronRight className="w-4 h-4 ml-1" />
+                            {isLoading ? (
+                                <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Processando...</>
+                            ) : (
+                                <>Próximo <ChevronRight className="w-4 h-4 ml-1" /></>
+                            )}
                         </Button>
                     ) : (
                         <Button onClick={handleSubmit} disabled={isLoading || parsedData.some(r => !r.category_id)}>

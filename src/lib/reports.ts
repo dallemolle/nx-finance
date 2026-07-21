@@ -16,6 +16,11 @@ export async function getReportData(userId: string, month: number, year: number,
         },
     };
 
+    // By default, exclude provisions from reports unless explicitly requested
+    if (!filters?.includeProvisions) {
+        where.is_provisioned = false;
+    }
+
     if (filters?.status && filters.status !== "ALL") where.status = filters.status;
     if (filters?.categoria_id && filters.categoria_id !== "ALL") where.categoria_id = filters.categoria_id;
     if (filters?.institution_id && filters.institution_id !== "ALL") where.institution_id = filters.institution_id;
@@ -46,6 +51,7 @@ export async function getReportData(userId: string, month: number, year: number,
 
     const itemsByHeader = new Map<string, any[]>();
     for (const item of invoiceItems) {
+        if (!item.transactionId) continue;
         const list = itemsByHeader.get(item.transactionId) || [];
         list.push({
             ...item,

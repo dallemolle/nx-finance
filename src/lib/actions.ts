@@ -24,9 +24,8 @@ export async function createTransaction(data: any) {
         const { isInstallment, installmentsCount, installmentDescriptions, ...rest } = validatedData;
 
         if (isInstallment && installmentsCount && installmentsCount > 1) {
-            const totalValue = new Decimal(rest.valor);
-            const installmentValue = totalValue.dividedBy(installmentsCount).toDecimalPlaces(2, Decimal.ROUND_DOWN);
-            const lastInstallmentValue = totalValue.minus(installmentValue.times(installmentsCount - 1));
+            const groupId = crypto.randomUUID();
+            const installmentValue = new Decimal(rest.valor);
 
             const transactions = await db.$transaction(
                 Array.from({ length: installmentsCount }).map((_, i) => {
@@ -35,15 +34,17 @@ export async function createTransaction(data: any) {
                     const description = (validatedData.installmentDescriptions && validatedData.installmentDescriptions[i]) 
                         ? validatedData.installmentDescriptions[i] 
                         : defaultDescription;
-                    
-                    const currentInstallmentValue = i === installmentsCount - 1 ? lastInstallmentValue : installmentValue;
 
                     return db.transaction.create({
                         data: {
                             ...rest,
                             descricao: description,
-                            valor: currentInstallmentValue.toNumber(),
+                            valor: installmentValue.toNumber(),
                             data_vencimento: dueDate,
+                            is_installment: true,
+                            current_installment: i + 1,
+                            total_installments: installmentsCount,
+                            unique_installment_group: groupId,
                             userId,
                         },
                     });

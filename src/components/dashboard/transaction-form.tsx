@@ -206,9 +206,9 @@ export function TransactionForm({ categories: initialCategories, paymentMethods:
                 {errors.descricao && <p className="text-xs text-red-500">{errors.descricao.message as string}</p>}
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                    <Label htmlFor="valor">Valor Total (R$)</Label>
+                    <Label htmlFor="valor">Valor {isInstallment ? 'por Parcela' : '(R$)'}</Label>
                     <Input id="valor" type="number" step="0.01" {...register("valor")} placeholder="0,00" />
                     {errors.valor && <p className="text-xs text-red-500">{errors.valor.message as string}</p>}
                 </div>
@@ -275,7 +275,7 @@ export function TransactionForm({ categories: initialCategories, paymentMethods:
                     <div className="flex items-center justify-between">
                         <div className="space-y-0.5">
                             <Label>Despesa Parcelada?</Label>
-                            <p className="text-xs text-muted-foreground">O valor total será dividido entre as parcelas.</p>
+                            <p className="text-xs text-muted-foreground">O valor informado será replicado em cada parcela.</p>
                         </div>
                         <Switch
                             checked={isInstallment}
@@ -315,17 +315,12 @@ export function TransactionForm({ categories: initialCategories, paymentMethods:
                                             </thead>
                                             <tbody>
                                                 {Array.from({ length: installmentsCount }).map((_, i) => {
-                                                    const totalValue = new Decimal(watch("valor") || 0);
                                                     const count = Number(installmentsCount);
-                                                    const installmentValue = totalValue.dividedBy(count).toDecimalPlaces(2, Decimal.ROUND_DOWN);
-                                                    const lastInstallmentValue = totalValue.minus(installmentValue.times(count - 1));
-
-                                                    const currentVal = i === count - 1 ? lastInstallmentValue : installmentValue;
                                                     const dueDate = addMonths(new Date(dataVencimento), i);
-                                                    const isAdjusted = i === count - 1 && !lastInstallmentValue.equals(installmentValue);
+                                                    const valorParcela = Number(watch("valor") || 0);
 
                                                     return (
-                                                        <tr key={i} className={cn("border-b last:border-0", isAdjusted && "bg-blue-50/50 dark:bg-blue-900/20")}>
+                                                        <tr key={i} className="border-b last:border-0">
                                                             <td className="p-2 text-center text-muted-foreground">{String(i + 1).padStart(2, '0')}</td>
                                                             <td className="p-1">
                                                                 <Input 
@@ -335,9 +330,8 @@ export function TransactionForm({ categories: initialCategories, paymentMethods:
                                                                 />
                                                             </td>
                                                             <td className="p-2 whitespace-nowrap">{format(dueDate, "dd/MM/yy")}</td>
-                                                            <td className={cn("p-2 text-right font-medium", isAdjusted && "text-blue-600 dark:text-blue-400")}>
-                                                                {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(currentVal.toNumber())}
-                                                                {isAdjusted && <span className="ml-0.5 text-[10px] opacity-70" title="Ajuste de centavos">*</span>}
+                                                            <td className="p-2 text-right font-medium text-rose-600">
+                                                                {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(valorParcela)}
                                                             </td>
                                                         </tr>
                                                     );
@@ -346,7 +340,7 @@ export function TransactionForm({ categories: initialCategories, paymentMethods:
                                         </table>
                                     </div>
                                     <p className="text-[10px] text-muted-foreground italic">
-                                        * A última parcela contém o ajuste de centavos. Clique nos campos de nome para personalizar.
+                                        Cada parcela terá o valor exato informado. Clique nos campos de nome para personalizar.
                                     </p>
                                 </div>
                             )}

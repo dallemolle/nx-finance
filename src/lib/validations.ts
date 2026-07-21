@@ -42,6 +42,30 @@ export const financialInstitutionSchema = z.object({
     cor: z.string().regex(/^#[0-9A-F]{6}$/i, "Cor inválida").optional().or(z.literal("")),
 });
 
+export const provisionRecurringSchema = z.object({
+    descricao: z.string().min(1, "Descrição é obrigatória").transform(val => val.trim().charAt(0).toUpperCase() + val.slice(1).toLowerCase()),
+    valor: z.coerce.number().positive("Valor deve ser positivo"),
+    categoria_id: z.string().min(1, "Categoria é obrigatória"),
+    tipo_pagamento_id: z.string().min(1, "Meio de pagamento é obrigatório"),
+    institution_id: z.string().min(1, "Instituição é obrigatória"),
+    startMonth: z.coerce.number().min(1).max(12),
+    startYear: z.coerce.number().min(2020).max(2100),
+    totalMonths: z.coerce.number().min(1).max(60),
+});
+
+export const reconcileSchema = z.object({
+    provisionId: z.string().min(1),
+    type: z.enum(["transaction", "invoice_item"]),
+    targetInvoiceId: z.string().optional().nullable(),
+    updateData: z.object({
+        valor: z.coerce.number().positive().optional(),
+        data_pagamento: z.coerce.date().optional().nullable(),
+        status: z.enum(["PENDENTE", "PAGO"]).optional(),
+        categoria_id: z.string().optional(),
+        descricao: z.string().optional(),
+    }).optional().nullable(),
+});
+
 export const loginSchema = z.object({
     email: z.string().email("Email inválido"),
     password: z.string().min(6, "Senha deve ter no mínimo 6 caracteres"),
@@ -56,6 +80,11 @@ export const creditCardInvoiceItemSchema = z.object({
     valor: z.coerce.number().positive("Valor deve ser positivo"),
     categoria_id: z.string().min(1, "Categoria é obrigatória"),
     data_compra: z.coerce.date(),
+    // Suporte a parcelamento na importação
+    totalInstallments: z.coerce.number().min(2).max(48).optional().nullable(),
+    currentInstallment: z.coerce.number().min(1).optional().nullable(),
+    // Suporte a conciliação: se informado, vincula a uma provisão existente
+    reconcileProvisionId: z.string().optional().nullable(),
 });
 
 export const creditCardInvoiceSchema = z.object({

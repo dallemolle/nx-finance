@@ -12,6 +12,8 @@ export const metadata: Metadata = {
 };
 
 import { EnvironmentBanner } from "@/components/environment-banner";
+import { CommandPalette } from "@/components/command-palette";
+import { MobileBottomNav } from "@/components/layout/mobile-bottom-nav";
 
 export default function RootLayout({
     children,
@@ -25,6 +27,8 @@ export default function RootLayout({
                     <EnvironmentBanner />
                     {children}
                     <Toaster richColors position="top-right" />
+                    <CommandPalette />
+                    <MobileBottomNav />
                 </Providers>
             </body>
         </html>

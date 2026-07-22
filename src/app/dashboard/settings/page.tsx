@@ -26,7 +26,7 @@ export default async function SettingsPage() {
     return (
         <>
             <TopNav />
-            <div className="px-8 pb-8 pt-4 space-y-6 animate-in fade-in duration-700 max-w-7xl mx-auto">
+            <div className="px-8 pb-24 sm:pb-8 pt-4 space-y-6 animate-in fade-in duration-700 max-w-7xl mx-auto">
                 <div className="flex flex-col gap-1">
                     <h1 className="text-4xl font-black tracking-tighter text-slate-900 dark:text-slate-100 italic">Configurações</h1>
                     <p className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Gerencie suas categorias, instituições e meios de pagamento.</p>

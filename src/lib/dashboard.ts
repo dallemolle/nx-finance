@@ -1,7 +1,8 @@
 "use server";
 
 import { db } from "@/lib/db";
-import { startOfMonth, endOfMonth, isBefore, subMonths, getDaysInMonth } from "date-fns";
+import { startOfMonth, endOfMonth, isBefore, subMonths, getDaysInMonth, format } from "date-fns";
+import { ptBR } from "date-fns/locale";
 import { getCategoryGroupName } from "./dashboard-utils";
 import type { Prisma, TransactionType } from "@prisma/client";
 
@@ -25,7 +26,7 @@ export async function getDashboardData(userId: string, month: number, year: numb
     const prevEndDate = endOfMonth(prevMonthDate);
 
     // Fetch current and previous month transactions
-    const [transactions, prevTransactions] = await Promise.all([
+    const [transactions, prevTransactions, firstTransaction] = await Promise.all([
         db.transaction.findMany({
             where: { userId, data_vencimento: { gte: startDate, lte: endDate } },
             include: { category: true, institution: true },
@@ -33,8 +34,11 @@ export async function getDashboardData(userId: string, month: number, year: numb
         }),
         db.transaction.findMany({
             where: { userId, data_vencimento: { gte: prevStartDate, lte: prevEndDate } },
-        })
+        }),
+        db.transaction.findFirst({ where: { userId }, select: { id: true } }),
     ]);
+
+    const hasAnyTransactions = !!firstTransaction;
 
     const calculateTotals = (data: TotalsEntry[]) => data.reduce(
         (acc, t) => {
@@ -162,6 +166,44 @@ export async function getDashboardData(userId: string, month: number, year: numb
             healthScore,
             daysPassed,
             totalDays: getDaysInMonth(targetDate)
-        }
+        },
+        hasAnyTransactions,
     };
+}
+
+const TREND_MONTHS_COUNT = 6;
+
+export async function getMonthlyTrend(userId: string, month: number, year: number) {
+    const targetDate = new Date(year, month - 1);
+    const rangeStart = startOfMonth(subMonths(targetDate, TREND_MONTHS_COUNT - 1));
+    const rangeEnd = endOfMonth(targetDate);
+
+    const transactions = await db.transaction.findMany({
+        where: { userId, data_vencimento: { gte: rangeStart, lte: rangeEnd } },
+        select: { valor: true, tipo: true, data_vencimento: true },
+    });
+
+    const buckets = Array.from({ length: TREND_MONTHS_COUNT }, (_, i) => {
+        const bucketDate = subMonths(targetDate, TREND_MONTHS_COUNT - 1 - i);
+        return {
+            key: `${bucketDate.getFullYear()}-${bucketDate.getMonth()}`,
+            label: format(bucketDate, "MMM", { locale: ptBR }),
+            totalEntradas: 0,
+            totalSaidas: 0,
+        };
+    });
+    const bucketByKey = new Map(buckets.map(b => [b.key, b]));
+
+    for (const t of transactions) {
+        const key = `${t.data_vencimento.getFullYear()}-${t.data_vencimento.getMonth()}`;
+        const bucket = bucketByKey.get(key);
+        if (!bucket) continue;
+        if (t.tipo === "ENTRADA") bucket.totalEntradas += Number(t.valor);
+        else bucket.totalSaidas += Number(t.valor);
+    }
+
+    return buckets.map(b => ({
+        label: b.label,
+        saldo: b.totalEntradas - b.totalSaidas,
+    }));
 }

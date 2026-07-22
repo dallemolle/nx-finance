@@ -35,7 +35,9 @@
     "next": "^16.2.2",
     "next-auth": "^4.24.13",
     "next-themes": "^0.4.3",
+    "otplib": "^13.4.1",
     "papaparse": "^5.5.3",
+    "qrcode": "^1.5.4",
     "react": "^18.3.1",
     "react-day-picker": "^9.14.0",
     "react-dom": "^18.3.1",
@@ -49,6 +51,7 @@
   },
   "devDependencies": {
     "@types/node": "^20.17.6",
+    "@types/qrcode": "^1.5.6",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
     "autoprefixer": "^10.4.27",

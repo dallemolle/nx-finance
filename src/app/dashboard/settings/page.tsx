@@ -5,6 +5,7 @@ import { db } from "@/lib/db";
 import { TopNav } from "@/components/layout/top-nav";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CategorySettings, InstitutionSettings, PaymentMethodSettings } from "@/components/dashboard/settings-forms";
+import { SecuritySettings } from "@/components/dashboard/security-settings";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
 export default async function SettingsPage() {
@@ -15,10 +16,11 @@ export default async function SettingsPage() {
 
     const userId = session.user.id;
 
-    const [categories, institutions, paymentMethods] = await Promise.all([
+    const [categories, institutions, paymentMethods, user] = await Promise.all([
         db.category.findMany({ where: { userId }, orderBy: { nome: "asc" } }),
         db.financialInstitution.findMany({ where: { userId }, orderBy: { nome: "asc" } }),
         db.paymentMethod.findMany({ where: { userId }, orderBy: { nome: "asc" } }),
+        db.user.findUnique({ where: { id: userId }, select: { status_2fa: true } }),
     ]);
 
     return (
@@ -37,22 +39,27 @@ export default async function SettingsPage() {
                     </CardHeader>
                     <CardContent>
                         <Tabs defaultValue="institutions" className="w-full">
-                            <TabsList className="grid w-full grid-cols-3 mb-8 bg-slate-100 dark:bg-slate-800 p-1">
+                            <TabsList className="grid w-full grid-cols-4 mb-8 bg-slate-100 dark:bg-slate-800 p-1">
                                 <TabsTrigger value="institutions" className="font-bold tracking-tight py-2 data-[state=active]:bg-white dark:data-[state=active]:bg-slate-950 data-[state=active]:shadow-sm">Instituições</TabsTrigger>
                                 <TabsTrigger value="categories" className="font-bold tracking-tight py-2 data-[state=active]:bg-white dark:data-[state=active]:bg-slate-950 data-[state=active]:shadow-sm">Categorias</TabsTrigger>
                                 <TabsTrigger value="payments" className="font-bold tracking-tight py-2 data-[state=active]:bg-white dark:data-[state=active]:bg-slate-950 data-[state=active]:shadow-sm">Meios de Pagamento</TabsTrigger>
+                                <TabsTrigger value="security" className="font-bold tracking-tight py-2 data-[state=active]:bg-white dark:data-[state=active]:bg-slate-950 data-[state=active]:shadow-sm">Segurança</TabsTrigger>
                             </TabsList>
-                            
+
                             <TabsContent value="institutions" className="mt-0 focus-visible:outline-none focus-visible:ring-0">
                                 <InstitutionSettings institutions={institutions} />
                             </TabsContent>
-                            
+
                             <TabsContent value="categories" className="mt-0 focus-visible:outline-none focus-visible:ring-0">
                                 <CategorySettings categories={categories} />
                             </TabsContent>
-                            
+
                             <TabsContent value="payments" className="mt-0 focus-visible:outline-none focus-visible:ring-0">
                                 <PaymentMethodSettings paymentMethods={paymentMethods} />
+                            </TabsContent>
+
+                            <TabsContent value="security" className="mt-0 focus-visible:outline-none focus-visible:ring-0">
+                                <SecuritySettings enabled={user?.status_2fa ?? false} />
                             </TabsContent>
                         </Tabs>
                     </CardContent>

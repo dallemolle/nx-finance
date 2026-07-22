@@ -24,7 +24,7 @@ Auditoria completa do projeto (Next.js 16 + TypeScript + Prisma/PostgreSQL) sob 
 
 ## Status Geral
 
-**15 de 16 itens concluídos.** Único pendente: item 3 (2FA), com decisão explícita do usuário de deixar como está por enquanto.
+**16 de 16 itens concluídos.**
 
 ## 🔴 Prioridade Alta (Crítico / Bugs / Gargalos)
 
@@ -32,7 +32,7 @@ Auditoria completa do projeto (Next.js 16 + TypeScript + Prisma/PostgreSQL) sob 
 
 2. ✅ **CONCLUÍDO** — **Nenhum índice no `Transaction`.** Toda query de dashboard/relatório filtra por `userId` + `data_vencimento` (`dashboard.ts:19,24`; `reports.ts:11-17`). → `@@index([userId, data_vencimento])` adicionado ao `schema.prisma` e aplicado via `prisma db push`.
 
-3. ⬜ **PENDENTE** — **2FA é uma casca vazia e potencialmente insegura.** `authorize()` em `auth.ts` aceita **qualquer** valor não vazio em `credentials.code` quando `status_2fa` é true — não valida contra `secret_2fa`. Não há UI para ativar `status_2fa`. `proxy.ts` referencia `token.isTwoFactorVerified`/`needsTwoFactor`, que o callback `jwt()` nunca seta, e a rota `/auth/verify-2fa` não existe. **Requer decisão:** completar o fluxo ou remover explicitamente o código morto.
+3. ✅ **CONCLUÍDO** — **2FA era uma casca vazia e potencialmente insegura.** `authorize()` em `auth.ts` aceitava qualquer valor não vazio em `credentials.code`; não havia UI para ativar `status_2fa`; `proxy.ts` referenciava `token.isTwoFactorVerified`/`needsTwoFactor` (nunca setados) e uma rota `/auth/verify-2fa` inexistente. → Implementado TOTP real (`otplib` + `qrcode`, sem dependência de e-mail): `authorize()` agora valida o código contra `secret_2fa` de verdade; nova aba "Segurança" em `/dashboard/settings` (`security-settings.tsx`) para ativar/desativar com QR code; novo `src/lib/two-factor-actions.ts` com `generateTwoFactorSetup`/`enableTwoFactor`/`disableTwoFactor`. Como o gate de 2FA acontece inteiramente dentro de `authorize()` antes do JWT existir, a lógica morta de `isTwoFactorVerified`/`needsTwoFactor`/`/auth/verify-2fa` em `proxy.ts` foi **removida** (não completada — era desnecessária no desenho final). Testado ponta a ponta via NextAuth real (`/api/auth/callback/credentials`): login sem 2FA, sem código (pede 2FA), código errado (rejeita) e código certo (loga) — todos os 4 cenários passaram.
 
 4. ✅ **CONCLUÍDO** — **Sem paginação em Relatórios.** `getReportData` (`reports.ts`) carregava todas as transações do período de uma vez, e `report-content.tsx` renderizava o array inteiro via `.flatMap()`. → Paginação client-side implementada em `report-content.tsx` (50 itens/página, com reset de página ao trocar filtro feito durante o render, evitando o anti-padrão de `setState` síncrono em `useEffect`).
 
@@ -68,9 +68,10 @@ Auditoria completa do projeto (Next.js 16 + TypeScript + Prisma/PostgreSQL) sob 
 
 ## Próximos Candidatos (por esforço)
 
-Todos os itens mecânicos e de esforço médio foram concluídos. Resta apenas:
+Todos os 16 itens da auditoria original foram concluídos. Melhorias futuras identificadas durante a implementação do 2FA (fora do escopo original, não implementadas):
 
-- **Decidido, aguardando o usuário:** item 3 (2FA — usuário optou por deixar como está por enquanto; casca vazia continua documentada como risco conhecido). Se decidir agir, as opções são: completar o fluxo (gerar/validar `secret_2fa`, criar UI de ativação e rota `/auth/verify-2fa`) ou remover o código morto (`credentials.code` em `auth.ts`, `isTwoFactorVerified`/`needsTwoFactor` em `proxy.ts`).
+- Códigos de recuperação/backup para 2FA (caso o usuário perca o dispositivo com o app autenticador).
+- Exigir senha (não só o código TOTP atual) para desativar o 2FA, como camada extra de confirmação.
 
 ## Verificação
 

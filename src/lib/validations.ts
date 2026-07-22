@@ -42,6 +42,10 @@ export const financialInstitutionSchema = z.object({
     cor: z.string().regex(/^#[0-9A-F]{6}$/i, "Cor inválida").optional().or(z.literal("")),
 });
 
+export const twoFactorCodeSchema = z.object({
+    code: z.string().length(6, "Código deve ter 6 dígitos").regex(/^\d+$/, "Código deve conter apenas números"),
+});
+
 export const loginSchema = z.object({
     email: z.string().email("Email inválido"),
     password: z.string().min(6, "Senha deve ter no mínimo 6 caracteres"),
@@ -76,6 +80,7 @@ export type TransactionFormValues = z.infer<typeof transactionSchema>;
 export type CategoryInput = z.input<typeof categorySchema>;
 export type PaymentMethodInput = z.input<typeof paymentMethodSchema>;
 export type FinancialInstitutionInput = z.input<typeof financialInstitutionSchema>;
+export type TwoFactorCodeInput = z.input<typeof twoFactorCodeSchema>;
 export type LoginInput = z.input<typeof loginSchema>;
 export type RegisterInput = z.input<typeof registerSchema>;
 export type CreditCardInvoiceItemInput = z.input<typeof creditCardInvoiceItemSchema>;

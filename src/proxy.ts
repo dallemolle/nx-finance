@@ -7,23 +7,15 @@ export default withAuth(
     const isAuth = !!token;
     const isAuthPage = req.nextUrl.pathname.startsWith("/auth/login") ||
       req.nextUrl.pathname.startsWith("/auth/register");
-    const isVerify2FAPage = req.nextUrl.pathname === "/auth/verify-2fa";
 
     // Se o usuário não estiver logado e tentar acessar o dashboard, o withAuth redireciona para o login
 
-    if (isAuth) {
-      if (isAuthPage) {
-        return NextResponse.redirect(new URL("/", req.url));
-      }
-
-      // Se o usuário está logado mas ainda não passou pelo 2FA (segundo fator)
-      const isTwoFactorVerified = token.isTwoFactorVerified;
-      const needsTwoFactor = token.needsTwoFactor;
-
-      if (needsTwoFactor && !isTwoFactorVerified && !isVerify2FAPage) {
-        return NextResponse.redirect(new URL("/auth/verify-2fa", req.url));
-      }
+    if (isAuth && isAuthPage) {
+      return NextResponse.redirect(new URL("/", req.url));
     }
+
+    // O 2FA já é validado dentro de authorize() (auth.ts) antes do JWT
+    // existir, então não há um estado "logado mas pendente de 2FA" a checar aqui.
 
     return NextResponse.next();
   },

@@ -12,6 +12,12 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
+# DATABASE_URL is required to construct the Prisma Client and satisfy
+# prisma.config.ts's schema validation at build time, but neither
+# `prisma generate` nor `next build` actually connect to the database —
+# the real URL is only needed at runtime (injected via docker-compose).
+ENV DATABASE_URL="postgresql://user:password@localhost:5432/db?schema=public"
+
 # Generate Prisma Client
 RUN npx prisma generate
 
@@ -30,8 +36,8 @@ COPY --from=builder /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 COPY --from=deps --chown=nextjs:nodejs /app/node_modules ./node_modules
-COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
-COPY --from=builder /app/prisma ./prisma
+COPY --from=builder --chown=nextjs:nodejs /app/node_modules/.prisma ./node_modules/.prisma
+COPY --from=builder --chown=nextjs:nodejs /app/prisma ./prisma
 COPY --from=builder /app/package.json ./package.json
 
 # Copy entrypoint

@@ -12,19 +12,19 @@ interface SummaryCardsProps {
     };
 }
 
+function Variation({ value }: { value: number }) {
+    const isPositive = value >= 0;
+    return (
+        <div className={`flex items-center text-xs font-medium ${isPositive ? 'text-emerald-500' : 'text-rose-500'}`}>
+            {isPositive ? '+' : ''}{value.toFixed(1)}%
+            <span className="text-muted-foreground ml-1">vs mês anterior</span>
+        </div>
+    );
+}
+
 export function SummaryCards({ summary }: SummaryCardsProps) {
     const formatCurrency = (value: number) =>
         new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value);
-
-    const Variation = ({ value }: { value: number }) => {
-        const isPositive = value >= 0;
-        return (
-            <div className={`flex items-center text-xs font-medium ${isPositive ? 'text-emerald-500' : 'text-rose-500'}`}>
-                {isPositive ? '+' : ''}{value.toFixed(1)}%
-                <span className="text-muted-foreground ml-1">vs mês anterior</span>
-            </div>
-        );
-    };
 
     return (
         <div className="grid gap-6 md:grid-cols-3">

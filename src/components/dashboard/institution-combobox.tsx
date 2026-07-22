@@ -20,12 +20,14 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { createFinancialInstitution } from "@/lib/actions";
 import { toast } from "sonner";
+import { getErrorMessage } from "@/lib/utils";
+import type { FinancialInstitution } from "@/types/models";
 
 interface InstitutionComboboxProps {
   options: { id: string; nome: string; cor?: string | null }[];
   value?: string | null;
   onValueChange: (value: string) => void;
-  onAdded?: (newInstitution: any) => void;
+  onAdded?: (newInstitution: FinancialInstitution) => void;
 }
 
 export function InstitutionCombobox({ options, value, onValueChange, onAdded }: InstitutionComboboxProps) {
@@ -56,8 +58,8 @@ export function InstitutionCombobox({ options, value, onValueChange, onAdded }: 
       if (onAdded) onAdded(newInst);
       setDialogOpen(false);
       setOpen(false);
-    } catch (error: any) {
-      toast.error(error.message || "Erro ao criar instituição.");
+    } catch (error: unknown) {
+      toast.error(getErrorMessage(error, "Erro ao criar instituição."));
     } finally {
       setIsCreating(false);
     }

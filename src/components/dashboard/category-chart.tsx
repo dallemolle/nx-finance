@@ -9,6 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { getCategoryGroupName } from "@/lib/dashboard-utils";
+import type { TransactionDisplay } from "@/types/models";
 
 interface CategoryChartProps {
     data: {
@@ -16,7 +17,7 @@ interface CategoryChartProps {
         value: number;
         fill: string;
     }[];
-    transactions?: any[];
+    transactions?: TransactionDisplay[];
 }
 
 export function CategoryChart({ data, transactions = [] }: CategoryChartProps) {

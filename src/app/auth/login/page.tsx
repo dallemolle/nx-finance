@@ -39,7 +39,7 @@ export default function LoginPage() {
             } else {
                 router.push("/");
             }
-        } catch (err: any) {
+        } catch {
             setError("Erro ao autenticar. Verifique suas credenciais.");
         } finally {
             setLoading(false);

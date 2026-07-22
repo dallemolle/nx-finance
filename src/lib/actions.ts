@@ -1,14 +1,23 @@
 "use server";
 
-import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { revalidatePath } from "next/cache";
-import { categorySchema, paymentMethodSchema, transactionSchema, financialInstitutionSchema } from "@/lib/validations";
+import {
+    categorySchema,
+    paymentMethodSchema,
+    transactionSchema,
+    financialInstitutionSchema,
+    type TransactionInput,
+    type CategoryInput,
+    type PaymentMethodInput,
+    type FinancialInstitutionInput,
+} from "@/lib/validations";
 import { authOptions } from "@/lib/auth";
 import { getServerSession } from "next-auth";
 import { addMonths, format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Decimal } from "decimal.js";
+import { getPrismaErrorMessage } from "@/lib/utils";
 
 async function getUserId() {
     const session = await getServerSession(authOptions);
@@ -17,7 +26,7 @@ async function getUserId() {
 }
 
 // Transaction Actions
-export async function createTransaction(data: any) {
+export async function createTransaction(data: TransactionInput) {
     try {
         const userId = await getUserId();
         const validatedData = transactionSchema.parse(data);
@@ -32,10 +41,10 @@ export async function createTransaction(data: any) {
                 Array.from({ length: installmentsCount }).map((_, i) => {
                     const dueDate = addMonths(new Date(rest.data_vencimento), i);
                     const defaultDescription = `${rest.descricao} (${String(i + 1).padStart(2, '0')}/${String(installmentsCount).padStart(2, '0')})`;
-                    const description = (validatedData.installmentDescriptions && validatedData.installmentDescriptions[i]) 
-                        ? validatedData.installmentDescriptions[i] 
+                    const description = (validatedData.installmentDescriptions && validatedData.installmentDescriptions[i])
+                        ? validatedData.installmentDescriptions[i]
                         : defaultDescription;
-                    
+
                     const currentInstallmentValue = i === installmentsCount - 1 ? lastInstallmentValue : installmentValue;
 
                     return db.transaction.create({
@@ -77,13 +86,13 @@ export async function createTransaction(data: any) {
                 valor: Number(transaction.valor)
             }
         };
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error("Error creating transaction:", error);
-        throw new Error(error.message || "Erro ao criar transação");
+        throw new Error(getPrismaErrorMessage(error, "Erro ao criar transação"));
     }
 }
 
-export async function updateTransaction(id: string, data: any) {
+export async function updateTransaction(id: string, data: TransactionInput) {
     try {
         const userId = await getUserId();
         const validatedData = transactionSchema.parse(data);
@@ -103,19 +112,19 @@ export async function updateTransaction(id: string, data: any) {
                 valor: Number(transaction.valor)
             }
         };
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error("Error updating transaction:", error);
-        throw new Error(error.message || "Erro ao atualizar transação");
+        throw new Error(getPrismaErrorMessage(error, "Erro ao atualizar transação"));
     }
 }
 
 export async function payTransaction(id: string) {
     try {
         const userId = await getUserId();
-        
+
         const transaction = await db.transaction.update({
             where: { id, userId },
-            data: { status: "PAGO" },
+            data: { status: "PAGO", data_pagamento: new Date() },
         });
 
         revalidatePath("/dashboard");
@@ -127,9 +136,9 @@ export async function payTransaction(id: string) {
                 valor: Number(transaction.valor)
             }
         };
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error("Error paying transaction:", error);
-        throw new Error(error.message || "Erro ao liquidar transação");
+        throw new Error(getPrismaErrorMessage(error, "Erro ao liquidar transação"));
     }
 }
 
@@ -143,14 +152,14 @@ export async function deleteTransaction(id: string) {
         revalidatePath("/dashboard");
         revalidatePath("/reports");
         return { success: true };
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error("Error deleting transaction:", error);
-        throw new Error(error.message || "Erro ao deletar transação");
+        throw new Error(getPrismaErrorMessage(error, "Erro ao deletar transação"));
     }
 }
 
 // Category Actions
-export async function createCategory(data: any) {
+export async function createCategory(data: CategoryInput) {
     try {
         const userId = await getUserId();
         const validatedData = categorySchema.parse(data);
@@ -178,14 +187,15 @@ export async function createCategory(data: any) {
 
         revalidatePath("/dashboard");
         revalidatePath("/reports");
+        revalidatePath("/dashboard/settings");
         return category;
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error("Error creating category:", error);
-        throw new Error(error.message || "Erro ao criar categoria");
+        throw new Error(getPrismaErrorMessage(error, "Erro ao criar categoria"));
     }
 }
 
-export async function updateCategory(id: string, data: any) {
+export async function updateCategory(id: string, data: Partial<CategoryInput>) {
     try {
         const userId = await getUserId();
         const validatedData = categorySchema.partial().parse(data);
@@ -197,20 +207,18 @@ export async function updateCategory(id: string, data: any) {
 
         revalidatePath("/dashboard");
         revalidatePath("/reports");
+        revalidatePath("/dashboard/settings");
         return category;
-    } catch (error: any) {
-        if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
-            throw new Error("Já existe um registro com este nome para este usuário.");
-        }
+    } catch (error: unknown) {
         console.error("Error updating category:", error);
-        throw new Error(error.message || "Erro ao atualizar categoria");
+        throw new Error(getPrismaErrorMessage(error, "Erro ao atualizar categoria"));
     }
 }
 
 export async function deleteCategory(id: string) {
     try {
         const userId = await getUserId();
-        
+
         const transactionCount = await db.transaction.count({
             where: { userId, categoria_id: id },
         });
@@ -225,15 +233,16 @@ export async function deleteCategory(id: string) {
 
         revalidatePath("/dashboard");
         revalidatePath("/reports");
+        revalidatePath("/dashboard/settings");
         return { success: true };
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error("Error deleting category:", error);
-        throw new Error(error.message || "Erro ao excluir categoria");
+        throw new Error(getPrismaErrorMessage(error, "Erro ao excluir categoria"));
     }
 }
 
 // Payment Method Actions
-export async function createPaymentMethod(data: any) {
+export async function createPaymentMethod(data: PaymentMethodInput) {
     try {
         const userId = await getUserId();
         const validatedData = paymentMethodSchema.parse(data);
@@ -259,14 +268,15 @@ export async function createPaymentMethod(data: any) {
 
         revalidatePath("/dashboard");
         revalidatePath("/reports");
+        revalidatePath("/dashboard/settings");
         return paymentMethod;
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error("Error creating payment method:", error);
-        throw new Error(error.message || "Erro ao criar meio de pagamento");
+        throw new Error(getPrismaErrorMessage(error, "Erro ao criar meio de pagamento"));
     }
 }
 
-export async function updatePaymentMethod(id: string, data: any) {
+export async function updatePaymentMethod(id: string, data: Partial<PaymentMethodInput>) {
     try {
         const userId = await getUserId();
         const validatedData = paymentMethodSchema.partial().parse(data);
@@ -278,20 +288,18 @@ export async function updatePaymentMethod(id: string, data: any) {
 
         revalidatePath("/dashboard");
         revalidatePath("/reports");
+        revalidatePath("/dashboard/settings");
         return paymentMethod;
-    } catch (error: any) {
-        if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
-            throw new Error("Já existe um registro com este nome.");
-        }
+    } catch (error: unknown) {
         console.error("Error updating payment method:", error);
-        throw new Error(error.message || "Erro ao atualizar meio de pagamento");
+        throw new Error(getPrismaErrorMessage(error, "Erro ao atualizar meio de pagamento"));
     }
 }
 
 export async function deletePaymentMethod(id: string) {
     try {
         const userId = await getUserId();
-        
+
         const transactionCount = await db.transaction.count({
             where: { userId, tipo_pagamento_id: id },
         });
@@ -306,15 +314,16 @@ export async function deletePaymentMethod(id: string) {
 
         revalidatePath("/dashboard");
         revalidatePath("/reports");
+        revalidatePath("/dashboard/settings");
         return { success: true };
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error("Error deleting payment method:", error);
-        throw new Error(error.message || "Erro ao excluir meio de pagamento");
+        throw new Error(getPrismaErrorMessage(error, "Erro ao excluir meio de pagamento"));
     }
 }
 
 // Financial Institution Actions
-export async function createFinancialInstitution(data: any) {
+export async function createFinancialInstitution(data: FinancialInstitutionInput) {
     try {
         const userId = await getUserId();
         const validatedData = financialInstitutionSchema.parse(data);
@@ -340,14 +349,15 @@ export async function createFinancialInstitution(data: any) {
 
         revalidatePath("/dashboard");
         revalidatePath("/reports");
+        revalidatePath("/dashboard/settings");
         return financialInstitution;
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error("Error creating financial institution:", error);
-        throw new Error(error.message || "Erro ao criar instituição financeira");
+        throw new Error(getPrismaErrorMessage(error, "Erro ao criar instituição financeira"));
     }
 }
 
-export async function updateFinancialInstitution(id: string, data: any) {
+export async function updateFinancialInstitution(id: string, data: Partial<FinancialInstitutionInput>) {
     try {
         const userId = await getUserId();
         const validatedData = financialInstitutionSchema.partial().parse(data);
@@ -359,20 +369,18 @@ export async function updateFinancialInstitution(id: string, data: any) {
 
         revalidatePath("/dashboard");
         revalidatePath("/reports");
+        revalidatePath("/dashboard/settings");
         return financialInstitution;
-    } catch (error: any) {
-        if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
-            throw new Error("Já existe uma instituição com este nome.");
-        }
+    } catch (error: unknown) {
         console.error("Error updating financial institution:", error);
-        throw new Error(error.message || "Erro ao atualizar instituição financeira");
+        throw new Error(getPrismaErrorMessage(error, "Erro ao atualizar instituição financeira"));
     }
 }
 
 export async function deleteFinancialInstitution(id: string) {
     try {
         const userId = await getUserId();
-        
+
         // Validation: verify if the institution has linked transactions
         const transactionCount = await db.transaction.count({
             where: {
@@ -394,9 +402,10 @@ export async function deleteFinancialInstitution(id: string) {
 
         revalidatePath("/dashboard");
         revalidatePath("/reports");
+        revalidatePath("/dashboard/settings");
         return { success: true };
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error("Error deleting financial institution:", error);
-        throw new Error(error.message || "Erro ao excluir instituição financeira");
+        throw new Error(getPrismaErrorMessage(error, "Erro ao excluir instituição financeira"));
     }
 }

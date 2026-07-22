@@ -50,7 +50,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                         </div>
 
                         <div className="grid grid-cols-1 sm:grid-cols-2 md:flex md:flex-row gap-3 w-full md:w-auto">
-                            <ExportButtons className="w-full" />
+                            <ExportButtons transactions={data.monthlyTransactions} month={month} year={year} className="w-full" />
                             <CsvImportDialog userId={session.user.id} className="w-full" />
                             <CreditCardInvoiceDialog userId={session.user.id} className="w-full" />
                             <NewTransactionDialog userId={session.user.id} className="w-full" />

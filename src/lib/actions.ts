@@ -1,6 +1,5 @@
 "use server";
 
-import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { revalidatePath } from "next/cache";
 import {
@@ -18,7 +17,7 @@ import { getServerSession } from "next-auth";
 import { addMonths, format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Decimal } from "decimal.js";
-import { getErrorMessage } from "@/lib/utils";
+import { getPrismaErrorMessage } from "@/lib/utils";
 
 async function getUserId() {
     const session = await getServerSession(authOptions);
@@ -89,7 +88,7 @@ export async function createTransaction(data: TransactionInput) {
         };
     } catch (error: unknown) {
         console.error("Error creating transaction:", error);
-        throw new Error(getErrorMessage(error, "Erro ao criar transação"));
+        throw new Error(getPrismaErrorMessage(error, "Erro ao criar transação"));
     }
 }
 
@@ -115,7 +114,7 @@ export async function updateTransaction(id: string, data: TransactionInput) {
         };
     } catch (error: unknown) {
         console.error("Error updating transaction:", error);
-        throw new Error(getErrorMessage(error, "Erro ao atualizar transação"));
+        throw new Error(getPrismaErrorMessage(error, "Erro ao atualizar transação"));
     }
 }
 
@@ -125,7 +124,7 @@ export async function payTransaction(id: string) {
 
         const transaction = await db.transaction.update({
             where: { id, userId },
-            data: { status: "PAGO" },
+            data: { status: "PAGO", data_pagamento: new Date() },
         });
 
         revalidatePath("/dashboard");
@@ -139,7 +138,7 @@ export async function payTransaction(id: string) {
         };
     } catch (error: unknown) {
         console.error("Error paying transaction:", error);
-        throw new Error(getErrorMessage(error, "Erro ao liquidar transação"));
+        throw new Error(getPrismaErrorMessage(error, "Erro ao liquidar transação"));
     }
 }
 
@@ -155,7 +154,7 @@ export async function deleteTransaction(id: string) {
         return { success: true };
     } catch (error: unknown) {
         console.error("Error deleting transaction:", error);
-        throw new Error(getErrorMessage(error, "Erro ao deletar transação"));
+        throw new Error(getPrismaErrorMessage(error, "Erro ao deletar transação"));
     }
 }
 
@@ -192,7 +191,7 @@ export async function createCategory(data: CategoryInput) {
         return category;
     } catch (error: unknown) {
         console.error("Error creating category:", error);
-        throw new Error(getErrorMessage(error, "Erro ao criar categoria"));
+        throw new Error(getPrismaErrorMessage(error, "Erro ao criar categoria"));
     }
 }
 
@@ -211,11 +210,8 @@ export async function updateCategory(id: string, data: Partial<CategoryInput>) {
         revalidatePath("/dashboard/settings");
         return category;
     } catch (error: unknown) {
-        if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
-            throw new Error("Já existe um registro com este nome para este usuário.");
-        }
         console.error("Error updating category:", error);
-        throw new Error(getErrorMessage(error, "Erro ao atualizar categoria"));
+        throw new Error(getPrismaErrorMessage(error, "Erro ao atualizar categoria"));
     }
 }
 
@@ -241,7 +237,7 @@ export async function deleteCategory(id: string) {
         return { success: true };
     } catch (error: unknown) {
         console.error("Error deleting category:", error);
-        throw new Error(getErrorMessage(error, "Erro ao excluir categoria"));
+        throw new Error(getPrismaErrorMessage(error, "Erro ao excluir categoria"));
     }
 }
 
@@ -276,7 +272,7 @@ export async function createPaymentMethod(data: PaymentMethodInput) {
         return paymentMethod;
     } catch (error: unknown) {
         console.error("Error creating payment method:", error);
-        throw new Error(getErrorMessage(error, "Erro ao criar meio de pagamento"));
+        throw new Error(getPrismaErrorMessage(error, "Erro ao criar meio de pagamento"));
     }
 }
 
@@ -295,11 +291,8 @@ export async function updatePaymentMethod(id: string, data: Partial<PaymentMetho
         revalidatePath("/dashboard/settings");
         return paymentMethod;
     } catch (error: unknown) {
-        if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
-            throw new Error("Já existe um registro com este nome.");
-        }
         console.error("Error updating payment method:", error);
-        throw new Error(getErrorMessage(error, "Erro ao atualizar meio de pagamento"));
+        throw new Error(getPrismaErrorMessage(error, "Erro ao atualizar meio de pagamento"));
     }
 }
 
@@ -325,7 +318,7 @@ export async function deletePaymentMethod(id: string) {
         return { success: true };
     } catch (error: unknown) {
         console.error("Error deleting payment method:", error);
-        throw new Error(getErrorMessage(error, "Erro ao excluir meio de pagamento"));
+        throw new Error(getPrismaErrorMessage(error, "Erro ao excluir meio de pagamento"));
     }
 }
 
@@ -360,7 +353,7 @@ export async function createFinancialInstitution(data: FinancialInstitutionInput
         return financialInstitution;
     } catch (error: unknown) {
         console.error("Error creating financial institution:", error);
-        throw new Error(getErrorMessage(error, "Erro ao criar instituição financeira"));
+        throw new Error(getPrismaErrorMessage(error, "Erro ao criar instituição financeira"));
     }
 }
 
@@ -379,11 +372,8 @@ export async function updateFinancialInstitution(id: string, data: Partial<Finan
         revalidatePath("/dashboard/settings");
         return financialInstitution;
     } catch (error: unknown) {
-        if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
-            throw new Error("Já existe uma instituição com este nome.");
-        }
         console.error("Error updating financial institution:", error);
-        throw new Error(getErrorMessage(error, "Erro ao atualizar instituição financeira"));
+        throw new Error(getPrismaErrorMessage(error, "Erro ao atualizar instituição financeira"));
     }
 }
 
@@ -416,6 +406,6 @@ export async function deleteFinancialInstitution(id: string) {
         return { success: true };
     } catch (error: unknown) {
         console.error("Error deleting financial institution:", error);
-        throw new Error(getErrorMessage(error, "Erro ao excluir instituição financeira"));
+        throw new Error(getPrismaErrorMessage(error, "Erro ao excluir instituição financeira"));
     }
 }

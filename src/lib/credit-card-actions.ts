@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { creditCardInvoiceSchema, type CreditCardInvoiceInput } from "@/lib/validations";
-import { getErrorMessage } from "@/lib/utils";
+import { getErrorMessage, getPrismaErrorMessage } from "@/lib/utils";
 
 async function getUserId() {
     const session = await getServerSession(authOptions);
@@ -76,7 +76,7 @@ export async function importCreditCardInvoice(data: CreditCardInvoiceInput) {
         };
     } catch (error: unknown) {
         console.error("Error importing credit card invoice:", error);
-        throw new Error(getErrorMessage(error, "Erro ao importar fatura de cartão de crédito"));
+        throw new Error(getPrismaErrorMessage(error, "Erro ao importar fatura de cartão de crédito"));
     }
 }
 

@@ -4,7 +4,7 @@ import { db } from "@/lib/db";
 import { revalidatePath } from "next/cache";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { getErrorMessage } from "@/lib/utils";
+import { getErrorMessage, getPrismaErrorMessage } from "@/lib/utils";
 import type { TransactionStatus, TransactionType } from "@prisma/client";
 
 async function getUserId() {
@@ -49,7 +49,7 @@ export async function saveMappingSuggestion(searchTerm: string, categoryId: stri
         return suggestion;
     } catch (error: unknown) {
         console.error("Error saving mapping suggestion:", error);
-        throw new Error(getErrorMessage(error, "Erro ao salvar mapeamento inteligente"));
+        throw new Error(getPrismaErrorMessage(error, "Erro ao salvar mapeamento inteligente"));
     }
 }
 
@@ -116,6 +116,6 @@ export async function processBatchTransactions(transactions: BatchTransactionInp
         return { success: true, count: createdTransactions.length };
     } catch (error: unknown) {
         console.error("Error processing batch transactions:", error);
-        throw new Error(getErrorMessage(error, "Erro ao importar transações em lote"));
+        throw new Error(getPrismaErrorMessage(error, "Erro ao importar transações em lote"));
     }
 }

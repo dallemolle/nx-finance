@@ -24,7 +24,7 @@ Auditoria completa do projeto (Next.js 16 + TypeScript + Prisma/PostgreSQL) sob 
 
 ## Status Geral
 
-**12 de 16 itens concluídos.**
+**15 de 16 itens concluídos.** Único pendente: item 3 (2FA), com decisão explícita do usuário de deixar como está por enquanto.
 
 ## 🔴 Prioridade Alta (Crítico / Bugs / Gargalos)
 
@@ -42,7 +42,7 @@ Auditoria completa do projeto (Next.js 16 + TypeScript + Prisma/PostgreSQL) sob 
 
 6. ✅ **CONCLUÍDO** — **Tipagem `any` sistemática na fronteira client→server.** Todas as Server Actions recebiam `data: any` em vez do tipo inferido do schema Zod; `dashboard.ts`/`reports.ts` também "achatavam" resultados do Prisma para `any`. → 123 erros `no-explicit-any` eliminados em 21 arquivos (`z.input`/`z.infer` em `validations.ts`, tipos de modelo em `src/types/models.ts`, helper `getErrorMessage` em `src/lib/utils.ts`). `tsc --noEmit`, `npm run lint` e `npm run build` limpos.
 
-7. ⬜ **PENDENTE** — **Tratamento de erro Prisma incompleto e assimétrico.** Só `updateCategory`/`updatePaymentMethod`/`updateFinancialInstitution` tratam `P2002`; os `create*` equivalentes não tratam. Nenhuma action trata `P2025` (not found) ou `P2003` (FK).
+7. ✅ **CONCLUÍDO** — **Tratamento de erro Prisma incompleto e assimétrico.** Só `updateCategory`/`updatePaymentMethod`/`updateFinancialInstitution` tratavam `P2002`; os `create*` equivalentes não tratavam, e nenhuma action tratava `P2025` (not found) ou `P2003` (FK). → Criado `getPrismaErrorMessage()` em `src/lib/utils.ts`, centralizando a tradução de `P2002`/`P2025`/`P2003` em mensagens amigáveis; aplicado em todos os catches de mutação de `actions.ts`, `credit-card-actions.ts`, `csv-actions.ts` e `auth-actions.ts` (que antes não tinha try/catch nenhum em `registerUser`).
 
 8. ✅ **CONCLUÍDO** — **`importCreditCardInvoice` inseria itens um a um** (`Promise.all(items.map(create))` — N `INSERT`s separados). → trocado por `db.creditCardInvoiceItem.createMany({ data: [...] })`.
 
@@ -56,9 +56,9 @@ Auditoria completa do projeto (Next.js 16 + TypeScript + Prisma/PostgreSQL) sob 
 
 12. ✅ **CONCLUÍDO** — **Inconsistência de loading state** entre `credit-card-invoice-dialog.tsx` (usa `Loader2`) e `csv-import-dialog.tsx` (só texto "Processando..."). → `csv-import-dialog.tsx` agora usa o mesmo padrão `Loader2` + texto.
 
-13. ⬜ **PENDENTE** — **`export-buttons.tsx`** é 100% mock (`alert()`), sem exportação real de CSV/PDF.
+13. ✅ **CONCLUÍDO** — **`export-buttons.tsx`** era 100% mock (`alert()`), sem exportação real de CSV/PDF. → CSV real gerado client-side (Blob + download, delimitador `;` e BOM para acentuação correta no Excel pt-BR); PDF via janela de impressão do navegador (`window.print()`) com tabela formatada — sem novas dependências. Componente agora recebe `transactions`/`month`/`year` de `data.monthlyTransactions` em `src/app/page.tsx`.
 
-14. ⬜ **PENDENTE** — **`data_pagamento` nunca é preenchido** por `payTransaction()` — campo existe no schema mas fica sempre `null`.
+14. ✅ **CONCLUÍDO** — **`data_pagamento` nunca era preenchido** por `payTransaction()` — campo existe no schema mas ficava sempre `null`. → `payTransaction()` agora seta `data_pagamento: new Date()` junto com `status: "PAGO"`.
 
 15. ✅ **CONCLUÍDO** — **`@auth/prisma-adapter`** era dependência instalada e não usada (sessão é 100% JWT). → removida via `npm uninstall`.
 
@@ -68,9 +68,9 @@ Auditoria completa do projeto (Next.js 16 + TypeScript + Prisma/PostgreSQL) sob 
 
 ## Próximos Candidatos (por esforço)
 
-- **Baixo esforço, mecânico, sem decisão pendente:** item 13 (`export-buttons.tsx` — exportação real de CSV/PDF), item 14 (preencher `data_pagamento` em `payTransaction()`).
-- **Esforço médio:** item 7 (padronizar tratamento de `P2002`/`P2025`/`P2003` em todas as Server Actions).
-- **Decidido, aguardando o usuário:** item 3 (2FA — usuário optou por deixar como está por enquanto; casca vazia continua documentada como risco conhecido).
+Todos os itens mecânicos e de esforço médio foram concluídos. Resta apenas:
+
+- **Decidido, aguardando o usuário:** item 3 (2FA — usuário optou por deixar como está por enquanto; casca vazia continua documentada como risco conhecido). Se decidir agir, as opções são: completar o fluxo (gerar/validar `secret_2fa`, criar UI de ativação e rota `/auth/verify-2fa`) ou remover o código morto (`credentials.code` em `auth.ts`, `isTwoFactorVerified`/`needsTwoFactor` em `proxy.ts`).
 
 ## Verificação
 

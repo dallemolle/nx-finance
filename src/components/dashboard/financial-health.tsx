@@ -12,10 +12,10 @@ export function FinancialHealth({ score }: FinancialHealthProps) {
     // Score is % of income spent. 0 = perfect, >100 = critical
     const clampedScore = Math.min(score, 100);
     const getStatus = () => {
-        if (score < 50) return { label: "Excelente", color: "text-emerald-500", bg: "bg-emerald-500" };
-        if (score < 80) return { label: "Boa", color: "text-indigo-500", bg: "bg-indigo-500" };
-        if (score < 100) return { label: "Alerta", color: "text-orange-500", bg: "bg-orange-500" };
-        return { label: "Crítica", color: "text-rose-500", bg: "bg-rose-500" };
+        if (score < 50) return { label: "Excelente", color: "text-emerald-500 dark:text-emerald-400", bg: "bg-emerald-500" };
+        if (score < 80) return { label: "Boa", color: "text-indigo-500 dark:text-indigo-400", bg: "bg-indigo-500" };
+        if (score < 100) return { label: "Alerta", color: "text-orange-500 dark:text-orange-400", bg: "bg-orange-500" };
+        return { label: "Crítica", color: "text-rose-500 dark:text-rose-400", bg: "bg-rose-500" };
     };
 
     const status = getStatus();

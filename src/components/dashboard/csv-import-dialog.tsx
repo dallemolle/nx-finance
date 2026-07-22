@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Upload, ChevronRight, X, AlertCircle } from "lucide-react";
+import { Upload, ChevronRight, X, AlertCircle, Loader2 } from "lucide-react";
 import Papa from "papaparse";
 import { getCategories, getPaymentMethods, getFinancialInstitutions } from "@/lib/reports";
 import { InstitutionCombobox } from "@/components/dashboard/institution-combobox";
@@ -224,7 +224,7 @@ export function CsvImportDialog({ userId, className }: { userId: string, classNa
 
                 <div className="flex-1 min-h-0 overflow-y-auto pr-2 mt-4 space-y-6">
                     {error && (
-                        <div className="p-3 bg-red-50 text-red-600 rounded-lg flex items-center gap-2 text-sm font-medium">
+                        <div className="p-3 bg-red-50 dark:bg-red-950/40 text-red-600 dark:text-red-400 rounded-lg flex items-center gap-2 text-sm font-medium">
                             <AlertCircle className="w-4 h-4" />
                             {error}
                         </div>
@@ -286,7 +286,7 @@ export function CsvImportDialog({ userId, className }: { userId: string, classNa
                                 <span>Revisão e Mapeamento</span>
                                 <span className="text-muted-foreground">{parsedData.length} registros</span>
                             </div>
-                            <div className="border rounded-lg overflow-hidden shrink-0">
+                            <div className="border rounded-lg overflow-x-auto shrink-0">
                                 <Table>
                                     <TableHeader className="bg-muted/50">
                                         <TableRow>
@@ -367,7 +367,14 @@ export function CsvImportDialog({ userId, className }: { userId: string, classNa
                         </Button>
                     ) : (
                         <Button onClick={handleSubmit} disabled={isLoading || parsedData.some(r => !r.category_id)}>
-                            {isLoading ? "Processando..." : "Confirmar Importação"}
+                            {isLoading ? (
+                                <>
+                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                    Processando...
+                                </>
+                            ) : (
+                                "Confirmar Importação"
+                            )}
                         </Button>
                     )}
                 </div>

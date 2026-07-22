@@ -234,7 +234,7 @@ export function CreditCardInvoiceDialog({ userId, className }: { userId: string;
 
                 <div className="flex-1 min-h-0 overflow-y-auto pr-2 mt-4 space-y-6">
                     {error && (
-                        <div className="p-3 bg-red-50 text-red-600 rounded-lg flex items-center gap-2 text-sm font-medium">
+                        <div className="p-3 bg-red-50 dark:bg-red-950/40 text-red-600 dark:text-red-400 rounded-lg flex items-center gap-2 text-sm font-medium">
                             <AlertCircle className="w-4 h-4" />
                             {error}
                         </div>
@@ -311,7 +311,7 @@ export function CreditCardInvoiceDialog({ userId, className }: { userId: string;
                                     <span className="font-black text-rose-600">{formatCurrency(totalAmount)}</span>
                                 </div>
                             </div>
-                            <div className="border rounded-lg overflow-hidden">
+                            <div className="border rounded-lg overflow-x-auto">
                                 <Table>
                                     <TableHeader className="bg-muted/50">
                                         <TableRow>

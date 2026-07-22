@@ -3,9 +3,12 @@
 import { useMemo, useState, type ReactNode } from "react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { ReportFilters } from "./report-filters";
-import { ChevronRight, ChevronDown, CreditCard } from "lucide-react";
+import { ChevronRight, ChevronDown, ChevronLeft, CreditCard } from "lucide-react";
 import type { TransactionDisplay, InvoiceItemDisplay, Category, PaymentMethod, FinancialInstitution } from "@/types/models";
+
+const PAGE_SIZE = 50;
 
 interface ReportContentProps {
     transactions: TransactionDisplay[];
@@ -20,6 +23,13 @@ export function ReportContent({ transactions, categories, institutions, paymentM
     const [institutionFilter, setInstitutionFilter] = useState("ALL");
     const [paymentMethodFilter, setPaymentMethodFilter] = useState("ALL");
     const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
+    const [currentPage, setCurrentPage] = useState(1);
+    const filterKey = `${statusFilter}|${categoryFilter}|${institutionFilter}|${paymentMethodFilter}`;
+    const [prevFilterKey, setPrevFilterKey] = useState(filterKey);
+    if (filterKey !== prevFilterKey) {
+        setPrevFilterKey(filterKey);
+        setCurrentPage(1);
+    }
 
     const toggleExpand = (id: string) => {
         setExpandedRows(prev => {
@@ -39,6 +49,12 @@ export function ReportContent({ transactions, categories, institutions, paymentM
             return matchesStatus && matchesCategory && matchesInstitution && matchesPaymentMethod;
         });
     }, [transactions, statusFilter, categoryFilter, institutionFilter, paymentMethodFilter]);
+
+    const totalPages = Math.max(1, Math.ceil(filteredTransactions.length / PAGE_SIZE));
+    const paginatedTransactions = useMemo(() => {
+        const start = (currentPage - 1) * PAGE_SIZE;
+        return filteredTransactions.slice(start, start + PAGE_SIZE);
+    }, [filteredTransactions, currentPage]);
 
     // Cálculo dos Totais por Meio de Pagamento (para o Dropdown)
     // Reflete o somatório total de cada método dentro deste mês
@@ -106,6 +122,7 @@ export function ReportContent({ transactions, categories, institutions, paymentM
             </div>
 
             <div className="border rounded-xl shadow-sm overflow-hidden bg-card ring-1 ring-slate-200 dark:ring-slate-800">
+                <div className="overflow-x-auto">
                 <Table>
                     <TableHeader className="bg-muted/50">
                         <TableRow>
@@ -125,7 +142,7 @@ export function ReportContent({ transactions, categories, institutions, paymentM
                                     Nenhuma transação encontrada para os filtros selecionados.
                                 </TableCell>
                             </TableRow>
-                        ) : filteredTransactions.flatMap((t) => {
+                        ) : paginatedTransactions.flatMap((t) => {
                             const isExpanded = expandedRows.has(t.id);
                             const hasInvoiceItems = t.is_invoice_header && (t.invoiceItems?.length ?? 0) > 0;
 
@@ -179,7 +196,7 @@ export function ReportContent({ transactions, categories, institutions, paymentM
                                         </div>
                                     </TableCell>
                                     <TableCell className="text-sm text-muted-foreground">{t.displayDate}</TableCell>
-                                    <TableCell className={`text-sm font-black tracking-tight ${t.tipo === 'ENTRADA' ? 'text-emerald-600' : 'text-rose-600'}`}>
+                                    <TableCell className={`text-sm font-black tracking-tight ${t.tipo === 'ENTRADA' ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
                                         {t.tipo === 'ENTRADA' ? '+' : '-'} {t.formattedAmount}
                                     </TableCell>
                                     <TableCell>{getStatusBadge(t.status)}</TableCell>
@@ -207,7 +224,7 @@ export function ReportContent({ transactions, categories, institutions, paymentM
                                                 </div>
                                             </TableCell>
                                             <TableCell className="text-xs text-muted-foreground">{item.displayDate}</TableCell>
-                                            <TableCell className="text-xs font-semibold text-rose-500">
+                                            <TableCell className="text-xs font-semibold text-rose-500 dark:text-rose-400">
                                                 - {item.formattedAmount}
                                             </TableCell>
                                             <TableCell />
@@ -220,7 +237,38 @@ export function ReportContent({ transactions, categories, institutions, paymentM
                         })}
                     </TableBody>
                 </Table>
+                </div>
             </div>
+
+            {filteredTransactions.length > 0 && (
+                <div className="flex flex-wrap items-center justify-between gap-3 px-1 text-sm">
+                    <span className="text-muted-foreground">
+                        Mostrando {(currentPage - 1) * PAGE_SIZE + 1}
+                        –{Math.min(currentPage * PAGE_SIZE, filteredTransactions.length)} de {filteredTransactions.length}
+                    </span>
+                    <div className="flex items-center gap-2">
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                            disabled={currentPage === 1}
+                        >
+                            <ChevronLeft className="w-4 h-4" />
+                        </Button>
+                        <span className="text-muted-foreground font-medium">
+                            Página {currentPage} de {totalPages}
+                        </span>
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                            disabled={currentPage === totalPages}
+                        >
+                            <ChevronRight className="w-4 h-4" />
+                        </Button>
+                    </div>
+                </div>
+            )}
 
             <div className="flex flex-wrap items-center justify-center sm:justify-between bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-4 rounded-xl shadow-sm">
                 <div className="flex flex-wrap items-center justify-center gap-4 sm:gap-8 text-sm font-bold tracking-tight">

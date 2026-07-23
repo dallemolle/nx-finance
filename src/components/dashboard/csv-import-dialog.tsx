@@ -8,11 +8,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Upload, ChevronRight, X, AlertCircle, Loader2 } from "lucide-react";
+import { Upload, ChevronRight, X, AlertCircle, Loader2, Sparkles } from "lucide-react";
 import Papa from "papaparse";
 import { getCategories, getPaymentMethods, getFinancialInstitutions } from "@/lib/reports";
 import { InstitutionCombobox } from "@/components/dashboard/institution-combobox";
 import { processBatchTransactions, getMappingSuggestions, type BatchTransactionInput } from "@/lib/csv-actions";
+import { getMerchantSignature } from "@/lib/dashboard-utils";
 import { cn, getErrorMessage } from "@/lib/utils";
 import { createCategory, createPaymentMethod } from "@/lib/actions";
 import { Combobox } from "@/components/ui/combobox";
@@ -26,6 +27,7 @@ interface ParsedRow {
     amount: number;
     date: string;
     category_id: string;
+    matchedByHistory: boolean;
 }
 
 export function CsvImportDialog({ userId, className }: { userId: string, className?: string }) {
@@ -113,7 +115,8 @@ export function CsvImportDialog({ userId, className }: { userId: string, classNa
                                 : new Date().toISOString().split('T')[0];
 
                         // Find category suggestion based on search_term
-                        const guess = suggestions.find(s => title.toLowerCase().includes(s.search_term));
+                        const signature = getMerchantSignature(title);
+                        const guess = suggestions.find(s => s.search_term === signature);
 
                         return {
                             id: index,
@@ -122,6 +125,7 @@ export function CsvImportDialog({ userId, className }: { userId: string, classNa
                             amount: isNaN(amount) ? 0 : amount,
                             date: date,
                             category_id: guess ? guess.categoria_id : "",
+                            matchedByHistory: !!guess,
                         };
                     });
 
@@ -142,7 +146,10 @@ export function CsvImportDialog({ userId, className }: { userId: string, classNa
     };
 
     const handleRowChange = <K extends keyof ParsedRow>(id: number, field: K, value: ParsedRow[K]) => {
-        setParsedData(prev => prev.map(row => row.id === id ? { ...row, [field]: value } : row));
+        setParsedData(prev => prev.map(row => row.id === id
+            ? { ...row, [field]: value, ...(field === "category_id" ? { matchedByHistory: false } : {}) }
+            : row
+        ));
     };
 
     const handleCategoryCreate = async (id: number, catName: string) => {
@@ -316,6 +323,7 @@ export function CsvImportDialog({ userId, className }: { userId: string, classNa
                                                     />
                                                 </TableCell>
                                                 <TableCell className="p-2">
+                                                    <div className="flex items-center gap-1.5">
                                                     <Select value={row.category_id} onValueChange={(val) => {
                                                         if (val === "NEW") {
                                                             const catName = prompt("Nome da nova categoria (Saída):");
@@ -339,6 +347,16 @@ export function CsvImportDialog({ userId, className }: { userId: string, classNa
                                                             <SelectItem value="NEW" className="font-bold text-blue-600">+ Nova Categoria</SelectItem>
                                                         </SelectContent>
                                                     </Select>
+                                                    {row.matchedByHistory && (
+                                                        <span
+                                                            title="Categoria sugerida com base no histórico"
+                                                            className="shrink-0 flex items-center gap-1 text-[10px] font-semibold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/40 rounded-full px-2 py-0.5"
+                                                        >
+                                                            <Sparkles className="w-3 h-3" />
+                                                            Sugerido
+                                                        </span>
+                                                    )}
+                                                    </div>
                                                 </TableCell>
                                                 <TableCell className="p-2 text-center">
                                                     <Button

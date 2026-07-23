@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { getErrorMessage, getPrismaErrorMessage } from "@/lib/utils";
+import { getMerchantSignature } from "@/lib/dashboard-utils";
 import type { TransactionStatus, TransactionType } from "@prisma/client";
 
 async function getUserId() {
@@ -30,10 +31,11 @@ export async function getMappingSuggestions() {
 export async function saveMappingSuggestion(searchTerm: string, categoryId: string) {
     try {
         const userId = await getUserId();
+        const signature = getMerchantSignature(searchTerm);
         const suggestion = await db.mappingSuggestion.upsert({
             where: {
                 search_term_userId: {
-                    search_term: searchTerm.toLowerCase().trim(),
+                    search_term: signature,
                     userId
                 }
             },
@@ -41,7 +43,7 @@ export async function saveMappingSuggestion(searchTerm: string, categoryId: stri
                 categoria_id: categoryId
             },
             create: {
-                search_term: searchTerm.toLowerCase().trim(),
+                search_term: signature,
                 categoria_id: categoryId,
                 userId
             }
@@ -90,11 +92,12 @@ export async function processBatchTransactions(transactions: BatchTransactionInp
         // Group by search term to avoid redundant writes
         for (const t of transactions) {
             if (t.original_title && t.categoria_id) {
-                const searchTerm = t.original_title.toLowerCase().trim();
+                const signature = getMerchantSignature(t.original_title);
+                if (!signature) continue;
                 await db.mappingSuggestion.upsert({
                     where: {
                         search_term_userId: {
-                            search_term: searchTerm,
+                            search_term: signature,
                             userId
                         }
                     },
@@ -102,7 +105,7 @@ export async function processBatchTransactions(transactions: BatchTransactionInp
                         categoria_id: t.categoria_id
                     },
                     create: {
-                        search_term: searchTerm,
+                        search_term: signature,
                         categoria_id: t.categoria_id,
                         userId
                     }

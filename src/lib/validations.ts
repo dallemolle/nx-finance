@@ -57,7 +57,8 @@ export const registerSchema = loginSchema.extend({
 
 export const creditCardInvoiceItemSchema = z.object({
     descricao: z.string().min(1, "Descrição é obrigatória"),
-    valor: z.coerce.number().positive("Valor deve ser positivo"),
+    // Negativo representa estorno/reembolso — reduz o total da fatura em vez de somar.
+    valor: z.coerce.number().refine(v => v !== 0, "Valor não pode ser zero"),
     categoria_id: z.string().min(1, "Categoria é obrigatória"),
     data_compra: z.coerce.date(),
 });

@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ReportFilters } from "./report-filters";
 import { ChevronRight, ChevronDown, ChevronLeft, CreditCard } from "lucide-react";
+import { cn } from "@/lib/utils";
 import type { TransactionDisplay, InvoiceItemDisplay, Category, PaymentMethod, FinancialInstitution } from "@/types/models";
 
 const PAGE_SIZE = 50;
@@ -224,8 +225,11 @@ export function ReportContent({ transactions, categories, institutions, paymentM
                                                 </div>
                                             </TableCell>
                                             <TableCell className="text-xs text-muted-foreground">{item.displayDate}</TableCell>
-                                            <TableCell className="text-xs font-semibold text-rose-500 dark:text-rose-400">
-                                                - {item.formattedAmount}
+                                            <TableCell className={cn(
+                                                "text-xs font-semibold",
+                                                item.valor < 0 ? "text-emerald-500 dark:text-emerald-400" : "text-rose-500 dark:text-rose-400"
+                                            )}>
+                                                {item.valor < 0 ? "+" : "-"} {formatCurrency(Math.abs(item.valor))}
                                             </TableCell>
                                             <TableCell />
                                         </TableRow>

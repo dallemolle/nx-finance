@@ -14,6 +14,7 @@ import { getCategories, getPaymentMethods, getFinancialInstitutions } from "@/li
 import { InstitutionCombobox } from "@/components/dashboard/institution-combobox";
 import { importCreditCardInvoice } from "@/lib/credit-card-actions";
 import { getMappingSuggestions } from "@/lib/csv-actions";
+import { getMerchantSignature } from "@/lib/dashboard-utils";
 import { cn, getErrorMessage } from "@/lib/utils";
 import { createCategory, createPaymentMethod } from "@/lib/actions";
 import { Combobox } from "@/components/ui/combobox";
@@ -26,6 +27,7 @@ interface ParsedInvoiceRow {
     amount: number;
     date: string;
     category_id: string;
+    matchedByHistory: boolean;
 }
 
 export function CreditCardInvoiceDialog({ userId, className }: { userId: string; className?: string }) {
@@ -117,14 +119,16 @@ export function CreditCardInvoiceDialog({ userId, className }: { userId: string;
                                 ? rawDate.split('/').reverse().join('-')
                                 : new Date().toISOString().split('T')[0];
 
-                        const guess = suggestions.find(s => title.toLowerCase().includes(s.search_term));
+                        const signature = getMerchantSignature(title);
+                        const guess = suggestions.find(s => s.search_term === signature);
 
                         return {
                             id: index,
                             title: title,
-                            amount: isNaN(amount) ? 0 : Math.abs(amount),
+                            amount: isNaN(amount) ? 0 : amount,
                             date: date,
                             category_id: guess ? guess.categoria_id : "",
+                            matchedByHistory: !!guess,
                         };
                     });
 
@@ -145,7 +149,10 @@ export function CreditCardInvoiceDialog({ userId, className }: { userId: string;
     };
 
     const handleRowChange = <K extends keyof ParsedInvoiceRow>(id: number, field: K, value: ParsedInvoiceRow[K]) => {
-        setParsedData(prev => prev.map(row => row.id === id ? { ...row, [field]: value } : row));
+        setParsedData(prev => prev.map(row => row.id === id
+            ? { ...row, [field]: value, ...(field === "category_id" ? { matchedByHistory: false } : {}) }
+            : row
+        ));
     };
 
     const handleCategoryCreate = async (id: number, catName: string) => {
@@ -198,7 +205,7 @@ export function CreditCardInvoiceDialog({ userId, className }: { userId: string;
                 tipo_pagamento_id: paymentMethodId,
                 items: parsedData.map(row => ({
                     descricao: row.title,
-                    valor: Math.abs(row.amount),
+                    valor: row.amount,
                     categoria_id: row.category_id,
                     data_compra: row.date,
                 })),
@@ -215,7 +222,8 @@ export function CreditCardInvoiceDialog({ userId, className }: { userId: string;
         }
     };
 
-    const totalAmount = parsedData.reduce((sum, row) => sum + Math.abs(Number(row.amount) || 0), 0);
+    // Itens negativos (estorno/reembolso) reduzem o total
+    const totalAmount = parsedData.reduce((sum, row) => sum + (Number(row.amount) || 0), 0);
     const formatCurrency = (val: number) =>
         new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
 
@@ -329,16 +337,17 @@ export function CreditCardInvoiceDialog({ userId, className }: { userId: string;
                                                     <Input
                                                         value={row.title}
                                                         onChange={(e) => handleRowChange(row.id, "title", e.target.value)}
-                                                        className="h-8 text-sm"
+                                                        className="h-8 text-sm min-w-[240px]"
                                                     />
                                                 </TableCell>
                                                 <TableCell className="p-2">
                                                     <Input
                                                         type="number"
                                                         step="0.01"
-                                                        value={Math.abs(row.amount)}
+                                                        title="Valores negativos representam estorno/reembolso e reduzem o total da fatura"
+                                                        value={row.amount}
                                                         onChange={(e) => handleRowChange(row.id, "amount", parseFloat(e.target.value))}
-                                                        className="h-8 text-sm w-[100px]"
+                                                        className="h-8 text-sm w-[90px] [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                                                     />
                                                 </TableCell>
                                                 <TableCell className="p-2">
@@ -361,7 +370,13 @@ export function CreditCardInvoiceDialog({ userId, className }: { userId: string;
                                                             }
                                                         }}
                                                     >
-                                                        <SelectTrigger className="h-8 text-sm">
+                                                        <SelectTrigger
+                                                            title={row.matchedByHistory ? "Categoria sugerida com base no histórico" : undefined}
+                                                            className={cn(
+                                                                "h-8 text-sm",
+                                                                row.matchedByHistory && "bg-indigo-50/60 border-indigo-200 dark:bg-indigo-950/20 dark:border-indigo-900"
+                                                            )}
+                                                        >
                                                             <SelectValue placeholder="Categoria..." />
                                                         </SelectTrigger>
                                                         <SelectContent>

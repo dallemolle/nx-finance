@@ -4,6 +4,9 @@ import { db } from "@/lib/db";
 import { revalidatePath } from "next/cache";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
+import { getErrorMessage, getPrismaErrorMessage } from "@/lib/utils";
+import { getMerchantSignature } from "@/lib/dashboard-utils";
+import type { TransactionStatus, TransactionType } from "@prisma/client";
 
 async function getUserId() {
     const session = await getServerSession(authOptions);
@@ -19,19 +22,20 @@ export async function getMappingSuggestions() {
             include: { category: true }
         });
         return suggestions;
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error("Error fetching mapping suggestions:", error);
-        throw new Error("Erro ao buscar mapeamentos");
+        throw new Error(getErrorMessage(error, "Erro ao buscar mapeamentos"));
     }
 }
 
 export async function saveMappingSuggestion(searchTerm: string, categoryId: string) {
     try {
         const userId = await getUserId();
+        const signature = getMerchantSignature(searchTerm);
         const suggestion = await db.mappingSuggestion.upsert({
             where: {
                 search_term_userId: {
-                    search_term: searchTerm.toLowerCase().trim(),
+                    search_term: signature,
                     userId
                 }
             },
@@ -39,22 +43,34 @@ export async function saveMappingSuggestion(searchTerm: string, categoryId: stri
                 categoria_id: categoryId
             },
             create: {
-                search_term: searchTerm.toLowerCase().trim(),
+                search_term: signature,
                 categoria_id: categoryId,
                 userId
             }
         });
         return suggestion;
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error("Error saving mapping suggestion:", error);
-        throw new Error("Erro ao salvar mapeamento inteligente");
+        throw new Error(getPrismaErrorMessage(error, "Erro ao salvar mapeamento inteligente"));
     }
 }
 
-export async function processBatchTransactions(transactions: any[]) {
+export interface BatchTransactionInput {
+    descricao: string;
+    valor: number;
+    data_vencimento: string;
+    status?: TransactionStatus;
+    tipo?: TransactionType;
+    categoria_id: string;
+    tipo_pagamento_id: string | null;
+    institution_id: string;
+    original_title?: string;
+}
+
+export async function processBatchTransactions(transactions: BatchTransactionInput[]) {
     try {
         const userId = await getUserId();
-        
+
         // Save the transactions
         const createdTransactions = await db.$transaction(
             transactions.map(t => db.transaction.create({
@@ -66,7 +82,7 @@ export async function processBatchTransactions(transactions: any[]) {
                     tipo: t.tipo || "SAIDA",
                     userId,
                     categoria_id: t.categoria_id,
-                    tipo_pagamento_id: t.tipo_pagamento_id || null,
+                    tipo_pagamento_id: (t.tipo_pagamento_id || null) as string,
                     institution_id: t.institution_id
                 }
             }))
@@ -76,11 +92,12 @@ export async function processBatchTransactions(transactions: any[]) {
         // Group by search term to avoid redundant writes
         for (const t of transactions) {
             if (t.original_title && t.categoria_id) {
-                const searchTerm = t.original_title.toLowerCase().trim();
+                const signature = getMerchantSignature(t.original_title);
+                if (!signature) continue;
                 await db.mappingSuggestion.upsert({
                     where: {
                         search_term_userId: {
-                            search_term: searchTerm,
+                            search_term: signature,
                             userId
                         }
                     },
@@ -88,7 +105,7 @@ export async function processBatchTransactions(transactions: any[]) {
                         categoria_id: t.categoria_id
                     },
                     create: {
-                        search_term: searchTerm,
+                        search_term: signature,
                         categoria_id: t.categoria_id,
                         userId
                     }
@@ -98,10 +115,10 @@ export async function processBatchTransactions(transactions: any[]) {
 
         revalidatePath("/dashboard");
         revalidatePath("/reports");
-        
+
         return { success: true, count: createdTransactions.length };
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error("Error processing batch transactions:", error);
-        throw new Error(error.message || "Erro ao importar transações em lote");
+        throw new Error(getPrismaErrorMessage(error, "Erro ao importar transações em lote"));
     }
 }

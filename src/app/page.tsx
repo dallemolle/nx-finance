@@ -2,7 +2,7 @@ import { SummaryCards } from "../components/dashboard/summary-cards";
 import { CategoryChart } from "../components/dashboard/category-chart";
 import { RecentTransactions } from "../components/dashboard/recent-transactions";
 import { MonthPicker } from "../components/dashboard/month-picker";
-import { getDashboardData } from "@/lib/dashboard";
+import { getDashboardData, getMonthlyTrend } from "@/lib/dashboard";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { redirect } from "next/navigation";
@@ -14,6 +14,8 @@ import { ThemeToggle } from "../components/theme-toggle";
 import { TopNav } from "@/components/layout/top-nav";
 import { CsvImportDialog } from "@/components/dashboard/csv-import-dialog";
 import { CreditCardInvoiceDialog } from "@/components/dashboard/credit-card-invoice-dialog";
+import { EmptyDashboardState } from "@/components/dashboard/empty-dashboard-state";
+import { MonthlyTrendChart } from "@/components/dashboard/monthly-trend-chart";
 
 interface DashboardPageProps {
     searchParams: Promise<{ month?: string; year?: string }>;
@@ -31,11 +33,12 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     const year = yearParam ? parseInt(yearParam) : now.getFullYear();
 
     const data = await getDashboardData(session.user.id, month, year);
+    const trend = data.hasAnyTransactions ? await getMonthlyTrend(session.user.id, month, year) : [];
 
     return (
         <>
             <TopNav />
-            <div className="px-8 pb-8 pt-4 space-y-6 animate-in fade-in duration-700 max-w-7xl mx-auto">
+            <div className="px-8 pb-24 sm:pb-8 pt-4 space-y-6 animate-in fade-in duration-700 max-w-7xl mx-auto">
                 <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                     <div>
                         <h1 className="text-4xl font-black tracking-tighter text-slate-900 dark:text-slate-100 italic">Dashboard</h1>
@@ -50,7 +53,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                         </div>
 
                         <div className="grid grid-cols-1 sm:grid-cols-2 md:flex md:flex-row gap-3 w-full md:w-auto">
-                            <ExportButtons className="w-full" />
+                            <ExportButtons transactions={data.monthlyTransactions} month={month} year={year} className="w-full" />
                             <CsvImportDialog userId={session.user.id} className="w-full" />
                             <CreditCardInvoiceDialog userId={session.user.id} className="w-full" />
                             <NewTransactionDialog userId={session.user.id} className="w-full" />
@@ -62,23 +65,30 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                     </div>
                 </div>
 
-                <SummaryCards summary={data.summary} />
+                {data.hasAnyTransactions ? (
+                    <>
+                        <SummaryCards summary={data.summary} />
 
-                <div className="grid gap-6 md:grid-cols-3">
-                    <CategoryChart data={data.categoryData} transactions={data.monthlyTransactions} />
-                    <div className="col-span-1 md:col-span-2">
-                        <RecentTransactions transactions={data.monthlyTransactions} userId={session.user.id} />
-                    </div>
-                </div>
+                        <div className="grid gap-6 md:grid-cols-3">
+                            <CategoryChart data={data.categoryData} transactions={data.monthlyTransactions} />
+                            <div className="col-span-1 md:col-span-2">
+                                <RecentTransactions transactions={data.monthlyTransactions} userId={session.user.id} />
+                            </div>
+                        </div>
 
-                <div className="grid gap-6 md:grid-cols-2">
-                    <FinancialHealth score={data.metrics.healthScore} />
-                    <Forecast
-                        forecast={data.metrics.forecast}
-                        daysPassed={data.metrics.daysPassed}
-                        totalDays={data.metrics.totalDays}
-                    />
-                </div>
+                        <div className="grid gap-6 md:grid-cols-3">
+                            <FinancialHealth score={data.metrics.healthScore} />
+                            <Forecast
+                                forecast={data.metrics.forecast}
+                                daysPassed={data.metrics.daysPassed}
+                                totalDays={data.metrics.totalDays}
+                            />
+                            <MonthlyTrendChart data={trend} />
+                        </div>
+                    </>
+                ) : (
+                    <EmptyDashboardState userId={session.user.id} />
+                )}
             </div>
         </>
     );

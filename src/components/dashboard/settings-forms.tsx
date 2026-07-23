@@ -14,15 +14,23 @@ import {
     updatePaymentMethod,
     deletePaymentMethod
 } from "@/lib/actions";
+import { getErrorMessage } from "@/lib/utils";
+import type { Category, PaymentMethod, FinancialInstitution } from "@/types/models";
 
-interface SettingsItemProps<T> {
+interface SettingsRowItem {
+    id: string;
+    nome: string;
+    cor?: string | null;
+}
+
+interface SettingsItemProps<T extends SettingsRowItem> {
     item: T;
-    onUpdate: (id: string, data: any) => Promise<any>;
-    onDelete: (id: string) => Promise<any>;
+    onUpdate: (id: string, data: { nome?: string; cor?: string }) => Promise<unknown>;
+    onDelete: (id: string) => Promise<unknown>;
     hasColor?: boolean;
 }
 
-function SettingsRow({ item, onUpdate, onDelete, hasColor = false }: SettingsItemProps<any>) {
+function SettingsRow<T extends SettingsRowItem>({ item, onUpdate, onDelete, hasColor = false }: SettingsItemProps<T>) {
     const [name, setName] = useState(item.nome);
     const [color, setColor] = useState(item.cor || "#64748b");
     const [isPending, setIsPending] = useState(false);
@@ -32,7 +40,7 @@ function SettingsRow({ item, onUpdate, onDelete, hasColor = false }: SettingsIte
     const handleUpdate = async () => {
         setIsPending(true);
         try {
-            const updateData: any = {};
+            const updateData: { nome?: string; cor?: string } = {};
             if (name !== item.nome) updateData.nome = name;
             if (hasColor && color !== item.cor) updateData.cor = color;
 
@@ -40,10 +48,10 @@ function SettingsRow({ item, onUpdate, onDelete, hasColor = false }: SettingsIte
 
             await onUpdate(item.id, updateData);
             toast.success("Atualizado com sucesso!");
-        } catch (error: any) {
-            toast.error(error.message || "Erro ao atualizar");
+        } catch (error: unknown) {
+            toast.error(getErrorMessage(error, "Erro ao atualizar"));
             setName(item.nome);
-            if (hasColor) setColor(item.cor);
+            if (hasColor) setColor(item.cor || "#64748b");
         } finally {
             setIsPending(false);
         }
@@ -51,13 +59,13 @@ function SettingsRow({ item, onUpdate, onDelete, hasColor = false }: SettingsIte
 
     const handleDelete = async () => {
         if (!confirm(`Tem certeza que deseja excluir "${item.nome}"?`)) return;
-        
+
         setIsPending(true);
         try {
             await onDelete(item.id);
             toast.success("Excluído com sucesso!");
-        } catch (error: any) {
-            toast.error(error.message || "Erro ao excluir");
+        } catch (error: unknown) {
+            toast.error(getErrorMessage(error, "Erro ao excluir"));
         } finally {
             setIsPending(false);
         }
@@ -65,7 +73,7 @@ function SettingsRow({ item, onUpdate, onDelete, hasColor = false }: SettingsIte
 
     const handleReset = () => {
         setName(item.nome);
-        if (hasColor) setColor(item.cor);
+        if (hasColor) setColor(item.cor || "#64748b");
     };
 
     return (
@@ -130,7 +138,7 @@ function SettingsRow({ item, onUpdate, onDelete, hasColor = false }: SettingsIte
     );
 }
 
-export function InstitutionSettings({ institutions }: { institutions: any[] }) {
+export function InstitutionSettings({ institutions }: { institutions: FinancialInstitution[] }) {
     return (
         <div className="space-y-1">
             {institutions.map(inst => (
@@ -149,7 +157,7 @@ export function InstitutionSettings({ institutions }: { institutions: any[] }) {
     );
 }
 
-export function CategorySettings({ categories }: { categories: any[] }) {
+export function CategorySettings({ categories }: { categories: Category[] }) {
     return (
         <div className="space-y-1">
             {categories.map(cat => (
@@ -168,7 +176,7 @@ export function CategorySettings({ categories }: { categories: any[] }) {
     );
 }
 
-export function PaymentMethodSettings({ paymentMethods }: { paymentMethods: any[] }) {
+export function PaymentMethodSettings({ paymentMethods }: { paymentMethods: PaymentMethod[] }) {
     return (
         <div className="space-y-1">
             {paymentMethods.map(pm => (

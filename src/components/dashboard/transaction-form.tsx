@@ -19,13 +19,15 @@ import { Switch } from "@/components/ui/switch";
 import { addMonths, format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Decimal } from "decimal.js";
-import { cn } from "@/lib/utils";
+import { cn, getErrorMessage } from "@/lib/utils";
+import type { TransactionFormValues, TransactionInput } from "@/lib/validations";
+import type { Category, PaymentMethod, FinancialInstitution, TransactionDisplay } from "@/types/models";
 
 interface TransactionFormProps {
-    categories: any[];
-    paymentMethods: any[];
-    institutions: any[];
-    initialData?: any;
+    categories: Category[];
+    paymentMethods: PaymentMethod[];
+    institutions: FinancialInstitution[];
+    initialData?: TransactionDisplay;
     onSuccess: () => void;
 }
 
@@ -53,12 +55,17 @@ export function TransactionForm({ categories: initialCategories, paymentMethods:
         setInstitutions(initialInstitutions);
     }, [initialInstitutions]);
 
-    const { register, handleSubmit, setValue, watch, reset, formState: { errors } } = useForm({
+    const { register, handleSubmit, setValue, watch, reset, formState: { errors } } = useForm<TransactionInput, unknown, TransactionFormValues>({
         resolver: zodResolver(transactionSchema),
         defaultValues: initialData ? {
-            ...initialData,
-            data_vencimento: new Date(initialData.data_vencimento),
+            descricao: initialData.descricao,
             valor: Number(initialData.valor),
+            data_vencimento: new Date(initialData.data_vencimento),
+            status: initialData.status,
+            tipo: initialData.tipo,
+            categoria_id: initialData.categoria_id,
+            tipo_pagamento_id: initialData.tipo_pagamento_id || "",
+            institution_id: initialData.institution_id || "",
         } : {
             tipo: "SAIDA",
             status: "PENDENTE",
@@ -68,12 +75,13 @@ export function TransactionForm({ categories: initialCategories, paymentMethods:
 
     const tipo = watch("tipo");
     const baseDesc = watch("descricao");
-    const dataVencimento = watch("data_vencimento");
+    const dataVencimento = new Date(watch("data_vencimento") as string | number | Date);
     const categoriaId = watch("categoria_id");
     const paymentMethodId = watch("tipo_pagamento_id");
     const institutionId = watch("institution_id");
     const isInstallment = watch("isInstallment");
-    const installmentsCount = watch("installmentsCount");
+    const installmentsCount = Number(watch("installmentsCount") || 0);
+    const valorAtual = Number(watch("valor") || 0);
 
     // Sync installment names when base description or count changes
     useEffect(() => {
@@ -108,7 +116,7 @@ export function TransactionForm({ categories: initialCategories, paymentMethods:
         });
     };
 
-    const onSubmit = (data: any) => {
+    const onSubmit = (data: TransactionFormValues) => {
         setError(null);
         const submissionData = {
             ...data,
@@ -128,8 +136,8 @@ export function TransactionForm({ categories: initialCategories, paymentMethods:
                 setManualEdits(new Set());
                 setInstallmentNames([]);
                 onSuccess();
-            } catch (err: any) {
-                const message = err.message || "Erro ao salvar transação";
+            } catch (err: unknown) {
+                const message = getErrorMessage(err, "Erro ao salvar transação");
                 setError(message);
                 toast.error(message);
             }
@@ -147,8 +155,8 @@ export function TransactionForm({ categories: initialCategories, paymentMethods:
             setCategories([...categories, newCat]);
             setValue("categoria_id", newCat.id);
             toast.success(`Categoria "${name}" criada!`);
-        } catch (err: any) {
-            toast.error("Erro ao criar categoria: " + err.message);
+        } catch (err: unknown) {
+            toast.error("Erro ao criar categoria: " + getErrorMessage(err, "erro desconhecido"));
         }
     };
 
@@ -158,8 +166,8 @@ export function TransactionForm({ categories: initialCategories, paymentMethods:
             setPaymentMethods([...paymentMethods, newPM]);
             setValue("tipo_pagamento_id", newPM.id);
             toast.success(`Meio "${name}" criado!`);
-        } catch (err: any) {
-            toast.error("Erro ao criar meio de pagamento: " + err.message);
+        } catch (err: unknown) {
+            toast.error("Erro ao criar meio de pagamento: " + getErrorMessage(err, "erro desconhecido"));
         }
     };
 
@@ -174,7 +182,7 @@ export function TransactionForm({ categories: initialCategories, paymentMethods:
             <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                     <Label>Tipo</Label>
-                    <Select onValueChange={(v) => setValue("tipo", v as any)} value={tipo}>
+                    <Select onValueChange={(v) => setValue("tipo", v as TransactionFormValues["tipo"])} value={tipo}>
                         <SelectTrigger className="cursor-pointer">
                             <SelectValue placeholder="Selecione o tipo" />
                         </SelectTrigger>
@@ -187,7 +195,7 @@ export function TransactionForm({ categories: initialCategories, paymentMethods:
 
                 <div className="space-y-2">
                     <Label>Status</Label>
-                    <Select onValueChange={(v) => setValue("status", v as any)} value={watch("status")}>
+                    <Select onValueChange={(v) => setValue("status", v as TransactionFormValues["status"])} value={watch("status")}>
                         <SelectTrigger className="cursor-pointer">
                             <SelectValue placeholder="Selecione o status" />
                         </SelectTrigger>
@@ -300,7 +308,7 @@ export function TransactionForm({ categories: initialCategories, paymentMethods:
                                 placeholder="Ex: 12"
                             />
                             {errors.installmentsCount && <p className="text-xs text-red-500">{errors.installmentsCount.message as string}</p>}
-                            {watch("valor") > 0 && installmentsCount > 0 && (
+                            {valorAtual > 0 && installmentsCount > 0 && (
                                 <div className="mt-4 space-y-2 border-t pt-4">
                                     <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Prévia e Personalização</p>
                                     <div className="max-h-[300px] overflow-y-auto rounded-md border bg-background/50">
@@ -315,13 +323,13 @@ export function TransactionForm({ categories: initialCategories, paymentMethods:
                                             </thead>
                                             <tbody>
                                                 {Array.from({ length: installmentsCount }).map((_, i) => {
-                                                    const totalValue = new Decimal(watch("valor") || 0);
-                                                    const count = Number(installmentsCount);
+                                                    const totalValue = new Decimal(valorAtual);
+                                                    const count = installmentsCount;
                                                     const installmentValue = totalValue.dividedBy(count).toDecimalPlaces(2, Decimal.ROUND_DOWN);
                                                     const lastInstallmentValue = totalValue.minus(installmentValue.times(count - 1));
 
                                                     const currentVal = i === count - 1 ? lastInstallmentValue : installmentValue;
-                                                    const dueDate = addMonths(new Date(dataVencimento), i);
+                                                    const dueDate = addMonths(dataVencimento, i);
                                                     const isAdjusted = i === count - 1 && !lastInstallmentValue.equals(installmentValue);
 
                                                     return (

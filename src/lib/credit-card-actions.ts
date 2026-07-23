@@ -4,7 +4,9 @@ import { db } from "@/lib/db";
 import { revalidatePath } from "next/cache";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { creditCardInvoiceSchema } from "@/lib/validations";
+import { creditCardInvoiceSchema, type CreditCardInvoiceInput } from "@/lib/validations";
+import { getErrorMessage, getPrismaErrorMessage } from "@/lib/utils";
+import { getMerchantSignature } from "@/lib/dashboard-utils";
 
 async function getUserId() {
     const session = await getServerSession(authOptions);
@@ -12,12 +14,16 @@ async function getUserId() {
     return session.user.id;
 }
 
-export async function importCreditCardInvoice(data: any) {
+export async function importCreditCardInvoice(data: CreditCardInvoiceInput) {
     try {
         const userId = await getUserId();
         const validatedData = creditCardInvoiceSchema.parse(data);
 
-        const totalValor = validatedData.items.reduce((sum, item) => sum + Math.abs(item.valor), 0);
+        // Itens negativos (estorno/reembolso) reduzem o total da fatura
+        const totalValor = validatedData.items.reduce((sum, item) => sum + item.valor, 0);
+        if (totalValor <= 0) {
+            throw new Error("O valor total da fatura deve ser maior que zero. Confira se os estornos não superam as despesas.");
+        }
 
         // Find or create a generic "Fatura Cartão" category for the invoice header
         // This category exists only to satisfy the FK — it is excluded from chart aggregation
@@ -49,20 +55,33 @@ export async function importCreditCardInvoice(data: any) {
             },
         });
 
-        // Bulk create invoice items
-        const items = await Promise.all(
-            validatedData.items.map(item =>
-                db.creditCardInvoiceItem.create({
-                    data: {
-                        transactionId: transaction.id,
-                        descricao: item.descricao,
-                        valor: Math.abs(item.valor),
-                        categoria_id: item.categoria_id,
-                        data_compra: item.data_compra,
+        // Bulk create invoice items in a single query
+        const { count: itemsCount } = await db.creditCardInvoiceItem.createMany({
+            data: validatedData.items.map(item => ({
+                transactionId: transaction.id,
+                descricao: item.descricao,
+                valor: item.valor,
+                categoria_id: item.categoria_id,
+                data_compra: item.data_compra,
+            })),
+        });
+
+        // Aprende a categorização de cada item para sugerir automaticamente
+        // em importações futuras do mesmo estabelecimento
+        for (const item of validatedData.items) {
+            const signature = getMerchantSignature(item.descricao);
+            if (!signature) continue;
+            await db.mappingSuggestion.upsert({
+                where: {
+                    search_term_userId: {
+                        search_term: signature,
+                        userId,
                     },
-                })
-            )
-        );
+                },
+                update: { categoria_id: item.categoria_id },
+                create: { search_term: signature, categoria_id: item.categoria_id, userId },
+            });
+        }
 
         revalidatePath("/dashboard");
         revalidatePath("/reports");
@@ -74,12 +93,12 @@ export async function importCreditCardInvoice(data: any) {
                     ...transaction,
                     valor: Number(transaction.valor),
                 },
-                itemsCount: items.length,
+                itemsCount,
             },
         };
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error("Error importing credit card invoice:", error);
-        throw new Error(error.message || "Erro ao importar fatura de cartão de crédito");
+        throw new Error(getPrismaErrorMessage(error, "Erro ao importar fatura de cartão de crédito"));
     }
 }
 
@@ -100,9 +119,9 @@ export async function getInvoiceItems(transactionId: string) {
             ...item,
             valor: Number(item.valor),
         }));
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error("Error fetching invoice items:", error);
-        throw new Error("Erro ao buscar itens da fatura");
+        throw new Error(getErrorMessage(error, "Erro ao buscar itens da fatura"));
     }
 }
 

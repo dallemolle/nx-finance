@@ -2,6 +2,7 @@
 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../components/ui/select";
 import { cn } from "@/lib/utils";
+import type { Category, PaymentMethod, FinancialInstitution } from "@/types/models";
 
 interface ReportFiltersProps {
     statusFilter: string;
@@ -12,9 +13,9 @@ interface ReportFiltersProps {
     onInstitutionChange: (v: string) => void;
     paymentMethodFilter: string;
     onPaymentMethodChange: (v: string) => void;
-    categories: any[];
-    institutions: any[];
-    paymentMethods: any[];
+    categories: Category[];
+    institutions: FinancialInstitution[];
+    paymentMethods: PaymentMethod[];
     paymentMethodTotals: Record<string, number>;
 }
 

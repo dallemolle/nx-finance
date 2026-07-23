@@ -8,14 +8,27 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Upload, ChevronRight, X, AlertCircle } from "lucide-react";
+import { Upload, ChevronRight, X, AlertCircle, Loader2, Sparkles } from "lucide-react";
 import Papa from "papaparse";
 import { getCategories, getPaymentMethods, getFinancialInstitutions } from "@/lib/reports";
 import { InstitutionCombobox } from "@/components/dashboard/institution-combobox";
-import { processBatchTransactions, getMappingSuggestions } from "@/lib/csv-actions";
-import { cn } from "@/lib/utils";
+import { processBatchTransactions, getMappingSuggestions, type BatchTransactionInput } from "@/lib/csv-actions";
+import { getMerchantSignature } from "@/lib/dashboard-utils";
+import { cn, getErrorMessage } from "@/lib/utils";
 import { createCategory, createPaymentMethod } from "@/lib/actions";
 import { Combobox } from "@/components/ui/combobox";
+import { toast } from "sonner";
+import type { Category, PaymentMethod, FinancialInstitution } from "@/types/models";
+
+interface ParsedRow {
+    id: number;
+    original_title: string;
+    title: string;
+    amount: number;
+    date: string;
+    category_id: string;
+    matchedByHistory: boolean;
+}
 
 export function CsvImportDialog({ userId, className }: { userId: string, className?: string }) {
     const [open, setOpen] = useState(false);
@@ -31,12 +44,12 @@ export function CsvImportDialog({ userId, className }: { userId: string, classNa
     const [institutionId, setInstitutionId] = useState<string>("");
 
     // Data
-    const [categories, setCategories] = useState<any[]>([]);
-    const [paymentMethods, setPaymentMethods] = useState<any[]>([]);
-    const [institutions, setInstitutions] = useState<any[]>([]);
-    const [suggestions, setSuggestions] = useState<any[]>([]);
+    const [categories, setCategories] = useState<Category[]>([]);
+    const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
+    const [institutions, setInstitutions] = useState<FinancialInstitution[]>([]);
+    const [suggestions, setSuggestions] = useState<Awaited<ReturnType<typeof getMappingSuggestions>>>([]);
 
-    const [parsedData, setParsedData] = useState<any[]>([]);
+    const [parsedData, setParsedData] = useState<ParsedRow[]>([]);
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
@@ -83,12 +96,12 @@ export function CsvImportDialog({ userId, className }: { userId: string, classNa
         }
 
         setIsLoading(true);
-        Papa.parse(file, {
+        Papa.parse<Record<string, string>>(file, {
             header: true,
             skipEmptyLines: true,
-            complete: (results: any) => {
+            complete: (results) => {
                 try {
-                    const mapped = results.data.map((row: any, index: number) => {
+                    const mapped = results.data.map((row, index): ParsedRow => {
                         // Attempt to extract title, amount, date based on common headers
                         const title = row.title || row.descricao || row.description || row.Title || Object.values(row)[0] || "Sem título";
                         const rawAmount = row.amount || row.valor || row.Value || row.Amount || "0";
@@ -102,7 +115,8 @@ export function CsvImportDialog({ userId, className }: { userId: string, classNa
                                 : new Date().toISOString().split('T')[0];
 
                         // Find category suggestion based on search_term
-                        const guess = suggestions.find(s => title.toLowerCase().includes(s.search_term));
+                        const signature = getMerchantSignature(title);
+                        const guess = suggestions.find(s => s.search_term === signature);
 
                         return {
                             id: index,
@@ -111,27 +125,31 @@ export function CsvImportDialog({ userId, className }: { userId: string, classNa
                             amount: isNaN(amount) ? 0 : amount,
                             date: date,
                             category_id: guess ? guess.categoria_id : "",
+                            matchedByHistory: !!guess,
                         };
                     });
 
                     setParsedData(mapped);
                     setStep(2);
                     setError(null);
-                } catch (e) {
+                } catch {
                     setError("Erro ao processar CSV. Verifique o formato das colunas (title, amount, date).");
                 } finally {
                     setIsLoading(false);
                 }
             },
-            error: (err: any) => {
+            error: (err: Error) => {
                 setError(err.message);
                 setIsLoading(false);
             }
         });
     };
 
-    const handleRowChange = (id: number, field: string, value: any) => {
-        setParsedData(prev => prev.map(row => row.id === id ? { ...row, [field]: value } : row));
+    const handleRowChange = <K extends keyof ParsedRow>(id: number, field: K, value: ParsedRow[K]) => {
+        setParsedData(prev => prev.map(row => row.id === id
+            ? { ...row, [field]: value, ...(field === "category_id" ? { matchedByHistory: false } : {}) }
+            : row
+        ));
     };
 
     const handleCategoryCreate = async (id: number, catName: string) => {
@@ -144,18 +162,20 @@ export function CsvImportDialog({ userId, className }: { userId: string, classNa
             });
             setCategories(prev => [...prev, newCat]);
             handleRowChange(id, "category_id", newCat.id);
-        } catch (e: any) {
+        } catch (e: unknown) {
             console.error(e);
+            toast.error(getErrorMessage(e, "Erro ao criar categoria"));
         }
     };
-    
+
     const handlePaymentMethodAdd = async (name: string) => {
         try {
             const newPM = await createPaymentMethod({ nome: name });
             setPaymentMethods(prev => [...prev, newPM]);
             setPaymentMethodId(newPM.id);
-        } catch (e: any) {
+        } catch (e: unknown) {
             console.error(e);
+            toast.error(getErrorMessage(e, "Erro ao criar meio de pagamento"));
         }
     };
 
@@ -169,13 +189,12 @@ export function CsvImportDialog({ userId, className }: { userId: string, classNa
         setIsLoading(true);
         setError(null);
 
-        const payload = parsedData.map(row => ({
+        const payload: BatchTransactionInput[] = parsedData.map(row => ({
             descricao: row.title,
             original_title: row.original_title,
             valor: Math.abs(row.amount),
-            tipo: row.amount >= 0 ? "SAIDA" : "ENTRADA", // Usually CSV amounts denote type. Let's assume positive is ENTRADA unless configured. But if amount is positive for expenses, let's treat all as SAIDA by default if it's a credit card import. Actually we'll base on amount sign if there is one. Assumed logic: if amount < 0, SAIDA. If positive, ENTRADA., 
+            tipo: row.amount >= 0 ? "SAIDA" : "ENTRADA", // Usually CSV amounts denote type. Let's assume positive is ENTRADA unless configured. But if amount is positive for expenses, let's treat all as SAIDA by default if it's a credit card import. Actually we'll base on amount sign if there is one. Assumed logic: if amount < 0, SAIDA. If positive, ENTRADA.,
             data_vencimento: dueDate,
-            data_lancamento: new Date().toISOString(),
             status: "PENDENTE", // Usually imported statements are paid
             categoria_id: row.category_id,
             tipo_pagamento_id: paymentMethodId === "none" ? null : paymentMethodId,
@@ -186,8 +205,8 @@ export function CsvImportDialog({ userId, className }: { userId: string, classNa
             await processBatchTransactions(payload);
             setOpen(false);
             router.refresh();
-        } catch (e: any) {
-            setError(e.message);
+        } catch (e: unknown) {
+            setError(getErrorMessage(e, "Erro ao importar transações"));
         } finally {
             setIsLoading(false);
         }
@@ -212,7 +231,7 @@ export function CsvImportDialog({ userId, className }: { userId: string, classNa
 
                 <div className="flex-1 min-h-0 overflow-y-auto pr-2 mt-4 space-y-6">
                     {error && (
-                        <div className="p-3 bg-red-50 text-red-600 rounded-lg flex items-center gap-2 text-sm font-medium">
+                        <div className="p-3 bg-red-50 dark:bg-red-950/40 text-red-600 dark:text-red-400 rounded-lg flex items-center gap-2 text-sm font-medium">
                             <AlertCircle className="w-4 h-4" />
                             {error}
                         </div>
@@ -274,7 +293,7 @@ export function CsvImportDialog({ userId, className }: { userId: string, classNa
                                 <span>Revisão e Mapeamento</span>
                                 <span className="text-muted-foreground">{parsedData.length} registros</span>
                             </div>
-                            <div className="border rounded-lg overflow-hidden shrink-0">
+                            <div className="border rounded-lg overflow-x-auto shrink-0">
                                 <Table>
                                     <TableHeader className="bg-muted/50">
                                         <TableRow>
@@ -304,6 +323,7 @@ export function CsvImportDialog({ userId, className }: { userId: string, classNa
                                                     />
                                                 </TableCell>
                                                 <TableCell className="p-2">
+                                                    <div className="flex items-center gap-1.5">
                                                     <Select value={row.category_id} onValueChange={(val) => {
                                                         if (val === "NEW") {
                                                             const catName = prompt("Nome da nova categoria (Saída):");
@@ -327,6 +347,16 @@ export function CsvImportDialog({ userId, className }: { userId: string, classNa
                                                             <SelectItem value="NEW" className="font-bold text-blue-600">+ Nova Categoria</SelectItem>
                                                         </SelectContent>
                                                     </Select>
+                                                    {row.matchedByHistory && (
+                                                        <span
+                                                            title="Categoria sugerida com base no histórico"
+                                                            className="shrink-0 flex items-center gap-1 text-[10px] font-semibold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/40 rounded-full px-2 py-0.5"
+                                                        >
+                                                            <Sparkles className="w-3 h-3" />
+                                                            Sugerido
+                                                        </span>
+                                                    )}
+                                                    </div>
                                                 </TableCell>
                                                 <TableCell className="p-2 text-center">
                                                     <Button
@@ -355,7 +385,14 @@ export function CsvImportDialog({ userId, className }: { userId: string, classNa
                         </Button>
                     ) : (
                         <Button onClick={handleSubmit} disabled={isLoading || parsedData.some(r => !r.category_id)}>
-                            {isLoading ? "Processando..." : "Confirmar Importação"}
+                            {isLoading ? (
+                                <>
+                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                    Processando...
+                                </>
+                            ) : (
+                                "Confirmar Importação"
+                            )}
                         </Button>
                     )}
                 </div>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { format } from "date-fns";
@@ -8,22 +8,10 @@ import { ptBR } from "date-fns/locale";
 import { EditTransactionDialog } from "./edit-transaction-dialog";
 import { QuickPayButton } from "./quick-pay-button";
 import { ChevronRight, ChevronDown, CreditCard } from "lucide-react";
-
-interface Transaction {
-    id: string;
-    descricao: string;
-    valor: any;
-    data_vencimento: Date;
-    status: string;
-    tipo: string;
-    is_invoice_header?: boolean;
-    isInvoiceItem?: boolean;
-    invoiceItems?: any[];
-    institution?: { id: string; nome: string; cor: string | null };
-}
+import type { TransactionDisplay, InvoiceItemDisplay } from "@/types/models";
 
 interface RecentTransactionsProps {
-    transactions: Transaction[];
+    transactions: TransactionDisplay[];
     userId: string;
 }
 
@@ -56,7 +44,7 @@ export function RecentTransactions({ transactions, userId }: RecentTransactionsP
     const entradas = transactions.filter(t => t.tipo === "ENTRADA" && !t.isInvoiceItem);
     const saidas = transactions.filter(t => t.tipo === "SAIDA" && !t.isInvoiceItem);
 
-    const renderTransactionList = (list: Transaction[], emptyMessage: string, tipo: string) => {
+    const renderTransactionList = (list: TransactionDisplay[], emptyMessage: string, tipo: string) => {
         if (list.length === 0) {
             return (
                 <div className="py-6 text-center text-muted-foreground italic text-xs">
@@ -65,7 +53,7 @@ export function RecentTransactions({ transactions, userId }: RecentTransactionsP
             );
         }
 
-        const rows: any[] = [];
+        const rows: ReactNode[] = [];
 
         list.forEach((t) => {
             const isExpanded = expandedRows.has(t.id);
@@ -126,7 +114,7 @@ export function RecentTransactions({ transactions, userId }: RecentTransactionsP
 
             // Sub-itens expandidos
             if (isExpanded && hasInvoiceItems && t.invoiceItems) {
-                t.invoiceItems.forEach((item: any, idx: number) => {
+                t.invoiceItems.forEach((item: InvoiceItemDisplay, idx: number) => {
                     rows.push(
                         <div key={`${t.id}-item-${idx}`} className="flex items-center justify-between py-1.5 pl-10 pr-2 transition-all rounded-lg bg-slate-50/50 dark:bg-slate-900/50 border-b border-slate-100/50 dark:border-slate-800/50 last:border-0">
                             <div className="flex items-center gap-3 min-w-0 flex-1">
@@ -146,8 +134,8 @@ export function RecentTransactions({ transactions, userId }: RecentTransactionsP
                             </div>
                             <div className="flex items-center gap-1 md:gap-3 shrink-0">
                                 <div className="text-right min-w-[80px] md:min-w-[100px]">
-                                    <p className="text-xs font-semibold tracking-tight text-rose-500">
-                                        - {formatCurrency(Number(item.valor))}
+                                    <p className={`text-xs font-semibold tracking-tight ${Number(item.valor) < 0 ? "text-emerald-500" : "text-rose-500"}`}>
+                                        {Number(item.valor) < 0 ? "+" : "-"} {formatCurrency(Math.abs(Number(item.valor)))}
                                     </p>
                                 </div>
                                 <div className="w-[72px]" />

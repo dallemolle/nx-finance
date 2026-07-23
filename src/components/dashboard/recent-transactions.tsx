@@ -134,8 +134,8 @@ export function RecentTransactions({ transactions, userId }: RecentTransactionsP
                             </div>
                             <div className="flex items-center gap-1 md:gap-3 shrink-0">
                                 <div className="text-right min-w-[80px] md:min-w-[100px]">
-                                    <p className="text-xs font-semibold tracking-tight text-rose-500">
-                                        - {formatCurrency(Number(item.valor))}
+                                    <p className={`text-xs font-semibold tracking-tight ${Number(item.valor) < 0 ? "text-emerald-500" : "text-rose-500"}`}>
+                                        {Number(item.valor) < 0 ? "+" : "-"} {formatCurrency(Math.abs(Number(item.valor)))}
                                     </p>
                                 </div>
                                 <div className="w-[72px]" />

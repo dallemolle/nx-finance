@@ -6,6 +6,14 @@ export function cn(...inputs: ClassValue[]) {
     return twMerge(clsx(inputs))
 }
 
+export function formatCurrency(value: number): string {
+    return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value);
+}
+
+export function maskCurrency(value: number, isHidden: boolean): string {
+    return isHidden ? "••••••" : formatCurrency(value);
+}
+
 export function getErrorMessage(error: unknown, fallback: string): string {
     if (error instanceof Error) return error.message || fallback;
     return fallback;

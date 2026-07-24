@@ -8,6 +8,8 @@ import { ptBR } from "date-fns/locale";
 import { EditTransactionDialog } from "./edit-transaction-dialog";
 import { QuickPayButton } from "./quick-pay-button";
 import { ChevronRight, ChevronDown, CreditCard } from "lucide-react";
+import { maskCurrency } from "@/lib/utils";
+import { useIsPrivacyMode } from "./privacy-provider";
 import type { TransactionDisplay, InvoiceItemDisplay } from "@/types/models";
 
 interface RecentTransactionsProps {
@@ -17,6 +19,7 @@ interface RecentTransactionsProps {
 
 export function RecentTransactions({ transactions, userId }: RecentTransactionsProps) {
     const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
+    const isHidden = useIsPrivacyMode();
 
     const toggleExpand = (id: string) => {
         setExpandedRows(prev => {
@@ -25,9 +28,6 @@ export function RecentTransactions({ transactions, userId }: RecentTransactionsP
             return next;
         });
     };
-
-    const formatCurrency = (value: number) =>
-        new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value);
 
     const getStatusBadge = (status: string) => {
         switch (status) {
@@ -100,7 +100,7 @@ export function RecentTransactions({ transactions, userId }: RecentTransactionsP
                     <div className="flex items-center gap-1 md:gap-3 shrink-0">
                         <div className="text-right min-w-[80px] md:min-w-[100px]">
                             <p className={`text-sm font-black tracking-tight ${tipo === 'ENTRADA' ? 'text-emerald-600' : 'text-rose-600'}`}>
-                                {tipo === 'ENTRADA' ? '+' : '-'} {formatCurrency(Number(t.valor))}
+                                {tipo === 'ENTRADA' ? '+' : '-'} {maskCurrency(Number(t.valor), isHidden)}
                             </p>
                             {getStatusBadge(t.status)}
                         </div>
@@ -135,7 +135,7 @@ export function RecentTransactions({ transactions, userId }: RecentTransactionsP
                             <div className="flex items-center gap-1 md:gap-3 shrink-0">
                                 <div className="text-right min-w-[80px] md:min-w-[100px]">
                                     <p className={`text-xs font-semibold tracking-tight ${Number(item.valor) < 0 ? "text-emerald-500" : "text-rose-500"}`}>
-                                        {Number(item.valor) < 0 ? "+" : "-"} {formatCurrency(Math.abs(Number(item.valor)))}
+                                        {Number(item.valor) < 0 ? "+" : "-"} {maskCurrency(Math.abs(Number(item.valor)), isHidden)}
                                     </p>
                                 </div>
                                 <div className="w-[72px]" />

@@ -22,18 +22,22 @@ NxFinance é uma aplicação full-stack de finanças pessoais construída com Ne
 
 ## Funcionalidades
 
-- **Dashboard financeiro** — saldo, entradas, saídas, forecast mensal (projeção baseada na média diária de gastos) e indicador de saúde financeira, com gráfico donut de gastos por categoria.
+- **Dashboard financeiro** — KPIs de saldo/entradas/saídas com hierarquia visual (saldo em destaque), forecast mensal (projeção baseada na média diária de gastos), indicador de saúde financeira, gráfico donut de gastos por categoria (top 10 + "Outros", legenda completa) e tendência de saldo dos últimos 6 meses.
+- **Toggle de privacidade** — oculta/exibe valores monetários do dashboard com um clique (ícone de olho), persistido em `localStorage`.
+- **Busca global** — Ctrl/Cmd+K abre uma paleta de comando para buscar transações por descrição.
 - **Gestão de transações** — CRUD completo com status calculado dinamicamente (`PENDENTE` / `PAGO` / `ATRASADO`).
 - **Parcelamento inteligente** — divisão de valores com `decimal.js` (arredondamento para baixo + centavo residual na última parcela), datas de vencimento incrementais por mês, descrições editáveis por parcela.
-- **Importação de fatura de cartão de crédito** — upload de CSV que gera uma transação-cabeçalho (`is_invoice_header`) com N itens categorizados individualmente, evitando dupla contagem no gráfico de categorias.
-- **Importação de CSV genérica** — mapeamento automático de colunas (título/valor/data), sugestão de categoria por histórico (`MappingSuggestion`) e criação inline de categorias/meios de pagamento.
-- **Relatórios filtráveis** — tabela (TanStack Table) com filtros por status, categoria, instituição financeira e meio de pagamento.
+- **Importação de fatura de cartão de crédito** — upload de CSV que gera uma transação-cabeçalho (`is_invoice_header`) com N itens categorizados individualmente; reconhece estornos/reembolsos (valores negativos reduzem o total da fatura) e sugere categoria automaticamente com base no histórico.
+- **Importação de CSV genérica** — mapeamento automático de colunas (título/valor/data), sugestão de categoria por histórico (`MappingSuggestion`, casamento por assinatura de estabelecimento) e criação inline de categorias/meios de pagamento.
+- **Relatórios filtráveis** — tabela paginada (TanStack Table) com filtros por status, categoria, instituição financeira e meio de pagamento.
 - **Agrupamento inteligente de categorias** — normaliza variações de nome (ex.: "Mercado Extra", "Mercadinho" → "Mercado") na agregação do gráfico.
-- **Autenticação** — login via Credentials Provider (NextAuth) com sessão JWT; suporte a segundo fator no schema (ver limitações abaixo).
+- **Autenticação com 2FA (TOTP)** — login via Credentials Provider (NextAuth) com sessão JWT; segundo fator opcional via app autenticador (QR code de setup em Configurações → Segurança).
+- **Exportação** — CSV (compatível com Excel pt-BR) e PDF (via impressão) das transações do período.
 - **Tema claro/escuro** — alternância persistente via `next-themes`.
+- **Navegação mobile** — barra de navegação inferior fixa em telas pequenas.
 - **Navegação por URL** — mês/ano do dashboard e relatórios gerenciados via search params, compartilháveis e "bookmarkáveis".
 
-> **Limitação conhecida:** o fluxo de 2FA está parcialmente implementado (campos no banco, verificação de presença do código no login) mas não está conectado de ponta a ponta — não há UI para ativação, o código não é validado contra um segredo, e o envio de e-mail não é acionado. Detalhes técnicos completos em [CONTEXT.md](./CONTEXT.md#6-gaps-e-inconsistências-conhecidas).
+Gaps e decisões de escopo conhecidas em [CONTEXT.md](./CONTEXT.md#6-gaps-e-inconsistências-conhecidas).
 
 ---
 
@@ -44,7 +48,7 @@ NxFinance é uma aplicação full-stack de finanças pessoais construída com Ne
 | **Framework** | Next.js 16 (App Router), Server Components por padrão |
 | **Linguagem** | TypeScript (strict mode), path alias `@/` → `src/` |
 | **ORM / Banco** | Prisma 6 + PostgreSQL |
-| **Autenticação** | NextAuth 4 — Credentials Provider + sessão JWT |
+| **Autenticação** | NextAuth 4 — Credentials Provider + sessão JWT + 2FA via TOTP (otplib) |
 | **UI** | shadcn/ui (New York), Tailwind CSS, Radix UI, Lucide React |
 | **Formulários** | react-hook-form + Zod |
 | **Gráficos** | Recharts (donut chart) |
@@ -60,30 +64,36 @@ NxFinance é uma aplicação full-stack de finanças pessoais construída com Ne
 ```
 src/
 ├── app/                          # App Router
-│   ├── layout.tsx                # RootLayout global (providers, banner, toaster)
+│   ├── layout.tsx                # RootLayout global (providers, banner, command palette, nav mobile, toaster)
 │   ├── page.tsx                  # Dashboard principal (rota "/")
-│   ├── auth/                     # Login e registro
+│   ├── auth/                     # Login (com campo 2FA condicional) e registro
 │   ├── reports/                  # Relatórios com filtros
-│   └── dashboard/settings/       # Instituições, categorias, meios de pagamento
+│   └── dashboard/settings/       # Instituições, categorias, meios de pagamento, segurança (2FA)
 ├── components/
 │   ├── dashboard/                # Componentes de negócio
 │   │   ├── transaction-form.tsx           # Formulário com parcelamento
-│   │   ├── credit-card-invoice-dialog.tsx # Importação de fatura
+│   │   ├── credit-card-invoice-dialog.tsx # Importação de fatura (aceita estorno)
 │   │   ├── csv-import-dialog.tsx          # Importação CSV genérica
-│   │   ├── category-chart.tsx             # Gráfico donut
-│   │   ├── summary-cards.tsx              # Cards de resumo
+│   │   ├── category-chart.tsx             # Gráfico donut (top 10 + Outros) + legenda completa
+│   │   ├── summary-cards.tsx              # Cards de KPI (saldo em destaque)
 │   │   ├── financial-health.tsx           # Saúde financeira
-│   │   └── forecast.tsx                   # Projeção mensal
-│   ├── layout/top-nav.tsx        # Navegação superior
+│   │   ├── forecast.tsx                   # Projeção mensal
+│   │   ├── security-settings.tsx          # Ativação/desativação de 2FA
+│   │   └── privacy-provider.tsx           # Toggle de privacidade (ocultar valores)
+│   ├── layout/                   # Navegação (top-nav.tsx, mobile-bottom-nav.tsx)
+│   ├── command-palette.tsx       # Busca global (Ctrl/Cmd+K)
 │   └── ui/                       # Primitivas shadcn/ui
 ├── lib/
 │   ├── actions.ts                # Server Actions (transações, categorias, etc.)
-│   ├── auth.ts                   # Config NextAuth
-│   ├── dashboard.ts              # Agregações do dashboard
-│   ├── reports.ts                # Dados de relatórios
+│   ├── auth.ts                   # Config NextAuth (valida código TOTP no login)
+│   ├── two-factor-actions.ts     # Setup/ativação/desativação de 2FA
+│   ├── dashboard.ts              # Agregações do dashboard + tendência mensal
+│   ├── dashboard-utils.ts        # Normalização/agrupamento de categorias, assinatura de estabelecimento
+│   ├── reports.ts                # Dados de relatórios + busca global
 │   ├── credit-card-actions.ts    # Importação de fatura
 │   ├── csv-actions.ts            # Processamento em lote de CSV
 │   ├── validations.ts            # Schemas Zod
+│   ├── utils.ts                  # cn(), formatCurrency()/maskCurrency(), tratamento de erro Prisma
 │   └── db.ts                     # Singleton do PrismaClient
 ├── proxy.ts                      # Middleware de proteção de rotas
 └── types/next-auth.d.ts          # Extensões de tipo da sessão
@@ -144,14 +154,9 @@ DATABASE_URL="postgresql://user:password@localhost:5432/nx_finance?schema=public
 # NextAuth
 NEXTAUTH_SECRET="gere-um-segredo-com-openssl-rand-base64-32"
 NEXTAUTH_URL="http://localhost:3000"
-
-# SMTP (usado pelo módulo de envio de 2FA — ver limitação conhecida acima)
-SMTP_HOST="smtp.example.com"
-SMTP_PORT=587
-SMTP_USER="seu-email@example.com"
-SMTP_PASS="sua-senha-de-app"
-EMAIL_FROM="NxFinance <no-reply@example.com>"
 ```
+
+> O segundo fator (2FA) usa TOTP via app autenticador (Google Authenticator, Authy etc.) — não depende de nenhuma variável de e-mail/SMTP. Ative em Configurações → Segurança depois de criar sua conta.
 
 ### 3. Sincronize o schema do banco
 
@@ -174,10 +179,9 @@ Acesse [http://localhost:3000](http://localhost:3000), crie uma conta em `/auth/
 
 ```bash
 docker-compose up --build -d
-npx prisma generate
-npx prisma db push
-npm run dev
 ```
+
+Sobe o PostgreSQL e a aplicação em containers; o `docker-entrypoint.sh` já executa `prisma db push` automaticamente antes de iniciar o servidor. Acesse [http://localhost:3000](http://localhost:3000) — não é necessário rodar `npm run dev` à parte.
 
 ---
 

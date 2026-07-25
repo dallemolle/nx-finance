@@ -27,12 +27,13 @@ NxFinance é uma aplicação full-stack de finanças pessoais construída com Ne
 - **Busca global** — Ctrl/Cmd+K abre uma paleta de comando para buscar transações por descrição.
 - **Gestão de transações** — CRUD completo com status calculado dinamicamente (`PENDENTE` / `PAGO` / `ATRASADO`).
 - **Parcelamento inteligente** — divisão de valores com `decimal.js` (arredondamento para baixo + centavo residual na última parcela), datas de vencimento incrementais por mês, descrições editáveis por parcela.
-- **Importação de fatura de cartão de crédito** — upload de CSV que gera uma transação-cabeçalho (`is_invoice_header`) com N itens categorizados individualmente; reconhece estornos/reembolsos (valores negativos reduzem o total da fatura) e sugere categoria automaticamente com base no histórico.
+- **Importação de fatura de cartão de crédito** — upload de CSV que gera uma transação-cabeçalho (`is_invoice_header`) com N itens categorizados individualmente; reconhece estornos/reembolsos (valores negativos reduzem o total da fatura), sugere categoria automaticamente com base no histórico, e permite marcar um item como parcela de uma compra (o restante das parcelas é projetado nas faturas futuras).
+- **Compras parceladas no cartão e despesas previstas** — cadastro de cartões (dia de fechamento/vencimento), lançamento de compras parceladas com projeção automática nas faturas futuras corretas (respeitando o ciclo de fechamento), despesas previstas (com ou sem cartão, com ou sem parcelamento) pra planejamento, timeline de faturas confirmado vs. previsto e indicador de comprometimento mensal da renda. Despesas previstas genéricas podem ser efetivadas (valor/data reais) ou excluídas a qualquer momento.
 - **Importação de CSV genérica** — mapeamento automático de colunas (título/valor/data), sugestão de categoria por histórico (`MappingSuggestion`, casamento por assinatura de estabelecimento) e criação inline de categorias/meios de pagamento.
 - **Relatórios filtráveis** — tabela paginada (TanStack Table) com filtros por status, categoria, instituição financeira e meio de pagamento.
 - **Agrupamento inteligente de categorias** — normaliza variações de nome (ex.: "Mercado Extra", "Mercadinho" → "Mercado") na agregação do gráfico.
 - **Autenticação com 2FA (TOTP)** — login via Credentials Provider (NextAuth) com sessão JWT; segundo fator opcional via app autenticador (QR code de setup em Configurações → Segurança).
-- **Exportação** — CSV (compatível com Excel pt-BR) e PDF (via impressão) das transações do período.
+- **Exportação** — CSV (compatível com Excel pt-BR) e PDF (via impressão) das transações do período, com opção de incluir despesas previstas.
 - **Tema claro/escuro** — alternância persistente via `next-themes`.
 - **Navegação mobile** — barra de navegação inferior fixa em telas pequenas.
 - **Navegação por URL** — mês/ano do dashboard e relatórios gerenciados via search params, compartilháveis e "bookmarkáveis".
@@ -72,14 +73,22 @@ src/
 ├── components/
 │   ├── dashboard/                # Componentes de negócio
 │   │   ├── transaction-form.tsx           # Formulário com parcelamento
-│   │   ├── credit-card-invoice-dialog.tsx # Importação de fatura (aceita estorno)
+│   │   ├── credit-card-invoice-dialog.tsx # Importação de fatura (aceita estorno, marcação de parcela)
 │   │   ├── csv-import-dialog.tsx          # Importação CSV genérica
 │   │   ├── category-chart.tsx             # Gráfico donut (top 10 + Outros) + legenda completa
 │   │   ├── summary-cards.tsx              # Cards de KPI (saldo em destaque)
 │   │   ├── financial-health.tsx           # Saúde financeira
 │   │   ├── forecast.tsx                   # Projeção mensal
 │   │   ├── security-settings.tsx          # Ativação/desativação de 2FA
-│   │   └── privacy-provider.tsx           # Toggle de privacidade (ocultar valores)
+│   │   ├── privacy-provider.tsx           # Toggle de privacidade (ocultar valores)
+│   │   ├── credit-card-settings.tsx       # Aba "Cartões" em Configurações
+│   │   ├── card-installment-purchase-dialog.tsx # Nova compra parcelada no cartão
+│   │   ├── estimated-expense-dialog.tsx   # Nova despesa prevista (cartão ou genérica)
+│   │   ├── invoice-timeline-chart.tsx     # Timeline de faturas confirmado vs. previsto
+│   │   ├── monthly-commitment-card.tsx    # % da renda já comprometida
+│   │   ├── confirm-estimated-expense-button.tsx # Efetiva despesa prevista genérica
+│   │   ├── cancel-provisioned-button.tsx  # Exclui lançamento previsto
+│   │   └── provisioned-badge.tsx          # Badge "Previsto" (âmbar)
 │   ├── layout/                   # Navegação (top-nav.tsx, mobile-bottom-nav.tsx)
 │   ├── command-palette.tsx       # Busca global (Ctrl/Cmd+K)
 │   └── ui/                       # Primitivas shadcn/ui
@@ -87,16 +96,23 @@ src/
 │   ├── actions.ts                # Server Actions (transações, categorias, etc.)
 │   ├── auth.ts                   # Config NextAuth (valida código TOTP no login)
 │   ├── two-factor-actions.ts     # Setup/ativação/desativação de 2FA
-│   ├── dashboard.ts              # Agregações do dashboard + tendência mensal
+│   ├── dashboard.ts              # Agregações do dashboard + tendência mensal (exclui provisionado)
 │   ├── dashboard-utils.ts        # Normalização/agrupamento de categorias, assinatura de estabelecimento
 │   ├── reports.ts                # Dados de relatórios + busca global
-│   ├── credit-card-actions.ts    # Importação de fatura
+│   ├── credit-card-actions.ts    # Importação de fatura + reconciliação com faturas projetadas
+│   ├── credit-card-cycle.ts      # Matemática pura do ciclo de fatura (fechamento/vencimento/split)
+│   ├── credit-card-provision-actions.ts # CRUD de cartão + provisionamento + efetivar/excluir previstos
+│   ├── credit-card-shared.ts     # Helpers compartilhados (categoria/meio de pagamento sintéticos)
 │   ├── csv-actions.ts            # Processamento em lote de CSV
 │   ├── validations.ts            # Schemas Zod
 │   ├── utils.ts                  # cn(), formatCurrency()/maskCurrency(), tratamento de erro Prisma
 │   └── db.ts                     # Singleton do PrismaClient
 ├── proxy.ts                      # Middleware de proteção de rotas
-└── types/next-auth.d.ts          # Extensões de tipo da sessão
+└── types/
+    ├── next-auth.d.ts            # Extensões de tipo da sessão
+    └── models.ts                 # Tipos de exibição (Decimal → number) e re-exports do Prisma
+
+scripts/                          # Scripts de verificação standalone (npx tsx scripts/<arquivo>.ts)
 ```
 
 ### Modelo de dados (Prisma)
@@ -107,17 +123,21 @@ User (1) ──< (N) Category
 User (1) ──< (N) PaymentMethod
 User (1) ──< (N) FinancialInstitution
 User (1) ──< (N) MappingSuggestion
+User (1) ──< (N) CreditCard
 
 Transaction (1) ──< (N) CreditCardInvoiceItem
 Category (1) ──< (N) Transaction
 Category (1) ──< (N) CreditCardInvoiceItem
+CreditCard (1) ──< (N) Transaction
+FinancialInstitution (1) ──< (N) CreditCard
 ```
 
 **Regras principais:**
 - Parcelamento disponível apenas para transações do tipo `SAIDA`, e somente na criação.
 - Status `ATRASADO` é calculado dinamicamente na query — não é persistido no banco.
 - Fatura de cartão (CSV) cria uma `Transaction` com `is_invoice_header = true` + N `CreditCardInvoiceItem` vinculados; só o cabeçalho é liquidado (os itens não têm status próprio).
-- Categorias/meios de pagamento/instituições com transações vinculadas não podem ser excluídos.
+- Categorias/meios de pagamento/instituições/cartões com transações vinculadas não podem ser excluídos.
+- `is_provisioned = true` marca lançamentos futuros/estimados (compra parcelada projetada, despesa prevista): nunca entram nos KPIs/forecast/tendência, mas aparecem nas listas com badge "Previsto" até serem efetivados (só despesa prevista genérica) ou excluídos.
 
 Documentação técnica completa (regras de negócio, convenções, gaps conhecidos) em **[CONTEXT.md](./CONTEXT.md)**.
 

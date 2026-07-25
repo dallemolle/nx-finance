@@ -11,9 +11,11 @@ import {
     creditCardSchema,
     cardInstallmentPurchaseSchema,
     estimatedExpenseSchema,
+    confirmEstimatedExpenseSchema,
     type CreditCardInput,
     type CardInstallmentPurchaseInput,
     type EstimatedExpenseInput,
+    type ConfirmEstimatedExpenseInput,
 } from "@/lib/validations";
 import { getPrismaErrorMessage } from "@/lib/utils";
 import {
@@ -95,7 +97,7 @@ export async function deleteCreditCard(id: string) {
 
 // --- Provisionamento ---
 
-async function findOrCreateProvisionedHeader(
+export async function findOrCreateProvisionedHeader(
     tx: Tx,
     args: {
         userId: string;
@@ -205,53 +207,116 @@ export async function provisionEstimatedExpense(data: EstimatedExpenseInput) {
         await db.$transaction(async (tx) => {
             const category = await getOrCreateInvoiceCategory(tx, userId);
 
+            const isInstallment = validatedData.isInstallment && !!validatedData.installmentsCount && validatedData.installmentsCount > 1;
+
             if (validatedData.credit_card_id) {
                 const card = await tx.creditCard.findFirst({ where: { id: validatedData.credit_card_id, userId } });
                 if (!card) throw new Error("Cartão não encontrado.");
                 const paymentMethod = await getOrCreateProvisionedPaymentMethod(tx, userId);
 
-                const header = await findOrCreateProvisionedHeader(tx, {
-                    userId,
-                    card,
-                    invoiceMonth: validatedData.invoice_month,
-                    invoiceYear: validatedData.invoice_year,
-                    categoryId: category.id,
-                    paymentMethodId: paymentMethod.id,
-                });
+                if (isInstallment) {
+                    // Estimativa parcelada: divide o valor (mesma matemática de
+                    // provisionCardInstallmentPurchase), partindo direto do mês
+                    // escolhido pelo usuário — sem cálculo de closingDay, já que
+                    // aqui não existe uma data de compra real.
+                    const installments = splitInstallments(new Decimal(validatedData.valor), validatedData.installmentsCount!);
+                    const groupId = crypto.randomUUID();
+                    for (let i = 0; i < installments.length; i++) {
+                        const { month, year } = addInvoiceMonths(validatedData.invoice_month, validatedData.invoice_year, i);
+                        const header = await findOrCreateProvisionedHeader(tx, {
+                            userId, card, invoiceMonth: month, invoiceYear: year,
+                            categoryId: category.id, paymentMethodId: paymentMethod.id,
+                        });
+                        const value = installments[i].value;
+                        await tx.creditCardInvoiceItem.create({
+                            data: {
+                                transactionId: header.id,
+                                descricao: `${validatedData.descricao} (${String(i + 1).padStart(2, "0")}/${String(installments.length).padStart(2, "0")})`,
+                                valor: value.toNumber(),
+                                data_compra: new Date(validatedData.invoice_year, validatedData.invoice_month - 1, 1),
+                                categoria_id: validatedData.categoria_id,
+                                is_provisioned: true,
+                                installment_group_id: groupId,
+                                installment_number: i + 1,
+                                installment_total: installments.length,
+                            },
+                        });
+                        await tx.transaction.update({ where: { id: header.id }, data: { valor: { increment: value.toNumber() } } });
+                    }
+                } else {
+                    const header = await findOrCreateProvisionedHeader(tx, {
+                        userId,
+                        card,
+                        invoiceMonth: validatedData.invoice_month,
+                        invoiceYear: validatedData.invoice_year,
+                        categoryId: category.id,
+                        paymentMethodId: paymentMethod.id,
+                    });
 
-                await tx.creditCardInvoiceItem.create({
-                    data: {
-                        transactionId: header.id,
-                        descricao: validatedData.descricao,
-                        valor: validatedData.valor,
-                        data_compra: new Date(validatedData.invoice_year, validatedData.invoice_month - 1, 1),
-                        categoria_id: validatedData.categoria_id,
-                        is_provisioned: true,
-                        installment_group_id: null,
-                    },
-                });
-                await tx.transaction.update({
-                    where: { id: header.id },
-                    data: { valor: { increment: validatedData.valor } },
-                });
+                    await tx.creditCardInvoiceItem.create({
+                        data: {
+                            transactionId: header.id,
+                            descricao: validatedData.descricao,
+                            valor: validatedData.valor,
+                            data_compra: new Date(validatedData.invoice_year, validatedData.invoice_month - 1, 1),
+                            categoria_id: validatedData.categoria_id,
+                            is_provisioned: true,
+                            installment_group_id: null,
+                        },
+                    });
+                    await tx.transaction.update({
+                        where: { id: header.id },
+                        data: { valor: { increment: validatedData.valor } },
+                    });
+                }
             } else {
                 if (!validatedData.tipo_pagamento_id || !validatedData.institution_id) {
                     throw new Error("Informe um cartão ou um meio de pagamento + instituição.");
                 }
-                await tx.transaction.create({
-                    data: {
-                        descricao: validatedData.descricao,
-                        valor: validatedData.valor,
-                        data_vencimento: new Date(validatedData.invoice_year, validatedData.invoice_month - 1, 1),
-                        status: "PENDENTE",
-                        tipo: "SAIDA",
-                        is_provisioned: true,
-                        userId,
-                        categoria_id: validatedData.categoria_id,
-                        tipo_pagamento_id: validatedData.tipo_pagamento_id,
-                        institution_id: validatedData.institution_id,
-                    },
-                });
+                const startDate = new Date(validatedData.invoice_year, validatedData.invoice_month - 1, 1);
+
+                if (isInstallment) {
+                    // Mesma lógica de parcelamento genérico já usada em createTransaction
+                    // (src/lib/actions.ts) — sem installment_group_id, já que Transaction
+                    // não tem essa coluna e o parcelamento genérico de hoje também não usa.
+                    const totalValue = new Decimal(validatedData.valor);
+                    const count = validatedData.installmentsCount!;
+                    const installmentValue = totalValue.dividedBy(count).toDecimalPlaces(2, Decimal.ROUND_DOWN);
+                    const lastInstallmentValue = totalValue.minus(installmentValue.times(count - 1));
+
+                    for (let i = 0; i < count; i++) {
+                        const value = i === count - 1 ? lastInstallmentValue : installmentValue;
+                        await tx.transaction.create({
+                            data: {
+                                descricao: `${validatedData.descricao} (${String(i + 1).padStart(2, "0")}/${String(count).padStart(2, "0")})`,
+                                valor: value.toNumber(),
+                                data_vencimento: addMonths(startDate, i),
+                                status: "PENDENTE",
+                                tipo: "SAIDA",
+                                is_provisioned: true,
+                                userId,
+                                categoria_id: validatedData.categoria_id,
+                                tipo_pagamento_id: validatedData.tipo_pagamento_id,
+                                institution_id: validatedData.institution_id,
+                            },
+                        });
+                    }
+                } else {
+                    await tx.transaction.create({
+                        data: {
+                            descricao: validatedData.descricao,
+                            valor: validatedData.valor,
+                            data_vencimento: startDate,
+                            status: "PENDENTE",
+                            tipo: "SAIDA",
+                            is_provisioned: true,
+                            userId,
+                            categoria_id: validatedData.categoria_id,
+                            tipo_pagamento_id: validatedData.tipo_pagamento_id,
+                            institution_id: validatedData.institution_id,
+                        },
+                    });
+                }
             }
         });
 
@@ -261,6 +326,76 @@ export async function provisionEstimatedExpense(data: EstimatedExpenseInput) {
     } catch (error: unknown) {
         console.error("Error provisioning estimated expense:", error);
         throw new Error(getPrismaErrorMessage(error, "Erro ao provisionar despesa prevista"));
+    }
+}
+
+// Cancela/exclui um item avulso de fatura projetada (parcela futura ou
+// estimativa no cartão). Recalcula o valor do header ou o remove, se ficar
+// vazio — mesma limpeza usada em reconcileProvisionedInstallments.
+export async function deleteProvisionedInvoiceItem(itemId: string) {
+    try {
+        const userId = await getUserId();
+
+        const item = await db.creditCardInvoiceItem.findFirst({
+            where: { id: itemId, is_provisioned: true, transaction: { userId } },
+        });
+        if (!item) throw new Error("Item previsto não encontrado.");
+
+        const headerId = item.transactionId;
+        await db.creditCardInvoiceItem.delete({ where: { id: itemId } });
+
+        const remaining = await db.creditCardInvoiceItem.count({ where: { transactionId: headerId } });
+        if (remaining === 0) {
+            await db.transaction.delete({ where: { id: headerId } });
+        } else {
+            const sum = await db.creditCardInvoiceItem.aggregate({
+                where: { transactionId: headerId },
+                _sum: { valor: true },
+            });
+            await db.transaction.update({ where: { id: headerId }, data: { valor: sum._sum.valor ?? 0 } });
+        }
+
+        revalidatePath("/dashboard");
+        revalidatePath("/reports");
+        return { success: true };
+    } catch (error: unknown) {
+        console.error("Error deleting provisioned invoice item:", error);
+        throw new Error(getPrismaErrorMessage(error, "Erro ao excluir item previsto"));
+    }
+}
+
+// "Efetiva" uma despesa prevista GENÉRICA (sem cartão): confirma o valor real
+// (pode divergir do estimado, ex: conta de luz) e tira a marca de "previsto".
+// Guarda no servidor (não só na UI): só aceita is_provisioned:true e
+// credit_card_id:null — a versão vinculada a cartão fica de fora de propósito,
+// pra não mexer com fatura parcialmente confirmada/parcialmente projetada.
+export async function confirmEstimatedExpense(id: string, data: ConfirmEstimatedExpenseInput) {
+    try {
+        const userId = await getUserId();
+        const validatedData = confirmEstimatedExpenseSchema.parse(data);
+
+        const existing = await db.transaction.findFirst({
+            where: { id, userId, is_provisioned: true, credit_card_id: null },
+        });
+        if (!existing) throw new Error("Despesa prevista não encontrada (ou não é genérica).");
+
+        const updated = await db.transaction.update({
+            where: { id },
+            data: {
+                valor: validatedData.valor,
+                descricao: validatedData.descricao ?? existing.descricao,
+                categoria_id: validatedData.categoria_id ?? existing.categoria_id,
+                data_vencimento: validatedData.data_vencimento ?? existing.data_vencimento,
+                is_provisioned: false,
+            },
+        });
+
+        revalidatePath("/dashboard");
+        revalidatePath("/reports");
+        return { success: true, data: { ...updated, valor: Number(updated.valor) } };
+    } catch (error: unknown) {
+        console.error("Error confirming estimated expense:", error);
+        throw new Error(getPrismaErrorMessage(error, "Erro ao efetivar despesa prevista"));
     }
 }
 

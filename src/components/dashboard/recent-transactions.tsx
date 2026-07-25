@@ -7,6 +7,9 @@ import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { EditTransactionDialog } from "./edit-transaction-dialog";
 import { QuickPayButton } from "./quick-pay-button";
+import { ConfirmEstimatedExpenseButton } from "./confirm-estimated-expense-button";
+import { CancelProvisionedButton } from "./cancel-provisioned-button";
+import { ProvisionedBadge } from "./provisioned-badge";
 import { ChevronRight, ChevronDown, CreditCard } from "lucide-react";
 import { maskCurrency } from "@/lib/utils";
 import { useIsPrivacyMode } from "./privacy-provider";
@@ -102,9 +105,15 @@ export function RecentTransactions({ transactions, userId }: RecentTransactionsP
                             <p className={`text-sm font-black tracking-tight ${tipo === 'ENTRADA' ? 'text-emerald-600' : 'text-rose-600'}`}>
                                 {tipo === 'ENTRADA' ? '+' : '-'} {maskCurrency(Number(t.valor), isHidden)}
                             </p>
-                            {getStatusBadge(t.status)}
+                            {t.is_provisioned ? <ProvisionedBadge /> : getStatusBadge(t.status)}
                         </div>
                         <div className="flex items-center">
+                            {t.is_provisioned && !t.credit_card_id && (
+                                <>
+                                    <ConfirmEstimatedExpenseButton transaction={t} />
+                                    <CancelProvisionedButton kind="transaction" id={t.id} />
+                                </>
+                            )}
                             {t.status !== "PAGO" && <QuickPayButton transactionId={t.id} />}
                             <EditTransactionDialog transaction={t} userId={userId} />
                         </div>
@@ -137,8 +146,13 @@ export function RecentTransactions({ transactions, userId }: RecentTransactionsP
                                     <p className={`text-xs font-semibold tracking-tight ${Number(item.valor) < 0 ? "text-emerald-500" : "text-rose-500"}`}>
                                         {Number(item.valor) < 0 ? "+" : "-"} {maskCurrency(Math.abs(Number(item.valor)), isHidden)}
                                     </p>
+                                    {item.is_provisioned && <ProvisionedBadge />}
                                 </div>
-                                <div className="w-[72px]" />
+                                <div className="w-[72px] flex items-center justify-end">
+                                    {item.is_provisioned && (
+                                        <CancelProvisionedButton kind="invoiceItem" id={item.id.replace(/^inv-/, "")} />
+                                    )}
+                                </div>
                             </div>
                         </div>
                     );

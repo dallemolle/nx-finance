@@ -15,9 +15,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Combobox } from "@/components/ui/combobox";
 import { InstitutionCombobox } from "@/components/dashboard/institution-combobox";
+import { Switch } from "@/components/ui/switch";
 import { Loader2, CalendarPlus } from "lucide-react";
 import { toast } from "sonner";
-import { cn, getErrorMessage } from "@/lib/utils";
+import { Decimal } from "decimal.js";
+import { addMonths } from "date-fns";
+import { cn, formatCurrency, getErrorMessage } from "@/lib/utils";
+import { addInvoiceMonths } from "@/lib/credit-card-cycle";
 import type { Category, PaymentMethod, FinancialInstitution, CreditCardDisplay } from "@/types/models";
 
 const MONTHS = [
@@ -52,6 +56,7 @@ export function EstimatedExpenseDialog({ userId, className }: { userId: string; 
         defaultValues: {
             invoice_month: now.getMonth() + 2 > 12 ? 1 : now.getMonth() + 2,
             invoice_year: now.getMonth() + 2 > 12 ? now.getFullYear() + 1 : now.getFullYear(),
+            isInstallment: false,
         },
     });
 
@@ -61,6 +66,9 @@ export function EstimatedExpenseDialog({ userId, className }: { userId: string; 
     const institutionId = watch("institution_id");
     const invoiceMonth = Number(watch("invoice_month"));
     const invoiceYear = Number(watch("invoice_year"));
+    const isInstallment = watch("isInstallment");
+    const installmentsCount = Number(watch("installmentsCount") || 0);
+    const valorAtual = Number(watch("valor") || 0);
 
     const years = Array.from({ length: 6 }, (_, i) => now.getFullYear() + i);
 
@@ -198,6 +206,77 @@ export function EstimatedExpenseDialog({ userId, className }: { userId: string; 
                             </div>
                         </div>
                     )}
+
+                    <div className="space-y-4 rounded-lg border p-4 bg-muted/20">
+                        <div className="flex items-center justify-between">
+                            <div className="space-y-0.5">
+                                <Label>Despesa Prevista Parcelada?</Label>
+                                <p className="text-xs text-muted-foreground">O valor será dividido entre os meses seguintes a partir do mês selecionado.</p>
+                            </div>
+                            <Switch
+                                checked={isInstallment}
+                                onCheckedChange={(checked) => {
+                                    setValue("isInstallment", checked);
+                                    if (checked && !installmentsCount) {
+                                        setValue("installmentsCount", 2);
+                                    }
+                                }}
+                            />
+                        </div>
+
+                        {isInstallment && (
+                            <div className="space-y-2 animate-in fade-in slide-in-from-top-2 duration-300">
+                                <Label htmlFor="installmentsCount">Quantidade de Parcelas</Label>
+                                <Input
+                                    id="installmentsCount"
+                                    type="number"
+                                    min={2}
+                                    max={48}
+                                    {...register("installmentsCount")}
+                                    placeholder="Ex: 3"
+                                />
+                                {errors.installmentsCount && <p className="text-xs text-red-500">{errors.installmentsCount.message as string}</p>}
+
+                                {valorAtual > 0 && installmentsCount > 0 && (
+                                    <div className="max-h-[160px] overflow-y-auto rounded-md border bg-background/50 mt-2">
+                                        <table className="w-full text-left text-xs">
+                                            <thead className="sticky top-0 bg-muted/50 border-b">
+                                                <tr>
+                                                    <th className="p-2 font-medium w-16 text-center">Parc.</th>
+                                                    <th className="p-2 font-medium">Mês</th>
+                                                    <th className="p-2 font-medium text-right">Valor</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {(() => {
+                                                    const totalValue = new Decimal(valorAtual);
+                                                    const installmentValue = totalValue.dividedBy(installmentsCount).toDecimalPlaces(2, Decimal.ROUND_DOWN);
+                                                    const lastInstallmentValue = totalValue.minus(installmentValue.times(installmentsCount - 1));
+
+                                                    return Array.from({ length: installmentsCount }).map((_, i) => {
+                                                        const currentVal = i === installmentsCount - 1 ? lastInstallmentValue : installmentValue;
+                                                        const { month, year } = useCard
+                                                            ? addInvoiceMonths(invoiceMonth, invoiceYear, i)
+                                                            : (() => {
+                                                                const d = addMonths(new Date(invoiceYear, invoiceMonth - 1, 1), i);
+                                                                return { month: d.getMonth() + 1, year: d.getFullYear() };
+                                                            })();
+                                                        return (
+                                                            <tr key={i} className="border-b last:border-0">
+                                                                <td className="p-2 text-center text-muted-foreground">{String(i + 1).padStart(2, "0")}/{String(installmentsCount).padStart(2, "0")}</td>
+                                                                <td className="p-2 capitalize">{MONTHS[month - 1]}/{year}</td>
+                                                                <td className="p-2 text-right font-medium">{formatCurrency(currentVal.toNumber())}</td>
+                                                            </tr>
+                                                        );
+                                                    });
+                                                })()}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+                    </div>
 
                     <Button type="submit" className="w-full" disabled={isPending}>
                         {isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}

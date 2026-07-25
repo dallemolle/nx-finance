@@ -1,5 +1,10 @@
+"use client";
+
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
+import { Badge } from "../ui/badge";
 import { TrendingDown, TrendingUp, Wallet } from "lucide-react";
+import { cn, maskCurrency } from "@/lib/utils";
+import { useIsPrivacyMode } from "./privacy-provider";
 
 interface SummaryCardsProps {
     summary: {
@@ -23,8 +28,7 @@ function Variation({ value }: { value: number }) {
 }
 
 export function SummaryCards({ summary }: SummaryCardsProps) {
-    const formatCurrency = (value: number) =>
-        new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value);
+    const isHidden = useIsPrivacyMode();
 
     return (
         <div className="grid gap-6 md:grid-cols-3">
@@ -35,20 +39,25 @@ export function SummaryCards({ summary }: SummaryCardsProps) {
                 <CardHeader className="pb-2">
                     <CardTitle className="text-sm font-medium text-slate-400">Saldo Disponível</CardTitle>
                 </CardHeader>
-                <CardContent className="space-y-1">
+                <CardContent className="space-y-2">
                     <div className="text-4xl font-extrabold tracking-tighter">
-                        {formatCurrency(summary.saldoTotal)}
+                        {maskCurrency(summary.saldoTotal, isHidden)}
                     </div>
-                    <div className="flex items-center text-xs text-slate-400">
-                        {summary.deltaSaldo >= 0 ? (
-                            <TrendingUp className="w-3 h-3 mr-1 text-emerald-400" />
-                        ) : (
-                            <TrendingDown className="w-3 h-3 mr-1 text-rose-400" />
-                        )}
-                        <span className={summary.deltaSaldo >= 0 ? "text-emerald-400" : "text-rose-400"}>
+                    <div className="flex items-center gap-2">
+                        <Badge className={cn(
+                            "border-none px-2 py-0.5 text-xs font-semibold gap-1",
+                            summary.deltaSaldo >= 0
+                                ? "bg-emerald-500/10 text-emerald-400"
+                                : "bg-rose-500/10 text-rose-400"
+                        )}>
+                            {summary.deltaSaldo >= 0 ? (
+                                <TrendingUp className="w-3 h-3" />
+                            ) : (
+                                <TrendingDown className="w-3 h-3" />
+                            )}
                             {Math.abs(summary.deltaSaldo).toFixed(1)}%
-                        </span>
-                        <span className="ml-1 opacity-60 text-[10px]">desde o último mês</span>
+                        </Badge>
+                        <span className="text-[10px] text-slate-400 opacity-60">desde o último mês</span>
                     </div>
                 </CardContent>
             </Card>
@@ -61,8 +70,8 @@ export function SummaryCards({ summary }: SummaryCardsProps) {
                     </div>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                    <div className="text-3xl font-bold text-slate-900 dark:text-slate-100 italic">
-                        {formatCurrency(summary.totalEntradas)}
+                    <div className="text-3xl font-bold text-emerald-600 dark:text-emerald-400 italic">
+                        {maskCurrency(summary.totalEntradas, isHidden)}
                     </div>
                     <Variation value={summary.deltaEntradas} />
                 </CardContent>
@@ -76,8 +85,8 @@ export function SummaryCards({ summary }: SummaryCardsProps) {
                     </div>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                    <div className="text-3xl font-bold text-slate-900 dark:text-slate-100 italic">
-                        {formatCurrency(summary.totalSaidas)}
+                    <div className="text-3xl font-bold text-rose-600 dark:text-rose-400 italic">
+                        {maskCurrency(summary.totalSaidas, isHidden)}
                     </div>
                     <Variation value={summary.deltaSaidas} />
                 </CardContent>

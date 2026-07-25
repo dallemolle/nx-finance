@@ -16,6 +16,7 @@ import { CsvImportDialog } from "@/components/dashboard/csv-import-dialog";
 import { CreditCardInvoiceDialog } from "@/components/dashboard/credit-card-invoice-dialog";
 import { EmptyDashboardState } from "@/components/dashboard/empty-dashboard-state";
 import { MonthlyTrendChart } from "@/components/dashboard/monthly-trend-chart";
+import { PrivacyProvider, PrivacyToggleButton } from "@/components/dashboard/privacy-provider";
 
 interface DashboardPageProps {
     searchParams: Promise<{ month?: string; year?: string }>;
@@ -36,7 +37,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     const trend = data.hasAnyTransactions ? await getMonthlyTrend(session.user.id, month, year) : [];
 
     return (
-        <>
+        <PrivacyProvider>
             <TopNav />
             <div className="px-8 pb-24 sm:pb-8 pt-4 space-y-6 animate-in fade-in duration-700 max-w-7xl mx-auto">
                 <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
@@ -46,7 +47,10 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                     </div>
                     <div className="flex flex-col md:flex-row md:items-center gap-3 w-full md:w-auto">
                         <div className="flex items-center justify-between w-full md:w-auto gap-3">
-                            <ThemeToggle />
+                            <div className="flex items-center gap-2">
+                                <ThemeToggle />
+                                <PrivacyToggleButton />
+                            </div>
                             <div className="md:hidden">
                                 <MonthPicker month={month} year={year} />
                             </div>
@@ -90,6 +94,6 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                     <EmptyDashboardState userId={session.user.id} />
                 )}
             </div>
-        </>
+        </PrivacyProvider>
     );
 }

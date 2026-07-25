@@ -3,15 +3,13 @@
 import { AreaChart, Area, XAxis, ResponsiveContainer, Tooltip } from "recharts";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { TrendingUp } from "lucide-react";
+import { formatCurrency } from "@/lib/utils";
 
 interface MonthlyTrendChartProps {
     data: { label: string; saldo: number }[];
 }
 
 export function MonthlyTrendChart({ data }: MonthlyTrendChartProps) {
-    const formatCurrency = (value: number) =>
-        new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value);
-
     return (
         <Card className="border-none shadow-lg bg-white dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-800">
             <CardHeader className="flex flex-row items-center justify-between pb-2">

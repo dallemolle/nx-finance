@@ -26,14 +26,16 @@ export async function getDashboardData(userId: string, month: number, year: numb
     const prevEndDate = endOfMonth(prevMonthDate);
 
     // Fetch current and previous month transactions
+    // is_provisioned:false exclui faturas/despesas projetadas para meses futuros
+    // (ver credit-card-provision-actions.ts) — elas não são gasto real ainda.
     const [transactions, prevTransactions, firstTransaction] = await Promise.all([
         db.transaction.findMany({
-            where: { userId, data_vencimento: { gte: startDate, lte: endDate } },
+            where: { userId, data_vencimento: { gte: startDate, lte: endDate }, is_provisioned: false },
             include: { category: true, institution: true },
             orderBy: { data_vencimento: "desc" },
         }),
         db.transaction.findMany({
-            where: { userId, data_vencimento: { gte: prevStartDate, lte: prevEndDate } },
+            where: { userId, data_vencimento: { gte: prevStartDate, lte: prevEndDate }, is_provisioned: false },
         }),
         db.transaction.findFirst({ where: { userId }, select: { id: true } }),
     ]);
@@ -67,7 +69,7 @@ export async function getDashboardData(userId: string, month: number, year: numb
 
     const invoiceItems = invoiceHeaderIds.length > 0
         ? await db.creditCardInvoiceItem.findMany({
-            where: { transactionId: { in: invoiceHeaderIds } },
+            where: { transactionId: { in: invoiceHeaderIds }, is_provisioned: false },
             include: { category: true },
         })
         : [];
@@ -179,7 +181,7 @@ export async function getMonthlyTrend(userId: string, month: number, year: numbe
     const rangeEnd = endOfMonth(targetDate);
 
     const transactions = await db.transaction.findMany({
-        where: { userId, data_vencimento: { gte: rangeStart, lte: rangeEnd } },
+        where: { userId, data_vencimento: { gte: rangeStart, lte: rangeEnd }, is_provisioned: false },
         select: { valor: true, tipo: true, data_vencimento: true },
     });
 

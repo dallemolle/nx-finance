@@ -1,6 +1,6 @@
 # Contexto do Projeto: NxFinance
 
-> Documento técnico de referência para IAs e desenvolvedores. Reflete o estado real do código na branch atual (`feature/2026-07-23_melhoria_tela`, derivada de `staging`). Não documenta features de outras branches não mergeadas — ver seção 6.
+> Documento técnico de referência para IAs e desenvolvedores. Reflete o estado real do código na branch atual (`feature/2026-07-24_previsao_provisao_gasto`, derivada de `staging`). Não documenta features de outras branches não mergeadas — ver seção 6.
 
 ## 1. Stack Tecnológica Principal
 
@@ -38,6 +38,12 @@ lint        → next lint
 postinstall → prisma generate
 ```
 
+**Scripts de verificação (`scripts/`, sem framework de teste):**
+- Rodados via `npx tsx scripts/<arquivo>.ts` — `tsx` é devDependency justamente para isso (não há Jest/Vitest no projeto).
+- Convenção: imports relativos (não `@/`) para evitar problemas de resolução de path alias fora do Next.js; scripts de integração usam `PrismaClient` bruto (não o singleton `db.ts`) e checam que `DATABASE_URL` aponta pra `localhost`/`127.0.0.1` antes de rodar, abortando caso contrário — nunca devem tocar staging/produção.
+- `verify-billing-cycle.ts` / `verify-estimated-installments.ts`: matemática pura do ciclo de fatura e do parcelamento (sem banco).
+- `verify-reconciliation.ts` / `verify-csv-installment-import.ts` / `verify-confirm-estimate.ts`: integração contra o banco de dev, criam e limpam seus próprios dados de teste (usuário descartável, cascade delete).
+
 **Configurações notáveis:**
 - `tsconfig.json`: strict mode, path alias `@/` → `src/`, target ES2017, moduleResolution bundler
 - `next.config.ts`: output `standalone`
@@ -66,14 +72,14 @@ postinstall → prisma generate
 |---------|------|-----------|
 | `layout.tsx` | Server Component | RootLayout: `<html lang="pt-BR">`, Providers, EnvironmentBanner, `CommandPalette`, `MobileBottomNav`, Toaster Sonner |
 | `providers.tsx` | Client Component | Wrapper: SessionProvider + ThemeProvider (attribute="class", defaultTheme="system", enableSystem) |
-| `page.tsx` | Server Component | Dashboard principal (rota `/`): sessão → busca dados → envolve o conteúdo em `PrivacyProvider` → renderiza cards, gráficos, transações (ou `EmptyDashboardState` se o usuário nunca lançou nada) |
+| `page.tsx` | Server Component | Dashboard principal (rota `/`): sessão → busca dados → envolve o conteúdo em `PrivacyProvider` → renderiza cards, gráficos, transações (ou `EmptyDashboardState` se o usuário nunca lançou nada); se o usuário tem ao menos um `CreditCard` cadastrado, busca `getInvoiceTimeline()` e renderiza uma seção extra com `InvoiceTimelineChart` + `MonthlyCommitmentCard` (some completamente pra quem não usa cartão) |
 | `globals.css` | Estilos | Definição de CSS variables para `:root` (light) e `.dark`; `@tailwind base/components/utilities` |
 | `auth/login/page.tsx` | Client Component | Formulário de login com suporte a 2FA (campo `code` aparece condicionalmente quando o servidor responde `2FA_REQUIRED`) |
 | `auth/register/page.tsx` | Client Component | Formulário de registro → chama `registerUser()` Server Action |
 | `reports/page.tsx` | Server Component | Página de relatórios: busca dados + renderiza `ReportContent` + `MonthPicker` |
-| `reports/report-content.tsx` | Client Component | Tabela paginada (50/página) com filtragem por status/categoria/instituição/meio de pagamento |
+| `reports/report-content.tsx` | Client Component | Tabela paginada (50/página) com filtragem por status/categoria/instituição/meio de pagamento; linhas/sub-linhas com `is_provisioned:true` mostram `ProvisionedBadge` em vez do badge de status (dados já vêm sem filtro de provisionado, ver `reports.ts`) |
 | `reports/report-filters.tsx` | Client Component | Filtros combinados com Selects com totais por meio de pagamento |
-| `dashboard/settings/page.tsx` | Server Component | Tabs de configuração: Instituições (default), Categorias, Meios de Pagamento, Segurança (2FA) |
+| `dashboard/settings/page.tsx` | Server Component | Tabs de configuração: Instituições (default), Categorias, Meios de Pagamento, Cartões, Segurança (2FA) |
 | `api/auth/[...nextauth]/route.ts` | Route Handler | Catch-all NextAuth: exporta GET/POST handler |
 
 ### `src/components/dashboard/` — Componentes de Negócio
@@ -81,17 +87,26 @@ postinstall → prisma generate
 | Arquivo | Tipo | Propósito |
 |---------|------|-----------|
 | `summary-cards.tsx` | Client Component | 3 cards de KPI: Saldo (hero, fundo escuro, badge de tendência), Entradas (`emerald-600/400`), Saídas (`rose-600/400`) — valores mascaráveis via `useIsPrivacyMode()` |
-| `category-chart.tsx` | Client Component | Gráfico donut Recharts limitado a 10 fatias + "Outros"; legenda lista **todas** as categorias sem cap, cada uma na própria linha; clique (na fatia ou na legenda) abre diálogo de detalhe — se for "Outros", a lista de despesas vem agrupada por categoria |
-| `recent-transactions.tsx` | Client Component | Lista de transações do mês separada por Entradas/Saídas; valores mascaráveis |
+| `category-chart.tsx` | Client Component | Gráfico donut Recharts limitado a 10 fatias + "Outros"; legenda lista **todas** as categorias sem cap, cada uma na própria linha; clique (na fatia ou na legenda) abre diálogo de detalhe — se for "Outros", a lista de despesas vem agrupada por categoria; linhas previstas mostram `ProvisionedBadge` e o total do cabeçalho mostra um subtotal "+ R$X previsto" separado do total confirmado (`categoryItem.value` nunca inclui provisionado) |
+| `recent-transactions.tsx` | Client Component | Lista de transações do mês separada por Entradas/Saídas; valores mascaráveis; linhas/sub-itens com `is_provisioned:true` trocam o badge de status por `ProvisionedBadge` e ganham `ConfirmEstimatedExpenseButton` + `CancelProvisionedButton` (genérica) ou só `CancelProvisionedButton` (item de fatura projetada) no lugar dos botões normais |
 | `month-picker.tsx` | Client Component | Navegador de mês/ano via URL Search Params (`?month=&year=`); botões com hitbox de 44px; `useTransition` com feedback visual (pulso/disable) durante a navegação |
 | `transaction-form.tsx` | Client Component | Formulário completo com suporte a parcelamento (`decimal.js`), Combobox com criação inline |
 | `new-transaction-dialog.tsx` | Client Component | Diálogo para nova transação, carrega dados ao abrir |
 | `edit-transaction-dialog.tsx` | Client Component | Diálogo de edição com `initialData` |
 | `quick-pay-button.tsx` | Client Component | Botão de pagamento rápido (altera status para PAGO) |
 | `csv-import-dialog.tsx` | Client Component | Importação CSV em 2 passos: upload + mapeamento de categorias, com sugestão automática por `MappingSuggestion` |
-| `credit-card-invoice-dialog.tsx` | Client Component | Importação de fatura de cartão de crédito via CSV: cria cabeçalho `is_invoice_header` + itens detalhados com categoria; aceita valores negativos (estorno/reembolso, reduzem o total da fatura); sugestão automática de categoria com destaque visual sutil (sem badge de texto) |
+| `credit-card-invoice-dialog.tsx` | Client Component | Importação de fatura de cartão de crédito via CSV, em 2 passos: (1) upload + descrição/vencimento/instituição/meio de pagamento + seletor de `CreditCard` opcional; (2) revisão item a item, com um botão por linha (`Popover`, ícone `Repeat`) pra marcar "isto é uma compra parcelada" (nº da parcela + total), habilitado só se um cartão foi selecionado no passo 1. Cria cabeçalho `is_invoice_header` + itens; aceita valores negativos (estorno/reembolso, reduzem o total da fatura); sugestão automática de categoria com destaque visual sutil (sem badge de texto) |
+| `credit-card-form-dialog.tsx` | Client Component | Formulário de criar/editar `CreditCard` (nome, instituição emissora, dia de fechamento, dia de vencimento, limite opcional, cor) |
+| `credit-card-settings.tsx` | Client Component | Aba "Cartões" em Configurações: lista de `CreditCard` com edição inline e exclusão (bloqueada se houver `Transaction` vinculada) |
+| `card-installment-purchase-dialog.tsx` / `card-installment-purchase-form.tsx` | Client Component | Diálogo "Nova Compra Parcelada no Cartão": divide um valor total em N parcelas (`decimal.js`) e projeta cada uma na fatura futura correta (via `credit-card-cycle.ts`), com prévia ao vivo mês a mês antes de confirmar |
+| `estimated-expense-dialog.tsx` | Client Component | Diálogo "Despesa Prevista": lança uma estimativa futura, com toggle "No cartão" (vira item numa fatura projetada) / "Genérica" (vira `Transaction` avulsa com `is_provisioned:true`); suporta parcelamento opcional em ambos os casos, com prévia mês a mês |
+| `invoice-timeline-chart.tsx` | Client Component | `BarChart` empilhado (confirmado vs. provisionado) dos próximos meses de fatura por cartão; hospeda os gatilhos de `CardInstallmentPurchaseDialog` e `EstimatedExpenseDialog` no cabeçalho |
+| `monthly-commitment-card.tsx` | Client Component | Indicador de comprometimento do mês (% da renda já comprometida com parcelas + estimativas), mesma linguagem visual de `financial-health.tsx` (faixas de cor por limiar) |
+| `confirm-estimated-expense-button.tsx` | Client Component | Botão (ícone `BadgeCheck`) que "efetiva" uma despesa prevista **genérica**: mini-diálogo com valor e data de vencimento editáveis, chama `confirmEstimatedExpense()` |
+| `cancel-provisioned-button.tsx` | Client Component | Botão (ícone `Trash2`, com `confirm()`) que exclui um lançamento previsto — `kind="transaction"` (despesa prevista genérica, via `deleteTransaction`) ou `kind="invoiceItem"` (parcela/estimativa dentro de fatura projetada, via `deleteProvisionedInvoiceItem`) |
+| `provisioned-badge.tsx` | Componente puro | `<ProvisionedBadge />` — pill âmbar "Previsto", mesmo formato dos badges de status; usado em `recent-transactions.tsx`, `category-chart.tsx` e `report-content.tsx` |
 | `institution-combobox.tsx` | Client Component | Combobox especializado com criação de instituição via diálogo |
-| `export-buttons.tsx` | Client Component | Dropdown de exportação real: CSV (`;`-delimitado, BOM UTF-8 p/ Excel pt-BR) via Blob + `<a download>`, e PDF via janela de impressão (`window.print()`) |
+| `export-buttons.tsx` | Client Component | Dropdown de exportação real: checkbox "Incluir despesas previstas" (desmarcado por padrão) filtra `is_provisioned` antes de exportar; CSV (`;`-delimitado, BOM UTF-8 p/ Excel pt-BR) via Blob + `<a download>`, e PDF via janela de impressão (`window.print()`) — linhas previstas incluídas ganham marcação "Previsto"/"PREVISTO" no lugar do status |
 | `financial-health.tsx` | Client Component | Indicador visual de saúde financeira com Progress |
 | `forecast.tsx` | Client Component | Projeção mensal baseada em média diária |
 | `settings-forms.tsx` | Client Component | Linhas editáveis para renomear/excluir registros auxiliares |
@@ -124,15 +139,18 @@ postinstall → prisma generate
 | Arquivo | Tipo | Propósito |
 |---------|------|-----------|
 | `utils.ts` | Utilitário | `cn()` (merge de classes Tailwind); `formatCurrency()`/`maskCurrency()` (formatação BRL centralizada — usado por todo o dashboard); `getErrorMessage()`/`getPrismaErrorMessage()` (mensagens amigáveis para erros do Prisma: P2002/P2025/P2003) |
-| `validations.ts` | Schema | Schemas Zod: `transactionSchema`, `categorySchema`, `paymentMethodSchema`, `financialInstitutionSchema`, `loginSchema`, `registerSchema`, `twoFactorCodeSchema`, `creditCardInvoiceSchema`, `creditCardInvoiceItemSchema` (valor aceita negativo — estorno/reembolso) |
+| `validations.ts` | Schema | Schemas Zod: `transactionSchema`, `categorySchema`, `paymentMethodSchema`, `financialInstitutionSchema`, `loginSchema`, `registerSchema`, `twoFactorCodeSchema`, `creditCardInvoiceSchema`, `creditCardInvoiceItemSchema` (valor aceita negativo — estorno/reembolso; campos opcionais `isInstallment`/`installmentNumber`/`installmentsCount` pra marcar parcela na importação), `creditCardSchema`, `cardInstallmentPurchaseSchema`, `estimatedExpenseSchema` (`.refine` exige cartão OU meio+instituição; `isInstallment`/`installmentsCount` opcionais), `confirmEstimatedExpenseSchema` |
 | `actions.ts` | Server Actions | CRUD de transações, categorias, métodos de pagamento, instituições financeiras |
 | `auth-actions.ts` | Server Action | `registerUser()` — registro + seed de categorias padrão |
 | `auth.ts` | Config | `authOptions` — NextAuth config com Credentials Provider; `authorize()` valida o código TOTP (via `otplib`, `epochTolerance: 30`) contra `secret_2fa` quando `status_2fa` está ativo |
 | `two-factor-actions.ts` | Server Actions | `generateTwoFactorSetup()` (gera segredo + QR code, não persiste), `enableTwoFactor()`/`disableTwoFactor()` (validam o código antes de gravar `status_2fa`/`secret_2fa`) |
-| `dashboard.ts` | Server Actions | `getDashboardData()` — agrega totais, deltas, health score, forecast, smart category grouping, `hasAnyTransactions`; `getMonthlyTrend()` — saldo dos últimos 6 meses em buckets mensais |
+| `dashboard.ts` | Server Actions | `getDashboardData()` — agrega totais, deltas, health score, forecast, smart category grouping, `hasAnyTransactions` (tudo isso **exclui** `is_provisioned:true`); busca à parte lançamentos previstos do período (`is_provisioned:true`) só pra exibição nas listas (badge "Previsto"), concatenados em `monthlyTransactions` sem afetar nenhuma métrica; `getMonthlyTrend()` — saldo dos últimos 6 meses em buckets mensais (também exclui provisionado) |
 | `dashboard-utils.ts` | Utilitário | `getCategoryGroupName()` (sinônimos hardcoded: mercado/mer, comida/restaurante/ifood); `mergeSimilarCategories()` (merge genérico por prefixo normalizado, cobre variações não previstas nos sinônimos); `capToTopNPlusOthers()` (cap fixo + fatia "Outros"); `getMerchantSignature()` (assinatura de 2 palavras p/ aprendizado de `MappingSuggestion`) |
-| `reports.ts` | Server Actions | `getReportData()`, `getCategories/PaymentMethods/Institutions()`, `searchTransactions()` (usado pelo `CommandPalette`, se autentica via `getServerSession`) |
-| `credit-card-actions.ts` | Server Actions | `importCreditCardInvoice()` — importa fatura CSV (soma sinalizada: estornos reduzem o total; bloqueia se total ≤ 0), aprende `MappingSuggestion` por item, + `getInvoiceItems()` + `getInvoiceHeaders()` |
+| `reports.ts` | Server Actions | `getReportData()` (sem filtro de `is_provisioned` — relatórios mostram previstos por padrão, com `ProvisionedBadge`), `getCategories/PaymentMethods/Institutions()`, `getCreditCards()`, `searchTransactions()` (usado pelo `CommandPalette`, se autentica via `getServerSession`) |
+| `credit-card-actions.ts` | Server Actions | `importCreditCardInvoice()` — roda dentro de `db.$transaction()`; importa fatura CSV (soma sinalizada: estornos reduzem o total; bloqueia se total ≤ 0), cria os itens individualmente (não `createMany`, precisa dos IDs gerados), aprende `MappingSuggestion` por item; se `credit_card_id` informado: grava `invoice_month`/`invoice_year` no cabeçalho (via `getReferenceMonthFromDueDate`), chama `reconcileProvisionedInstallments()` e projeta as parcelas restantes dos itens marcados como parcelados na revisão + `getInvoiceItems()` + `getInvoiceHeaders()` |
+| `credit-card-cycle.ts` | Utilitário puro | Matemática do ciclo de fatura, sem Prisma/`"use server"` (testável isoladamente via `scripts/verify-billing-cycle.ts`): `getInvoiceReferenceMonth()`, `addInvoiceMonths()`, `computeInvoiceDueDate()`, `getReferenceMonthFromDueDate()` (inverso), `splitInstallments()` (split cents-accurate) |
+| `credit-card-shared.ts` | Utilitário | Helpers compartilhados entre `credit-card-actions.ts` e `credit-card-provision-actions.ts` (extraídos pra evitar import circular): `getOrCreateInvoiceCategory()`, `getOrCreateProvisionedPaymentMethod()`, `findProvisionedHeader()` |
+| `credit-card-provision-actions.ts` | Server Actions | CRUD de `CreditCard`; `provisionCardInstallmentPurchase()` (compra parcelada real → projeta parcelas em faturas futuras); `provisionEstimatedExpense()` (despesa prevista, com ou sem parcelamento, no cartão ou genérica); `confirmEstimatedExpense()` (efetiva despesa prevista **genérica**, guarda `is_provisioned:true && credit_card_id:null` no servidor); `deleteProvisionedInvoiceItem()` (cancela item avulso de fatura projetada, recalcula/remove o cabeçalho); `reconcileProvisionedInstallments()` (migra parcelas provisionadas pra fatura real importada); `getInvoiceTimeline()` (buckets mensais confirmado/provisionado por cartão); `findOrCreateProvisionedHeader()` (exportado, reusado por `credit-card-actions.ts`) |
 | `csv-actions.ts` | Server Actions | `processBatchTransactions()`, `getMappingSuggestions()`, `saveMappingSuggestion()` — casamento/aprendizado via `getMerchantSignature()` |
 | `db.ts` | Singleton | Instância singleton do PrismaClient (cache em `globalThis`) — **usado por todas as Server Actions** |
 
@@ -149,6 +167,11 @@ postinstall → prisma generate
 | Arquivo | Propósito |
 |---------|-----------|
 | `next-auth.d.ts` | Estende `Session.user.id`, `User.id`, `JWT.id` |
+| `models.ts` | Re-exporta tipos Prisma (`Category`, `PaymentMethod`, `FinancialInstitution`, `CreditCard`, ...) e define os shapes "de exibição" pós-serialização (`Decimal` → `number`) consumidos por Client Components: `CreditCardDisplay`, `InvoiceItemDisplay`, `TransactionDisplay` (união entre uma `Transaction` real e um `CreditCardInvoiceItem` achatado em formato de transação) |
+
+### `scripts/` — Verificação Standalone (fora do Next.js)
+
+Ver "Scripts de verificação" na seção 1. Não faz parte do build/deploy — só rodados manualmente durante desenvolvimento pra validar lógica de ciclo de fatura, provisionamento e reconciliação sem precisar de UI.
 
 ---
 
@@ -178,6 +201,8 @@ Todos os schemas em `src/lib/validations.ts` aplicam transformações **antes** 
   - Nomes das parcelas seguem o padrão `"Descrição (01/12)"` editável pelo usuário via `installmentDescriptions`.
   - **O parcelamento só está disponível para `tipo === "SAIDA"`** e apenas na criação (não edição — `updateTransaction` descarta `isInstallment`/`installmentsCount`).
 - Status `ATRASADO` é **calculado dinamicamente** no servidor: se `status !== "PAGO" && dataVencimento < now()`, o status exibido é "ATRASADO" (não é persistido, apenas calculado na query em `dashboard.ts` e `reports.ts`).
+- `is_provisioned` (default `false`) marca um lançamento **futuro/estimado**, ainda não real: excluído de todas as métricas do dashboard (KPIs, forecast, health score, tendência), mas exibido nas listas com `ProvisionedBadge`. Ver seção 3.10.
+- `credit_card_id`/`invoice_month`/`invoice_year` só são preenchidos em cabeçalhos de fatura (`is_invoice_header:true`) vinculados a um `CreditCard` — `invoice_month`/`invoice_year` guardam o **mês de referência** (ciclo de fechamento), não o mês do vencimento, indexados junto (`@@index([userId, credit_card_id, invoice_month, invoice_year])`) pra achar "já existe fatura projetada desse cartão+mês?" sem recalcular a regra de vencimento a cada busca.
 
 **CreditCardInvoiceItem (modelo auxiliar de fatura de cartão):**
 - Relacionamento 1:N com Transaction via `transactionId` — uma transação `is_invoice_header` pode conter N itens.
@@ -189,7 +214,8 @@ Todos os schemas em `src/lib/validations.ts` aplicam transformações **antes** 
 - **Estorno/reembolso**: itens com valor negativo são aceitos e preservados (sinal mantido do parse até a gravação — sem `Math.abs()`); o total da fatura é a soma sinalizada dos itens, e a importação é bloqueada (`throw`) se o total ficar ≤ 0 (estornos superando as compras). Telas que exibem sub-itens de fatura (relatórios, lançamentos recentes) tratam o sinal explicitamente para não duplicar o "−" na formatação.
 - **Aprendizado de categoria**: após criar os itens, `importCreditCardInvoice()` faz `upsert` de `MappingSuggestion` por item (assinatura via `getMerchantSignature()`), para sugerir automaticamente a categoria em importações futuras do mesmo estabelecimento.
 - **Exibição em relatórios/dashboard**: invoice items são expandidos como sub-linhas na tabela de relatórios e mesclados no gráfico de categorias (evitando dupla contagem da transação `is_invoice_header`).
-- **Não há conciliação automática de parcelamentos** contra a fatura importada (sem regex/matching por descrição, sem tolerância de valor) — cada item da fatura é lançado manualmente com sua própria categoria no momento da importação.
+- `is_provisioned`, `installment_group_id`, `installment_number`, `installment_total` (todos opcionais/default `false`/`null`) suportam o módulo de provisionamento — ver seção 3.10. `installment_group_id` é compartilhado por todas as parcelas de uma mesma compra (indexado, `@@index([installment_group_id])`); itens avulsos (despesa prevista sem parcelamento) ficam com `installment_group_id: null`.
+- **Conciliação automática só para parcelas** (itens com `installment_group_id` preenchido — gerados pelo próprio sistema, casamento exato por cartão+mês de referência). Despesas previstas avulsas (`installment_group_id: null`) **não** são conciliadas automaticamente: ficam provisionadas até o usuário efetivar (só a genérica) ou excluir manualmente. Não há matching fuzzy por texto/valor.
 
 **Category:**
 - Duplicidade verificada antes da criação via `findFirst({ where: { nome: { equals, mode: 'insensitive' }, userId, tipo } })` — case-insensitive.
@@ -201,6 +227,11 @@ Todos os schemas em `src/lib/validations.ts` aplicam transformações **antes** 
 - Duplicidade verificada via `findUnique({ where: { nome_userId } })` — usa a unique constraint composta.
 - Mesma proteção de exclusão que categorias.
 - `FinancialInstitution` possui campo `metadata` (JSON, default `{}`) e `cor` opcional.
+
+**CreditCard:**
+- Campos: `nome`, `closingDay`/`dueDay` (1-31), `limite` opcional, `cor` opcional, `institution_id` (banco emissor, FK obrigatória pra `FinancialInstitution`). Unique `@@unique([nome, userId])`.
+- **Proteção de exclusão**: bloqueada se houver qualquer `Transaction` vinculada (`credit_card_id`), real ou provisionada.
+- Cadastro opcional — o dashboard não muda pra quem não cria nenhum `CreditCard` (a seção de timeline/comprometimento só renderiza se `creditCards.length > 0`).
 
 ### 3.3 Agrupamento Inteligente de Categorias (`dashboard-utils.ts`)
 
@@ -239,6 +270,7 @@ Todas as mutações seguem o mesmo padrão:
 
 - Ao processar `categoryData`, o dashboard separa transações com `is_invoice_header === true` e as exclui do agrupamento, evitando duplicidade no gráfico. Em vez disso, busca os registros de `CreditCardInvoiceItem` e os mescla na agregação via `aggregateByCategory()`, garantindo que os gastos do cartão apareçam nas categorias corretas.
 - Invoice items também são mapeados para estrutura similar a transação (`invoiceItemsAsTransactions`) para inclusão em `monthlyTransactions` e exibição no gráfico/diálogo de detalhes.
+- **`is_provisioned:true` é excluído de todas as queries que alimentam `categoryData`/`summary`/`forecast`/`healthScore`/`getMonthlyTrend`** — despesas futuras/estimadas nunca contam como gasto real do mês. Uma busca adicional (também em `getDashboardData()`) traz os lançamentos previstos do mesmo período só pra exibição (concatenados em `monthlyTransactions`, fora dos cálculos acima) — ver 3.10.
 
 **`getDashboardData()` — `src/lib/dashboard.ts`:**
 
@@ -288,6 +320,30 @@ O componente `MonthPicker` gerencia estado de navegação exclusivamente via URL
 - `PrivacyProvider` envolve o conteúdo de `src/app/page.tsx`; guarda um boolean (`isHidden`) em Context + `localStorage` (chave `nxfinance:dashboard-privacy`), inicializado em `false` no primeiro render (SSR-safe) e corrigido a partir do `localStorage` num `useEffect` no mount do cliente.
 - `PrivacyToggleButton` (ícone Eye/EyeOff) fica ao lado do `ThemeToggle` no cabeçalho do dashboard.
 - `useIsPrivacyMode()` é consumido por `SummaryCards` (os 3 KPIs), `CategoryChart` (total central do donut) e `RecentTransactions` (valor de cada lançamento/sub-item de fatura), todos passando o valor por `maskCurrency(value, isHidden)` — que retorna `"••••••"` quando oculto. Legenda de categorias e diálogos de detalhe **não** são mascarados (escopo confirmado do recurso).
+
+### 3.10 Compras Parceladas no Cartão e Projeção de Faturas Futuras
+
+Módulo opcional (só ativo pra quem cadastra um `CreditCard`) que resolve 3 necessidades: lançar uma compra parcelada e já projetar as parcelas nas faturas futuras certas; registrar uma despesa prevista pra planejamento; e visualizar o comprometimento futuro antes que ele vire gasto real.
+
+**Regra de ciclo de fatura** (`credit-card-cycle.ts`, funções puras testadas em `scripts/verify-billing-cycle.ts`):
+- Compra no dia `D` do cartão com fechamento `closingDay`: se `D >= closingDay`, cai na fatura do **mês seguinte** (ciclo já fechado); senão, cai no mês atual. Cada parcela seguinte soma +1 mês a essa referência (`addInvoiceMonths`).
+- Vencimento: fatura do mês de referência M vence no dia `dueDay`, mas **só no mesmo mês M se `dueDay > closingDay`**; se `dueDay <= closingDay` (caso comum — ex. fecha 25/vence 5), o vencimento é no `dueDay` do mês **seguinte** a M (senão venceria antes do próprio fechamento). `getReferenceMonthFromDueDate()` é o inverso exato dessa regra, usado pra descobrir a que mês de referência uma fatura real importada corresponde.
+- Split de valor (`splitInstallments()`): `decimal.js`, arredondamento pra baixo por parcela, última parcela absorve o centavo residual — mesma lógica já usada em `createTransaction`.
+
+**Faturas projetadas**: um cabeçalho `Transaction` (`is_invoice_header:true, is_provisioned:true, valor:0` inicial) é criado (ou reaproveitado, via `findOrCreateProvisionedHeader()`) por cartão+mês de referência, satisfazendo as FKs de categoria/meio de pagamento com registros sintéticos (categoria "Fatura Cartão", meio de pagamento "Cartão (Provisionado)" — mesmo truque já usado pra fatura real importada). Cada parcela/estimativa vira um `CreditCardInvoiceItem` dentro desse cabeçalho, incrementando seu `valor`.
+
+**3 formas de gerar provisionamento:**
+1. **Compra parcelada real** (`provisionCardInstallmentPurchase`, diálogo "Nova Compra Parcelada no Cartão") — valor total + nº de parcelas + data da compra: calcula o mês de referência da 1ª parcela e projeta todas.
+2. **Despesa prevista** (`provisionEstimatedExpense`, diálogo "Despesa Prevista") — usuário escolhe o mês de início diretamente (sem cálculo de `closingDay`, já que não há data de compra real); pode ser "no cartão" (item numa fatura projetada) ou "genérica" (uma `Transaction` avulsa com `is_provisioned:true`, sem cartão nem fatura); suporta parcelamento opcional em ambos os casos (cartão reaproveita a mesma máquina de `CreditCardInvoiceItem`; genérica reaproveita a mesma lógica de `createTransaction`, sem `installment_group_id` — esse campo só existe em `CreditCardInvoiceItem`).
+3. **Marcar item na importação de CSV** (`credit-card-invoice-dialog.tsx`, Step 2) — ao importar a fatura real, um item pode ser marcado como parcela nº X de Y (suporta começar no meio de um parcelamento, ex. entrar no app já na parcela 3/6); o item importado **é** a parcela real, então só as parcelas restantes são projetadas nos meses seguintes, **com o mesmo valor do item importado** (extrato de banco já mostra o valor fixo da parcela — não se divide um total).
+
+**Reconciliação** (`reconcileProvisionedInstallments`, chamada de dentro de `importCreditCardInvoice` quando a fatura real importada tem `credit_card_id`): busca a fatura projetada do mesmo cartão+mês de referência e migra pra fatura real **só** os itens com `installment_group_id` preenchido (parcelas — casamento exato, geradas pelo próprio sistema). Remove a fatura projetada se ficar vazia, ou recalcula seu valor caso sobre alguma estimativa avulsa. **Pré-requisito**: o diálogo de import precisa ter um `CreditCard` selecionado no Step 1 — sem isso `credit_card_id` nunca é enviado e a reconciliação nunca dispara.
+
+**Ciclo de vida de uma despesa prevista genérica** (sem cartão): pode ser **efetivada** (`confirmEstimatedExpense` — ajusta valor e data de vencimento reais, `is_provisioned` vira `false`; guarda no servidor exige `credit_card_id: null`, então uma estimativa no cartão nunca passa por aqui) ou **excluída** (`CancelProvisionedButton` com `kind="transaction"`, via `deleteTransaction`). Itens de fatura projetada (parcela futura ou estimativa no cartão) só podem ser excluídos individualmente (`deleteProvisionedInvoiceItem`, recalcula/remove o cabeçalho), não efetivados — evita o problema de uma fatura ficar parcialmente confirmada/parcialmente projetada.
+
+**Timeline e comprometimento** (`getInvoiceTimeline`, `InvoiceTimelineChart` + `MonthlyCommitmentCard`): agrega por mês (bucket) os totais confirmado vs. provisionado dos próximos 6 meses, por cartão. O card de comprometimento mostra quanto da renda do mês corrente já está comprometido (parcelas + estimativas), com faixas de cor por limiar (mesmo padrão de `financial-health.tsx`).
+
+**Fora do dashboard de KPIs, dentro das listas**: `is_provisioned:true` é excluído de `categoryData`/`summary`/`forecast`/`healthScore`/`getMonthlyTrend` (ver 3.5), mas os lançamentos previstos **aparecem** em `RecentTransactions`, no detalhamento por categoria (com subtotal "previsto" separado do total confirmado) e em Relatórios, sempre com `ProvisionedBadge` (pill âmbar). Exportação (CSV/PDF) tem opção explícita "Incluir despesas previstas" (desmarcada por padrão).
 
 ---
 
@@ -347,6 +403,7 @@ Todas as Server Actions usam `try/catch` com `console.error(...)` seguido de `th
 ### 4.7 Exportação
 
 - Dropdown com opções CSV e PDF, ambas funcionais (`export-buttons.tsx`).
+- Checkbox "Incluir despesas previstas" no topo do dropdown (`DropdownMenuCheckboxItem`, desmarcado por padrão) filtra `transactions` por `is_provisioned` antes de gerar o arquivo; quando incluídas, a coluna de status mostra "Previsto"/"PREVISTO" em vez do status real.
 - **CSV**: monta conteúdo `;`-delimitado com BOM UTF-8 (compatibilidade com Excel pt-BR), gera via `Blob` + `<a download>`.
 - **PDF**: abre uma nova janela com uma tabela HTML formatada e chama `window.print()`.
 
@@ -359,6 +416,10 @@ Todas as Server Actions usam `try/catch` com `console.error(...)` seguido de `th
 ### 4.9 Toggle de Privacidade
 
 - Ícone Eye/EyeOff (`PrivacyToggleButton`) ao lado do `ThemeToggle`, no cabeçalho do dashboard — oculta/exibe valores monetários dos 3 KPIs, do total central do gráfico de categorias e da lista de lançamentos recentes. Estado persiste em `localStorage` (ver 3.9).
+
+### 4.10 Convenção de cor para "Previsto"
+
+Âmbar (`amber-500`/`#f59e0b`) com opacidade reduzida é a cor reservada pra tudo que é provisionado/estimado, em contraste com índigo (confirmado/cabeçalho de fatura) e emerald/rose (entradas/saídas efetivas): `InvoiceTimelineChart` usa `fill="#f59e0b" fillOpacity={0.6}` na série "Provisionado"; `ProvisionedBadge` usa `bg-amber-50 text-amber-600 dark:bg-amber-950/40 dark:text-amber-400`, mesmo formato dos badges de status (`border-none px-2 py-0 text-[10px] uppercase font-bold tracking-tight`). Não reutilizar âmbar pra outro estado.
 
 ---
 
@@ -397,10 +458,11 @@ Todas as Server Actions usam `try/catch` com `console.error(...)` seguido de `th
 
 Seção para evitar que futuras sessões assumam que algo funciona apenas porque há código relacionado no repositório.
 
-- **`CreditCardInvoiceItem.data_vencimento_original`** existe no schema mas não é escrito pelo fluxo de importação atual.
-- **Sem conciliação assistida de fatura de cartão**: não há matching automático (regex/tolerância) entre itens de fatura importados e parcelamentos futuros já lançados — cada item da fatura é categorizado manualmente na importação.
-- **Sem provisão de despesas fixas → despesa real**: não existe, na branch atual, fluxo de "provisão" com transição de status para lançamento efetivo. Essas duas últimas features (conciliação assistida e provisão de despesas) existem implementadas na branch `feature/2026-07-18_prev-desc-new_table` (não mergeada) — consultar essa branch antes de reimplementar do zero.
+- **`CreditCardInvoiceItem.data_vencimento_original`** existe no schema mas não é escrito por nenhum fluxo (import de fatura real nem provisionamento).
+- **Conciliação automática só cobre parcelas** (`installment_group_id` preenchido) — despesas previstas avulsas (estimativas soltas, `installment_group_id: null`) nunca são conciliadas automaticamente contra uma fatura real importada; ficam provisionadas até o usuário efetivar (só a variante genérica, sem cartão) ou excluir manualmente. Decisão deliberada de escopo (matching fuzzy de texto/valor não foi implementado), não bug.
+- **Sem proteção contra double-provisioning**: se o usuário lança uma compra parcelada manualmente (diálogo "Compra Parcelada") e depois importa a fatura real marcando o mesmo item como parcelado (Step 2 do import), os dois fluxos geram projeções futuras independentes e não-deduplicadas pro mesmo cartão/mês — a soma nos agregados fica incorreta (duplicada) nesse cenário específico. Não há aviso na UI hoje.
+- **Detalhamento por categoria com itens previstos**: o total no cabeçalho do diálogo (`categoryItem.value`) soma só o confirmado; linhas previstas aparecem na lista com um subtotal "+ R$X previsto" separado — mas o agrupamento "Outros" (quando clicado) soma confirmado e previsto juntos no subtotal por categoria dentro do grupo, sem essa mesma separação.
 - **Legenda do gráfico de categorias não é mascarada pelo toggle de privacidade**: só o total central do donut e os 3 KPIs/lista de lançamentos são mascarados — decisão de escopo, não bug (ver 3.9).
 - **`db-sync.yml`** aplica `prisma db push` direto contra o banco de produção/staging a cada push nessas branches, sem histórico de migração — mudanças de schema que impliquem perda de dados (drop de coluna/tabela não vazia) bloqueiam o workflow até alguém decidir manualmente entre `--accept-data-loss` ou uma correção manual no banco (ex.: rename).
 
-**Já resolvido nesta branch (histórico, para não reabrir por engano):** 2FA agora é TOTP funcional de ponta a ponta (ver 3.6); `prisma.ts`, `mail.ts`/`mail.js` e o `dashboard/page.tsx` mock foram removidos (código morto); `export-buttons.tsx` exporta CSV/PDF de verdade; `data_pagamento` é preenchido por `payTransaction()`; `@auth/prisma-adapter` e `nodemailer` foram removidos do `package.json`.
+**Já resolvido nesta branch (histórico, para não reabrir por engano):** 2FA agora é TOTP funcional de ponta a ponta (ver 3.6); `prisma.ts`, `mail.ts`/`mail.js` e o `dashboard/page.tsx` mock foram removidos (código morto); `export-buttons.tsx` exporta CSV/PDF de verdade; `data_pagamento` é preenchido por `payTransaction()`; `@auth/prisma-adapter` e `nodemailer` foram removidos do `package.json`; módulo completo de compras parceladas/despesa prevista/provisionamento de fatura futura implementado do zero nesta branch (ver 3.10) — as branches antigas que tentavam isso (`feature/2026-07-15_lancto_previsao_despesa`, `07-17_prev_desp`, `07-18_prev-desc-new_table`) não foram portadas e podem ser ignoradas/descartadas.

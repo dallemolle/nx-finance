@@ -7,6 +7,9 @@ import { authOptions } from "@/lib/auth";
 import { creditCardInvoiceSchema, type CreditCardInvoiceInput } from "@/lib/validations";
 import { getErrorMessage, getPrismaErrorMessage } from "@/lib/utils";
 import { getMerchantSignature } from "@/lib/dashboard-utils";
+import { getOrCreateInvoiceCategory, getOrCreateProvisionedPaymentMethod } from "@/lib/credit-card-shared";
+import { getReferenceMonthFromDueDate, addInvoiceMonths } from "@/lib/credit-card-cycle";
+import { reconcileProvisionedInstallments, findOrCreateProvisionedHeader } from "@/lib/credit-card-provision-actions";
 
 async function getUserId() {
     const session = await getServerSession(authOptions);
@@ -25,63 +28,134 @@ export async function importCreditCardInvoice(data: CreditCardInvoiceInput) {
             throw new Error("O valor total da fatura deve ser maior que zero. Confira se os estornos não superam as despesas.");
         }
 
-        // Find or create a generic "Fatura Cartão" category for the invoice header
-        // This category exists only to satisfy the FK — it is excluded from chart aggregation
-        const invoiceCategory = await db.category.findFirst({
-            where: { userId, nome: "Fatura Cartão", tipo: "SAIDA" },
-        }) || await db.category.create({
-            data: {
-                nome: "Fatura Cartão",
-                cor: "#6366f1",
-                icone: "CreditCard",
-                tipo: "SAIDA",
-                userId,
-            },
-        });
+        const result = await db.$transaction(async (tx) => {
+            // Find or create a generic "Fatura Cartão" category for the invoice header
+            // This category exists only to satisfy the FK — it is excluded from chart aggregation
+            const invoiceCategory = await getOrCreateInvoiceCategory(tx, userId);
 
-        // Create the invoice header transaction
-        const transaction = await db.transaction.create({
-            data: {
-                descricao: validatedData.descricao,
-                valor: totalValor,
-                data_vencimento: validatedData.data_vencimento,
-                status: "PENDENTE",
-                tipo: "SAIDA",
-                is_invoice_header: true,
-                userId,
-                categoria_id: invoiceCategory.id,
-                tipo_pagamento_id: validatedData.tipo_pagamento_id,
-                institution_id: validatedData.institution_id,
-            },
-        });
+            let creditCard = null;
+            if (validatedData.credit_card_id) {
+                creditCard = await tx.creditCard.findFirst({ where: { id: validatedData.credit_card_id, userId } });
+            }
 
-        // Bulk create invoice items in a single query
-        const { count: itemsCount } = await db.creditCardInvoiceItem.createMany({
-            data: validatedData.items.map(item => ({
-                transactionId: transaction.id,
-                descricao: item.descricao,
-                valor: item.valor,
-                categoria_id: item.categoria_id,
-                data_compra: item.data_compra,
-            })),
-        });
-
-        // Aprende a categorização de cada item para sugerir automaticamente
-        // em importações futuras do mesmo estabelecimento
-        for (const item of validatedData.items) {
-            const signature = getMerchantSignature(item.descricao);
-            if (!signature) continue;
-            await db.mappingSuggestion.upsert({
-                where: {
-                    search_term_userId: {
-                        search_term: signature,
-                        userId,
-                    },
+            // Create the invoice header transaction
+            const transaction = await tx.transaction.create({
+                data: {
+                    descricao: validatedData.descricao,
+                    valor: totalValor,
+                    data_vencimento: validatedData.data_vencimento,
+                    status: "PENDENTE",
+                    tipo: "SAIDA",
+                    is_invoice_header: true,
+                    userId,
+                    categoria_id: invoiceCategory.id,
+                    tipo_pagamento_id: validatedData.tipo_pagamento_id,
+                    institution_id: validatedData.institution_id,
+                    credit_card_id: creditCard?.id ?? null,
                 },
-                update: { categoria_id: item.categoria_id },
-                create: { search_term: signature, categoria_id: item.categoria_id, userId },
             });
-        }
+
+            // Criação individual (não createMany) porque itens marcados como parcelados
+            // precisam do id gerado pra serem "carimbados" com installment_group_id logo abaixo.
+            const createdItems = [];
+            for (const item of validatedData.items) {
+                const created = await tx.creditCardInvoiceItem.create({
+                    data: {
+                        transactionId: transaction.id,
+                        descricao: item.descricao,
+                        valor: item.valor,
+                        categoria_id: item.categoria_id,
+                        data_compra: item.data_compra,
+                    },
+                });
+                createdItems.push(created);
+            }
+            const itemsCount = createdItems.length;
+
+            // Aprende a categorização de cada item para sugerir automaticamente
+            // em importações futuras do mesmo estabelecimento
+            for (const item of validatedData.items) {
+                const signature = getMerchantSignature(item.descricao);
+                if (!signature) continue;
+                await tx.mappingSuggestion.upsert({
+                    where: {
+                        search_term_userId: {
+                            search_term: signature,
+                            userId,
+                        },
+                    },
+                    update: { categoria_id: item.categoria_id },
+                    create: { search_term: signature, categoria_id: item.categoria_id, userId },
+                });
+            }
+
+            // Se a fatura importada está vinculada a um cartão, concilia parcelas
+            // já provisionadas pra esse cartão/mês (migra pra essa fatura real)
+            if (creditCard) {
+                const { month, year } = getReferenceMonthFromDueDate(
+                    validatedData.data_vencimento,
+                    creditCard.closingDay,
+                    creditCard.dueDay
+                );
+                await tx.transaction.update({
+                    where: { id: transaction.id },
+                    data: { invoice_month: month, invoice_year: year },
+                });
+                await reconcileProvisionedInstallments(tx, {
+                    userId,
+                    creditCardId: creditCard.id,
+                    invoiceMonth: month,
+                    invoiceYear: year,
+                    newHeaderId: transaction.id,
+                });
+
+                // Itens marcados como "compra parcelada" na revisão: o item importado
+                // JÁ é uma parcela real, então só projetamos as parcelas restantes nos
+                // meses seguintes, com o mesmo valor (extrato de banco já mostra o valor
+                // fixo da parcela, não um total a dividir).
+                const category = await getOrCreateInvoiceCategory(tx, userId);
+                const paymentMethod = await getOrCreateProvisionedPaymentMethod(tx, userId);
+
+                for (let idx = 0; idx < validatedData.items.length; idx++) {
+                    const item = validatedData.items[idx];
+                    if (!item.isInstallment || !item.installmentsCount) continue;
+
+                    const startNum = item.installmentNumber ?? 1;
+                    const total = item.installmentsCount;
+                    const groupId = crypto.randomUUID();
+
+                    await tx.creditCardInvoiceItem.update({
+                        where: { id: createdItems[idx].id },
+                        data: { installment_group_id: groupId, installment_number: startNum, installment_total: total },
+                    });
+
+                    for (let num = startNum + 1; num <= total; num++) {
+                        const offset = num - startNum;
+                        const { month: fm, year: fy } = addInvoiceMonths(month, year, offset);
+                        const futureHeader = await findOrCreateProvisionedHeader(tx, {
+                            userId, card: creditCard, invoiceMonth: fm, invoiceYear: fy,
+                            categoryId: category.id, paymentMethodId: paymentMethod.id,
+                        });
+                        await tx.creditCardInvoiceItem.create({
+                            data: {
+                                transactionId: futureHeader.id,
+                                descricao: `${item.descricao} (${String(num).padStart(2, "0")}/${String(total).padStart(2, "0")})`,
+                                valor: item.valor,
+                                data_compra: item.data_compra,
+                                categoria_id: item.categoria_id,
+                                is_provisioned: true,
+                                installment_group_id: groupId,
+                                installment_number: num,
+                                installment_total: total,
+                            },
+                        });
+                        await tx.transaction.update({ where: { id: futureHeader.id }, data: { valor: { increment: item.valor } } });
+                    }
+                }
+            }
+
+            return { transaction, itemsCount };
+        });
 
         revalidatePath("/dashboard");
         revalidatePath("/reports");
@@ -90,10 +164,10 @@ export async function importCreditCardInvoice(data: CreditCardInvoiceInput) {
             success: true,
             data: {
                 transaction: {
-                    ...transaction,
-                    valor: Number(transaction.valor),
+                    ...result.transaction,
+                    valor: Number(result.transaction.valor),
                 },
-                itemsCount,
+                itemsCount: result.itemsCount,
             },
         };
     } catch (error: unknown) {

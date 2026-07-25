@@ -1,11 +1,14 @@
 "use client";
 
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Download, FileText, Table } from "lucide-react";
 import {
     DropdownMenu,
+    DropdownMenuCheckboxItem,
     DropdownMenuContent,
     DropdownMenuItem,
+    DropdownMenuSeparator,
     DropdownMenuTrigger
 } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
@@ -32,22 +35,27 @@ const formatCurrency = (value: number) =>
 
 export function ExportButtons({ transactions, month, year, className }: ExportButtonsProps) {
     const period = `${String(month).padStart(2, "0")}-${year}`;
+    const [includeProvisioned, setIncludeProvisioned] = useState(false);
+
+    const getExportableTransactions = () =>
+        includeProvisioned ? transactions : transactions.filter(t => !t.is_provisioned);
 
     const handleExportCsv = () => {
-        if (transactions.length === 0) {
+        const exportRows = getExportableTransactions();
+        if (exportRows.length === 0) {
             toast.error("Nenhuma transação para exportar neste período.");
             return;
         }
 
         const headers = ["Descrição", "Categoria", "Instituição", "Meio de Pagamento", "Data", "Tipo", "Status", "Valor"];
-        const rows = transactions.map(t => [
+        const rows = exportRows.map(t => [
             t.descricao,
             t.category?.nome ?? "",
             t.institution?.nome ?? "",
             t.paymentMethod?.nome ?? "",
             t.displayDate ?? String(t.data_vencimento),
             t.tipo,
-            t.status,
+            t.is_provisioned ? "PREVISTO" : t.status,
             String(t.valor).replace(".", ","),
         ]);
 
@@ -66,7 +74,8 @@ export function ExportButtons({ transactions, month, year, className }: ExportBu
     };
 
     const handleExportPdf = () => {
-        if (transactions.length === 0) {
+        const exportRows = getExportableTransactions();
+        if (exportRows.length === 0) {
             toast.error("Nenhuma transação para exportar neste período.");
             return;
         }
@@ -77,14 +86,14 @@ export function ExportButtons({ transactions, month, year, className }: ExportBu
             return;
         }
 
-        const rowsHtml = transactions
+        const rowsHtml = exportRows
             .map(t => `
                 <tr>
                     <td>${t.descricao}</td>
                     <td>${t.category?.nome ?? "-"}</td>
                     <td>${t.institution?.nome ?? "-"}</td>
                     <td>${t.displayDate ?? ""}</td>
-                    <td>${t.status}</td>
+                    <td>${t.is_provisioned ? '<span style="color:#d97706;font-weight:bold;">Previsto</span>' : t.status}</td>
                     <td style="text-align:right; color:${t.tipo === "ENTRADA" ? "#059669" : "#e11d48"}">
                         ${t.tipo === "ENTRADA" ? "+" : "-"} ${formatCurrency(Math.abs(t.valor))}
                     </td>
@@ -107,7 +116,7 @@ export function ExportButtons({ transactions, month, year, className }: ExportBu
                 </head>
                 <body>
                     <h1>Relatório de Transações — NxFinance</h1>
-                    <p>Período: ${period} · ${transactions.length} lançamentos</p>
+                    <p>Período: ${period} · ${exportRows.length} lançamentos</p>
                     <table>
                         <thead>
                             <tr>
@@ -137,7 +146,16 @@ export function ExportButtons({ transactions, month, year, className }: ExportBu
                     Exportar
                 </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-40 rounded-xl shadow-2xl border-none ring-1 ring-slate-200 dark:ring-slate-800">
+            <DropdownMenuContent align="end" className="w-60 rounded-xl shadow-2xl border-none ring-1 ring-slate-200 dark:ring-slate-800">
+                <DropdownMenuCheckboxItem
+                    checked={includeProvisioned}
+                    onCheckedChange={setIncludeProvisioned}
+                    onSelect={(e) => e.preventDefault()}
+                    className="text-xs font-medium"
+                >
+                    Incluir despesas previstas
+                </DropdownMenuCheckboxItem>
+                <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={handleExportCsv} className="gap-2 py-2 cursor-pointer font-medium">
                     <Table className="w-4 h-4 text-emerald-500" />
                     CSV (Excel)

@@ -21,6 +21,7 @@ model User {
   paymentMethods     PaymentMethod[]
   institutions       FinancialInstitution[]
   mappingSuggestions MappingSuggestion[]
+  creditCards        CreditCard[]
   createdAt          DateTime               @default(now())
   updatedAt          DateTime               @updatedAt
 }
@@ -46,6 +47,9 @@ model Transaction {
   status            TransactionStatus @default(PENDENTE)
   tipo              TransactionType
   is_invoice_header Boolean           @default(false)
+  is_provisioned    Boolean           @default(false)
+  invoice_month     Int?
+  invoice_year      Int?
 
   userId String
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -59,12 +63,16 @@ model Transaction {
   institution_id String
   institution    FinancialInstitution @relation(fields: [institution_id], references: [id])
 
+  credit_card_id String?
+  creditCard     CreditCard? @relation(fields: [credit_card_id], references: [id])
+
   invoiceItems CreditCardInvoiceItem[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([userId, data_vencimento])
+  @@index([userId, credit_card_id, invoice_month, invoice_year])
 }
 
 model CreditCardInvoiceItem {
@@ -73,6 +81,10 @@ model CreditCardInvoiceItem {
   valor                    Decimal   @db.Decimal(10, 2)
   data_compra              DateTime
   data_vencimento_original DateTime?
+  is_provisioned           Boolean   @default(false)
+  installment_group_id     String?
+  installment_number       Int?
+  installment_total        Int?
 
   transactionId String
   transaction   Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
@@ -82,6 +94,8 @@ model CreditCardInvoiceItem {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@index([installment_group_id])
 }
 
 model Category {
@@ -135,6 +149,29 @@ model FinancialInstitution {
 
   userId       String
   user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transactions Transaction[]
+  creditCards  CreditCard[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([nome, userId])
+}
+
+model CreditCard {
+  id         String   @id @default(cuid())
+  nome       String
+  closingDay Int
+  dueDay     Int
+  limite     Decimal? @db.Decimal(10, 2)
+  cor        String?
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  institution_id String
+  institution    FinancialInstitution @relation(fields: [institution_id], references: [id])
+
   transactions Transaction[]
 
   createdAt DateTime @default(now())

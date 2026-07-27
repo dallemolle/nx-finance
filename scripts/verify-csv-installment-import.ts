@@ -182,6 +182,38 @@ async function main() {
     });
     assert(octoberStillProvisioned !== null, "fatura projetada de outubro (parcela 4/4) NÃO foi tocada pela reconciliação de setembro");
 
+    // --- 4. Item marcado como ÚLTIMA parcela (sem parcelas futuras a gerar) ainda deve ser carimbado ---
+    // Regressão: a versão paralelizada do loop de geração separou "carimbar o item"
+    // de "gerar parcelas futuras" — item sem futuro não pode ficar sem o carimbo.
+    const lastInstallmentItem = await db.creditCardInvoiceItem.create({
+        data: {
+            transactionId: header.id,
+            descricao: "Mouse (04/04)",
+            valor: 40,
+            data_compra: new Date(2026, 6, 27),
+            categoria_id: category.id,
+        },
+    });
+    const lastGroupId = crypto.randomUUID();
+    const lastStartNum = 4;
+    const lastTotal = 4;
+    // Réplica do bloco "stamps" (sempre roda) vs. "plan" (só roda se houver parcela futura)
+    await db.creditCardInvoiceItem.update({
+        where: { id: lastInstallmentItem.id },
+        data: { installment_group_id: lastGroupId, installment_number: lastStartNum, installment_total: lastTotal },
+    });
+    // lastStartNum === lastTotal -> nenhuma parcela futura gerada (loop `num = 5; num <= 4` não roda)
+
+    const lastItemAfter = await db.creditCardInvoiceItem.findUnique({ where: { id: lastInstallmentItem.id } });
+    assert(
+        lastItemAfter?.installment_group_id === lastGroupId && lastItemAfter?.installment_number === 4 && lastItemAfter?.installment_total === 4,
+        "item marcado como última parcela (4/4) é carimbado mesmo sem gerar parcelas futuras"
+    );
+    const noExtraHeaders = await db.transaction.count({
+        where: { userId: user.id, credit_card_id: card.id, is_invoice_header: true, is_provisioned: true, invoice_month: { notIn: [9, 10] } },
+    });
+    assert(noExtraHeaders === 0, "nenhuma fatura projetada extra foi criada pra uma última parcela (sem parcelas futuras)");
+
     // --- Limpeza ---
     await db.user.delete({ where: { id: user.id } });
     console.log("\nDados de teste removidos. Todos os testes de import com parcelamento passaram.");

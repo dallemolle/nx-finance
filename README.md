@@ -69,7 +69,8 @@ src/
 │   ├── page.tsx                  # Dashboard principal (rota "/")
 │   ├── auth/                     # Login (com campo 2FA condicional) e registro
 │   ├── reports/                  # Relatórios com filtros
-│   └── dashboard/settings/       # Instituições, categorias, meios de pagamento, segurança (2FA)
+│   ├── dashboard/settings/       # Instituições, categorias, meios de pagamento, cartões, segurança (2FA)
+│   └── api/version/route.ts      # Endpoint público: commit/branch/ambiente atuais (ver "Verificando o deploy")
 ├── components/
 │   ├── dashboard/                # Componentes de negócio
 │   │   ├── transaction-form.tsx           # Formulário com parcelamento
@@ -231,6 +232,17 @@ git add .
 git commit -m "feat: descrição da funcionalidade"
 git push origin feature/nome-da-feature
 ```
+
+---
+
+## Verificando o deploy
+
+O app é publicado pela Vercel (sem workflow de deploy próprio neste repo — `.github/workflows/db-sync.yml` só sincroniza o schema do Prisma, não garante que o build/deploy do app já rodou). Pra confirmar qual commit está de fato no ar em staging/produção, sem depender de lembrar se um push específico já foi mergeado e implantado:
+
+- Acesse `/api/version` — retorna `{ commit, commitShort, commitMessage, branch, vercelEnv }`.
+- Ou olhe o banner laranja "AMBIENTE DE HOMOLOGAÇÃO", que mostra o hash curto do commit ao lado do texto.
+
+Compare com `git log --oneline` local antes de investigar um bug reportado como "ainda acontecendo" após uma correção.
 
 ---
 

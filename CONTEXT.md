@@ -61,6 +61,7 @@ postinstall → prisma generate
 
 **CI/CD:**
 - `.github/workflows/db-sync.yml`: sincroniza schema Prisma ao fazer push em staging/main
+- Deploy do app é feito pela Vercel (fora do repo, sem workflow próprio aqui) — variáveis `VERCEL_GIT_COMMIT_SHA`/`VERCEL_GIT_COMMIT_REF`/`VERCEL_ENV` são injetadas automaticamente no build e usadas por `/api/version` e `EnvironmentBanner` pra confirmar qual commit está de fato no ar (ver 4.8), já que `db-sync.yml` só sincroniza schema — não garante que o deploy do app em si já rodou.
 
 ---
 
@@ -81,6 +82,7 @@ postinstall → prisma generate
 | `reports/report-filters.tsx` | Client Component | Filtros combinados com Selects com totais por meio de pagamento |
 | `dashboard/settings/page.tsx` | Server Component | Tabs de configuração: Instituições (default), Categorias, Meios de Pagamento, Cartões, Segurança (2FA) |
 | `api/auth/[...nextauth]/route.ts` | Route Handler | Catch-all NextAuth: exporta GET/POST handler |
+| `api/version/route.ts` | Route Handler | Sem autenticação (fora do matcher do middleware). Retorna `{ commit, commitShort, commitMessage, branch, vercelEnv }` lidos de `process.env.VERCEL_*` — permite confirmar qual commit está rodando em staging/produção sem depender de lembrar se um deploy específico já foi feito. `null`/`"local"` em `next dev` (variáveis só existem no build da Vercel) |
 
 ### `src/components/dashboard/` — Componentes de Negócio
 
@@ -126,7 +128,7 @@ postinstall → prisma generate
 
 | Arquivo | Tipo | Propósito |
 |---------|------|-----------|
-| `environment-banner.tsx` | Server Component | Banner "AMBIENTE DE HOMOLOGAÇÃO" laranja; oculto apenas quando `NODE_ENV === "production"` (ou `NEXT_PUBLIC_VERCEL_ENV === "production"`) **e** `DATABASE_URL` contém `/nxfinance` |
+| `environment-banner.tsx` | Server Component | Banner "AMBIENTE DE HOMOLOGAÇÃO" laranja; oculto apenas quando `NODE_ENV === "production"` (ou `NEXT_PUBLIC_VERCEL_ENV === "production"`) **e** `DATABASE_URL` contém `/nxfinance`; quando visível, mostra também o hash curto do commit (`VERCEL_GIT_COMMIT_SHA`) ao lado do texto, se disponível |
 | `theme-toggle.tsx` | Client Component | Dropdown de tema (Claro/Escuro/Sistema) com ícones Sun/Moon |
 | `command-palette.tsx` | Client Component | Busca global (Cmd/Ctrl+K ou clique no gatilho do `TopNav`) sobre `searchTransactions()`, debounce de 300ms; exporta `OPEN_COMMAND_PALETTE_EVENT` |
 
@@ -147,7 +149,7 @@ postinstall → prisma generate
 | `dashboard.ts` | Server Actions | `getDashboardData()` — agrega totais, deltas, health score, forecast, smart category grouping, `hasAnyTransactions` (tudo isso **exclui** `is_provisioned:true`); busca à parte lançamentos previstos do período (`is_provisioned:true`) só pra exibição nas listas (badge "Previsto"), concatenados em `monthlyTransactions` sem afetar nenhuma métrica; `getMonthlyTrend()` — saldo dos últimos 6 meses em buckets mensais (também exclui provisionado) |
 | `dashboard-utils.ts` | Utilitário | `getCategoryGroupName()` (sinônimos hardcoded: mercado/mer, comida/restaurante/ifood); `mergeSimilarCategories()` (merge genérico por prefixo normalizado, cobre variações não previstas nos sinônimos); `capToTopNPlusOthers()` (cap fixo + fatia "Outros"); `getMerchantSignature()` (assinatura de 2 palavras p/ aprendizado de `MappingSuggestion`) |
 | `reports.ts` | Server Actions | `getReportData()` (sem filtro de `is_provisioned` — relatórios mostram previstos por padrão, com `ProvisionedBadge`), `getCategories/PaymentMethods/Institutions()`, `getCreditCards()`, `searchTransactions()` (usado pelo `CommandPalette`, se autentica via `getServerSession`) |
-| `credit-card-actions.ts` | Server Actions | `importCreditCardInvoice()` — roda dentro de `db.$transaction()`; importa fatura CSV (soma sinalizada: estornos reduzem o total; bloqueia se total ≤ 0), cria os itens individualmente (não `createMany`, precisa dos IDs gerados), aprende `MappingSuggestion` por item; se `credit_card_id` informado: grava `invoice_month`/`invoice_year` no cabeçalho (via `getReferenceMonthFromDueDate`), chama `reconcileProvisionedInstallments()` e projeta as parcelas restantes dos itens marcados como parcelados na revisão + `getInvoiceItems()` + `getInvoiceHeaders()` |
+| `credit-card-actions.ts` | Server Actions | `importCreditCardInvoice()` — roda dentro de `db.$transaction(..., { timeout: 20000 })`; importa fatura CSV (soma sinalizada: estornos reduzem o total; bloqueia se total ≤ 0), cria os itens individualmente em paralelo via `Promise.all` (não `createMany` — precisa dos IDs gerados pra carimbar parcelas; `Promise.all` preserva a ordem de resolução) e aprende `MappingSuggestion` por item (também em paralelo); se `credit_card_id` informado: grava `invoice_month`/`invoice_year` no cabeçalho (via `getReferenceMonthFromDueDate`), chama `reconcileProvisionedInstallments()` e, pros itens marcados como parcelados na revisão, monta um plano de parcelas futuras, resolve os cabeçalhos de fatura projetada **únicos** necessários sequencialmente (find-or-create não é seguro em paralelo pro mesmo cartão+mês) e só então cria os itens em paralelo — ver nota de timeout em 3.4 + `getInvoiceItems()` + `getInvoiceHeaders()` |
 | `credit-card-cycle.ts` | Utilitário puro | Matemática do ciclo de fatura, sem Prisma/`"use server"` (testável isoladamente via `scripts/verify-billing-cycle.ts`): `getInvoiceReferenceMonth()`, `addInvoiceMonths()`, `computeInvoiceDueDate()`, `getReferenceMonthFromDueDate()` (inverso), `splitInstallments()` (split cents-accurate) |
 | `credit-card-shared.ts` | Utilitário | Helpers compartilhados entre `credit-card-actions.ts` e `credit-card-provision-actions.ts` (extraídos pra evitar import circular): `getOrCreateInvoiceCategory()`, `getOrCreateProvisionedPaymentMethod()`, `findProvisionedHeader()` |
 | `credit-card-provision-actions.ts` | Server Actions | CRUD de `CreditCard`; `provisionCardInstallmentPurchase()` (compra parcelada real → projeta parcelas em faturas futuras); `provisionEstimatedExpense()` (despesa prevista, com ou sem parcelamento, no cartão ou genérica); `confirmEstimatedExpense()` (efetiva despesa prevista **genérica**, guarda `is_provisioned:true && credit_card_id:null` no servidor); `deleteProvisionedInvoiceItem()` (cancela item avulso de fatura projetada, recalcula/remove o cabeçalho); `reconcileProvisionedInstallments()` (migra parcelas provisionadas pra fatura real importada); `getInvoiceTimeline()` (buckets mensais confirmado/provisionado por cartão); `findOrCreateProvisionedHeader()` (exportado, reusado por `credit-card-actions.ts`) |
@@ -259,6 +261,8 @@ Todas as mutações seguem o mesmo padrão:
 **Transações de lote** (`csv-actions.ts:processBatchTransactions`):
 - Usa `db.$transaction()` para criar múltiplos registros atomicamente.
 - Após importação, cria automaticamente `MappingSuggestion` para aprendizado de categorização futura.
+
+**Timeout de transação interativa (lição aprendida — P2028):** o Prisma fecha uma transação interativa (`db.$transaction(async (tx) => {...})`) depois de 5s por padrão. Um `for` sequencial fazendo várias queries `await` uma a uma dentro da transação passa despercebido contra o Postgres local (latência ~0), mas estoura esse limite contra um banco remoto (staging/produção) assim que há volume — quem primeiro sentiu isso foi `importCreditCardInvoice()` com faturas de muitos itens. Convenção adotada: (1) trocar loops sequenciais por `Promise.all()` sempre que as operações forem independentes entre si (`Promise.all` preserva a ordem de resolução, então dá pra mapear resultado↔índice de entrada com segurança); (2) quando há dependência de ordem (ex.: `findOrCreateProvisionedHeader` não é seguro em paralelo pro mesmo cartão+mês — duas chamadas concorrentes podem criar cabeçalhos duplicados), resolver essas poucas operações sequenciais **primeiro**, e só paralelizar o resto depois que as dependências já existem; (3) somar uma margem de timeout explícita (`db.$transaction(fn, { timeout: 20000 })`) como segurança adicional nas transações que seguem fazendo várias queries. Aplicado em `importCreditCardInvoice`, `provisionCardInstallmentPurchase` e `provisionEstimatedExpense`.
 
 **MappingSuggestion:**
 - Modelo auxiliar com unique `@@unique([search_term, userId])`.
@@ -407,11 +411,14 @@ Todas as Server Actions usam `try/catch` com `console.error(...)` seguido de `th
 - **CSV**: monta conteúdo `;`-delimitado com BOM UTF-8 (compatibilidade com Excel pt-BR), gera via `Blob` + `<a download>`.
 - **PDF**: abre uma nova janela com uma tabela HTML formatada e chama `window.print()`.
 
-### 4.8 Banner de Ambiente
+### 4.8 Banner de Ambiente e Verificação de Versão
 
 `EnvironmentBanner` (`src/components/environment-banner.tsx`):
 - Exibe banner laranja "AMBIENTE DE HOMOLOGAÇÃO - OS DADOS NÃO SÃO REAIS" quando **não** (`produção` E banco oficial `/nxfinance`) — ver condição exata em 2.
 - Oculta apenas em produção com banco oficial.
+- Quando visível, mostra o hash curto do commit (`VERCEL_GIT_COMMIT_SHA?.slice(0, 7)`) ao lado do texto — forma rápida de confirmar visualmente se o deploy mais recente já está no ar, sem precisar abrir o painel da Vercel.
+
+**`/api/version`** (`src/app/api/version/route.ts`): endpoint público (fora do matcher do middleware, não exige login) que retorna commit/branch/ambiente em JSON. Existe porque `db-sync.yml` só sincroniza o schema do Prisma — não há workflow de deploy do app neste repo (fica a cargo da Vercel) — então "o push foi feito" não implica "o deploy já rodou". Consultar esse endpoint (ou o banner) sempre que houver dúvida se uma correção específica já está em staging antes de reportar um bug como não resolvido.
 
 ### 4.9 Toggle de Privacidade
 
@@ -465,4 +472,4 @@ Seção para evitar que futuras sessões assumam que algo funciona apenas porque
 - **Legenda do gráfico de categorias não é mascarada pelo toggle de privacidade**: só o total central do donut e os 3 KPIs/lista de lançamentos são mascarados — decisão de escopo, não bug (ver 3.9).
 - **`db-sync.yml`** aplica `prisma db push` direto contra o banco de produção/staging a cada push nessas branches, sem histórico de migração — mudanças de schema que impliquem perda de dados (drop de coluna/tabela não vazia) bloqueiam o workflow até alguém decidir manualmente entre `--accept-data-loss` ou uma correção manual no banco (ex.: rename).
 
-**Já resolvido nesta branch (histórico, para não reabrir por engano):** 2FA agora é TOTP funcional de ponta a ponta (ver 3.6); `prisma.ts`, `mail.ts`/`mail.js` e o `dashboard/page.tsx` mock foram removidos (código morto); `export-buttons.tsx` exporta CSV/PDF de verdade; `data_pagamento` é preenchido por `payTransaction()`; `@auth/prisma-adapter` e `nodemailer` foram removidos do `package.json`; módulo completo de compras parceladas/despesa prevista/provisionamento de fatura futura implementado do zero nesta branch (ver 3.10) — as branches antigas que tentavam isso (`feature/2026-07-15_lancto_previsao_despesa`, `07-17_prev_desp`, `07-18_prev-desc-new_table`) não foram portadas e podem ser ignoradas/descartadas.
+**Já resolvido nesta branch (histórico, para não reabrir por engano):** 2FA agora é TOTP funcional de ponta a ponta (ver 3.6); `prisma.ts`, `mail.ts`/`mail.js` e o `dashboard/page.tsx` mock foram removidos (código morto); `export-buttons.tsx` exporta CSV/PDF de verdade; `data_pagamento` é preenchido por `payTransaction()`; `@auth/prisma-adapter` e `nodemailer` foram removidos do `package.json`; módulo completo de compras parceladas/despesa prevista/provisionamento de fatura futura implementado do zero nesta branch (ver 3.10) — as branches antigas que tentavam isso (`feature/2026-07-15_lancto_previsao_despesa`, `07-17_prev_desp`, `07-18_prev-desc-new_table`) não foram portadas e podem ser ignoradas/descartadas; timeout de transação interativa (P2028) em `importCreditCardInvoice`/`provisionCardInstallmentPurchase`/`provisionEstimatedExpense` corrigido via paralelização + margem de timeout (ver nota em 3.4) — se esse erro reaparecer, confirmar primeiro via `/api/version` (4.8) se o commit da correção já está de fato em staging antes de investigar mais.

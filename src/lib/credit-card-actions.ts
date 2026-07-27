@@ -28,16 +28,20 @@ export async function importCreditCardInvoice(data: CreditCardInvoiceInput) {
             throw new Error("O valor total da fatura deve ser maior que zero. Confira se os estornos não superam as despesas.");
         }
 
-        const result = await db.$transaction(async (tx) => {
-            // Find or create a generic "Fatura Cartão" category for the invoice header
-            // This category exists only to satisfy the FK — it is excluded from chart aggregation
-            const invoiceCategory = await getOrCreateInvoiceCategory(tx, userId);
-
-            let creditCard = null;
-            if (validatedData.credit_card_id) {
-                creditCard = await tx.creditCard.findFirst({ where: { id: validatedData.credit_card_id, userId } });
+        // Fora da transação: são idempotentes (find-or-create) e não dependem de nada
+        // criado dentro dela — cada query removida daqui é uma query a menos segurando
+        // a transação interativa aberta. Ver nota de timeout/round-trips em CONTEXT.md 3.4.
+        const invoiceCategory = await getOrCreateInvoiceCategory(db, userId);
+        let creditCard = null;
+        let provisionedPaymentMethod = null;
+        if (validatedData.credit_card_id) {
+            creditCard = await db.creditCard.findFirst({ where: { id: validatedData.credit_card_id, userId } });
+            if (creditCard) {
+                provisionedPaymentMethod = await getOrCreateProvisionedPaymentMethod(db, userId);
             }
+        }
 
+        const result = await db.$transaction(async (tx) => {
             // Create the invoice header transaction
             const transaction = await tx.transaction.create({
                 data: {
@@ -55,45 +59,50 @@ export async function importCreditCardInvoice(data: CreditCardInvoiceInput) {
                 },
             });
 
-            // Criação individual (não createMany) porque itens marcados como parcelados
-            // precisam do id gerado pra serem "carimbados" com installment_group_id logo abaixo.
-            // Promise.all mantém a ordem de resolução igual à do array de entrada (createdItems[idx]
-            // continua correspondendo a validatedData.items[idx]) e dispara as N queries em paralelo
-            // em vez de round-trip sequencial — essencial pra não estourar o timeout da transação
-            // interativa do Prisma (5s por padrão) em bancos remotos com faturas de muitos itens.
-            const createdItems = await Promise.all(
-                validatedData.items.map(item =>
-                    tx.creditCardInvoiceItem.create({
-                        data: {
-                            transactionId: transaction.id,
-                            descricao: item.descricao,
-                            valor: item.valor,
-                            categoria_id: item.categoria_id,
-                            data_compra: item.data_compra,
-                        },
-                    })
-                )
-            );
-            const itemsCount = createdItems.length;
+            // Uma transação interativa do Prisma roda numa única conexão — Promise.all no
+            // lado do JS só faz pipelining (evita esperar resposta antes de disparar a
+            // próxima query), NÃO executa em paralelo de verdade no banco. Com faturas de
+            // muitos itens, N creates individuais ainda somam N round-trips reais e estouram
+            // o timeout. Por isso: createMany (1 query) pros itens comuns, e create()
+            // individual só pros (normalmente poucos ou nenhum) itens marcados como
+            // parcelados, que precisam do id gerado pra serem carimbados logo abaixo.
+            const flaggedIndexes: number[] = [];
+            const bulkItems: typeof validatedData.items = [];
+            validatedData.items.forEach((item, idx) => {
+                if (item.isInstallment && item.installmentsCount) flaggedIndexes.push(idx);
+                else bulkItems.push(item);
+            });
 
-            // Aprende a categorização de cada item para sugerir automaticamente
-            // em importações futuras do mesmo estabelecimento (também em paralelo)
-            await Promise.all(
-                validatedData.items.map(item => {
-                    const signature = getMerchantSignature(item.descricao);
-                    if (!signature) return null;
-                    return tx.mappingSuggestion.upsert({
-                        where: {
-                            search_term_userId: {
-                                search_term: signature,
-                                userId,
+            if (bulkItems.length > 0) {
+                await tx.creditCardInvoiceItem.createMany({
+                    data: bulkItems.map(item => ({
+                        transactionId: transaction.id,
+                        descricao: item.descricao,
+                        valor: item.valor,
+                        categoria_id: item.categoria_id,
+                        data_compra: item.data_compra,
+                    })),
+                });
+            }
+            const createdItems = new Map<number, { id: string }>();
+            if (flaggedIndexes.length > 0) {
+                const created = await Promise.all(
+                    flaggedIndexes.map(idx => {
+                        const item = validatedData.items[idx];
+                        return tx.creditCardInvoiceItem.create({
+                            data: {
+                                transactionId: transaction.id,
+                                descricao: item.descricao,
+                                valor: item.valor,
+                                categoria_id: item.categoria_id,
+                                data_compra: item.data_compra,
                             },
-                        },
-                        update: { categoria_id: item.categoria_id },
-                        create: { search_term: signature, categoria_id: item.categoria_id, userId },
-                    });
-                })
-            );
+                        });
+                    })
+                );
+                flaggedIndexes.forEach((idx, i) => createdItems.set(idx, created[i]));
+            }
+            const itemsCount = validatedData.items.length;
 
             // Se a fatura importada está vinculada a um cartão, concilia parcelas
             // já provisionadas pra esse cartão/mês (migra pra essa fatura real)
@@ -119,8 +128,8 @@ export async function importCreditCardInvoice(data: CreditCardInvoiceInput) {
                 // JÁ é uma parcela real, então só projetamos as parcelas restantes nos
                 // meses seguintes, com o mesmo valor (extrato de banco já mostra o valor
                 // fixo da parcela, não um total a dividir).
-                const category = await getOrCreateInvoiceCategory(tx, userId);
-                const paymentMethod = await getOrCreateProvisionedPaymentMethod(tx, userId);
+                // Reaproveita invoiceCategory/provisionedPaymentMethod já resolvidos fora
+                // da transação — evita duas queries redundantes por item marcado.
 
                 // Todo item marcado precisa ser carimbado (installment_group_id/number/total),
                 // mesmo que seja a última parcela e não gere nenhuma parcela futura.
@@ -150,7 +159,7 @@ export async function importCreditCardInvoice(data: CreditCardInvoiceInput) {
                     // entre si, seguro em paralelo.
                     await Promise.all(stamps.map(s =>
                         tx.creditCardInvoiceItem.update({
-                            where: { id: createdItems[s.idx].id },
+                            where: { id: createdItems.get(s.idx)!.id },
                             data: { installment_group_id: s.groupId, installment_number: s.number, installment_total: s.total },
                         })
                     ));
@@ -167,7 +176,7 @@ export async function importCreditCardInvoice(data: CreditCardInvoiceInput) {
                         if (headerByMonth.has(key)) continue;
                         const header = await findOrCreateProvisionedHeader(tx, {
                             userId, card: creditCard, invoiceMonth: p.month, invoiceYear: p.year,
-                            categoryId: category.id, paymentMethodId: paymentMethod.id,
+                            categoryId: invoiceCategory.id, paymentMethodId: provisionedPaymentMethod!.id,
                         });
                         headerByMonth.set(key, header);
                     }
@@ -197,8 +206,28 @@ export async function importCreditCardInvoice(data: CreditCardInvoiceInput) {
             }
 
             return { transaction, itemsCount };
-        }, { timeout: 20000 }); // margem maior que o padrão de 5s: faturas com muitos itens
-        // e/ou geração de parcelas futuras fazem várias queries sequenciais nessa transação.
+        }, { timeout: 20000 }); // margem de segurança: geração de parcelas futuras (quando há
+        // itens marcados) ainda faz algumas queries sequenciais nessa transação.
+
+        // Aprendizado de categoria por item: fora da transação de propósito — não precisa
+        // ser atômico com a criação da fatura (pior caso de falha aqui: uma sugestão futura
+        // não é aprendida, não uma inconsistência de dados) e tirar isso da transação reduz
+        // bastante o número de queries que seguram a conexão interativa aberta.
+        try {
+            await Promise.all(
+                validatedData.items.map(item => {
+                    const signature = getMerchantSignature(item.descricao);
+                    if (!signature) return null;
+                    return db.mappingSuggestion.upsert({
+                        where: { search_term_userId: { search_term: signature, userId } },
+                        update: { categoria_id: item.categoria_id },
+                        create: { search_term: signature, categoria_id: item.categoria_id, userId },
+                    });
+                })
+            );
+        } catch (error: unknown) {
+            console.error("Error learning mapping suggestions (import already succeeded):", error);
+        }
 
         revalidatePath("/dashboard");
         revalidatePath("/reports");

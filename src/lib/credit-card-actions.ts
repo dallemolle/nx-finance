@@ -57,37 +57,43 @@ export async function importCreditCardInvoice(data: CreditCardInvoiceInput) {
 
             // Criação individual (não createMany) porque itens marcados como parcelados
             // precisam do id gerado pra serem "carimbados" com installment_group_id logo abaixo.
-            const createdItems = [];
-            for (const item of validatedData.items) {
-                const created = await tx.creditCardInvoiceItem.create({
-                    data: {
-                        transactionId: transaction.id,
-                        descricao: item.descricao,
-                        valor: item.valor,
-                        categoria_id: item.categoria_id,
-                        data_compra: item.data_compra,
-                    },
-                });
-                createdItems.push(created);
-            }
+            // Promise.all mantém a ordem de resolução igual à do array de entrada (createdItems[idx]
+            // continua correspondendo a validatedData.items[idx]) e dispara as N queries em paralelo
+            // em vez de round-trip sequencial — essencial pra não estourar o timeout da transação
+            // interativa do Prisma (5s por padrão) em bancos remotos com faturas de muitos itens.
+            const createdItems = await Promise.all(
+                validatedData.items.map(item =>
+                    tx.creditCardInvoiceItem.create({
+                        data: {
+                            transactionId: transaction.id,
+                            descricao: item.descricao,
+                            valor: item.valor,
+                            categoria_id: item.categoria_id,
+                            data_compra: item.data_compra,
+                        },
+                    })
+                )
+            );
             const itemsCount = createdItems.length;
 
             // Aprende a categorização de cada item para sugerir automaticamente
-            // em importações futuras do mesmo estabelecimento
-            for (const item of validatedData.items) {
-                const signature = getMerchantSignature(item.descricao);
-                if (!signature) continue;
-                await tx.mappingSuggestion.upsert({
-                    where: {
-                        search_term_userId: {
-                            search_term: signature,
-                            userId,
+            // em importações futuras do mesmo estabelecimento (também em paralelo)
+            await Promise.all(
+                validatedData.items.map(item => {
+                    const signature = getMerchantSignature(item.descricao);
+                    if (!signature) return null;
+                    return tx.mappingSuggestion.upsert({
+                        where: {
+                            search_term_userId: {
+                                search_term: signature,
+                                userId,
+                            },
                         },
-                    },
-                    update: { categoria_id: item.categoria_id },
-                    create: { search_term: signature, categoria_id: item.categoria_id, userId },
-                });
-            }
+                        update: { categoria_id: item.categoria_id },
+                        create: { search_term: signature, categoria_id: item.categoria_id, userId },
+                    });
+                })
+            );
 
             // Se a fatura importada está vinculada a um cartão, concilia parcelas
             // já provisionadas pra esse cartão/mês (migra pra essa fatura real)
@@ -155,7 +161,8 @@ export async function importCreditCardInvoice(data: CreditCardInvoiceInput) {
             }
 
             return { transaction, itemsCount };
-        });
+        }, { timeout: 20000 }); // margem maior que o padrão de 5s: faturas com muitos itens
+        // e/ou geração de parcelas futuras fazem várias queries sequenciais nessa transação.
 
         revalidatePath("/dashboard");
         revalidatePath("/reports");

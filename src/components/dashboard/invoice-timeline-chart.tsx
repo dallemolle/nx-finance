@@ -1,9 +1,8 @@
 "use client";
 
-import { BarChart, Bar, XAxis, ResponsiveContainer, Tooltip, Legend } from "recharts";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { CalendarRange } from "lucide-react";
-import { formatCurrency } from "@/lib/utils";
+import { StackedInvoiceBarChart } from "./stacked-invoice-bar-chart";
 import { CardInstallmentPurchaseDialog } from "./card-installment-purchase-dialog";
 import { EstimatedExpenseDialog } from "./estimated-expense-dialog";
 
@@ -26,34 +25,7 @@ export function InvoiceTimelineChart({ userId, data }: InvoiceTimelineChartProps
                 </div>
             </CardHeader>
             <CardContent className="pb-2">
-                <div className="h-[220px] w-full -ml-2">
-                    <ResponsiveContainer width="100%" height="100%">
-                        <BarChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
-                            <XAxis
-                                dataKey="label"
-                                tickLine={false}
-                                axisLine={false}
-                                className="text-[10px] fill-muted-foreground capitalize"
-                            />
-                            <Tooltip
-                                formatter={(value: number) => formatCurrency(value)}
-                                contentStyle={{
-                                    borderRadius: "12px",
-                                    border: "none",
-                                    boxShadow: "0 10px 15px -3px rgb(0 0 0 / 0.1)",
-                                    backgroundColor: "rgba(255, 255, 255, 0.95)",
-                                }}
-                            />
-                            <Legend
-                                formatter={(value) => (
-                                    <span className="text-xs text-muted-foreground">{value === "confirmed" ? "Confirmado" : "Provisionado"}</span>
-                                )}
-                            />
-                            <Bar dataKey="confirmed" stackId="fatura" fill="#6366f1" radius={[0, 0, 0, 0]} />
-                            <Bar dataKey="provisioned" stackId="fatura" fill="#f59e0b" fillOpacity={0.6} radius={[4, 4, 0, 0]} />
-                        </BarChart>
-                    </ResponsiveContainer>
-                </div>
+                <StackedInvoiceBarChart data={data} />
             </CardContent>
         </Card>
     );

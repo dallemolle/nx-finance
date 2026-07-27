@@ -524,3 +524,73 @@ export async function getInvoiceTimeline(userId: string, monthsAhead: number = T
         byCard: Array.from(b.byCard.values()),
     }));
 }
+
+// Igual a getInvoiceTimeline, mas preserva os itens individuais de cada fatura
+// (em vez de só somar) — usado pela tela dedicada de análise por cartão
+// (/faturas), onde o usuário precisa ver quais despesas compõem cada mês.
+export async function getInvoiceTimelineDetail(userId: string, monthsAhead: number = TIMELINE_MONTHS_DEFAULT) {
+    const now = new Date();
+    const rangeStart = startOfMonth(now);
+    const rangeEnd = endOfMonth(addMonths(now, monthsAhead - 1));
+
+    const [headers, cards] = await Promise.all([
+        db.transaction.findMany({
+            where: {
+                userId,
+                is_invoice_header: true,
+                data_vencimento: { gte: rangeStart, lte: rangeEnd },
+                credit_card_id: { not: null },
+            },
+            include: {
+                invoiceItems: {
+                    include: { category: true },
+                    orderBy: { data_compra: "asc" },
+                },
+            },
+        }),
+        db.creditCard.findMany({ where: { userId }, orderBy: { nome: "asc" } }),
+    ]);
+
+    const monthBuckets = Array.from({ length: monthsAhead }, (_, i) => {
+        const bucketDate = addMonths(now, i);
+        return {
+            month: bucketDate.getMonth() + 1,
+            year: bucketDate.getFullYear(),
+            label: format(bucketDate, "MMM/yy", { locale: ptBR }),
+        };
+    });
+
+    return cards.map(card => {
+        const months = monthBuckets.map(b => {
+            // filter (não find): nada impede duas faturas reais pro mesmo cartão+mês
+            // em cenários incomuns (ver gap conhecido em CONTEXT.md) — soma todas.
+            const matchingHeaders = headers.filter(
+                h => h.credit_card_id === card.id && h.invoice_month === b.month && h.invoice_year === b.year
+            );
+            const items = matchingHeaders.flatMap(h =>
+                h.invoiceItems.map(item => ({
+                    id: item.id,
+                    descricao: item.descricao,
+                    valor: Number(item.valor),
+                    data_compra: item.data_compra,
+                    is_provisioned: item.is_provisioned,
+                    installment_number: item.installment_number,
+                    installment_total: item.installment_total,
+                    category: item.category ? { nome: item.category.nome, cor: item.category.cor } : null,
+                }))
+            );
+            const confirmed = items.filter(i => !i.is_provisioned).reduce((sum, i) => sum + i.valor, 0);
+            const provisioned = items.filter(i => i.is_provisioned).reduce((sum, i) => sum + i.valor, 0);
+            return {
+                label: b.label,
+                month: b.month,
+                year: b.year,
+                confirmed,
+                provisioned,
+                total: confirmed + provisioned,
+                items,
+            };
+        });
+        return { cardId: card.id, cardNome: card.nome, cardCor: card.cor, months };
+    });
+}

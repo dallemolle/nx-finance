@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, FileText, Settings, Search } from "lucide-react";
+import { LayoutDashboard, FileText, Settings, Search, CalendarRange } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { OPEN_COMMAND_PALETTE_EVENT } from "@/components/command-palette";
@@ -65,6 +65,22 @@ export function TopNav() {
                         >
                             <FileText className="h-4 w-4" />
                             <span className="hidden sm:inline-block">Relatórios</span>
+                        </Button>
+                    </Link>
+
+                    <Link href="/faturas">
+                        <Button
+                            variant={pathname.startsWith("/faturas") ? "secondary" : "ghost"}
+                            size="sm"
+                            className={cn(
+                                "h-9 transition-colors gap-2",
+                                pathname.startsWith("/faturas")
+                                    ? "bg-slate-100 text-slate-900 border-none hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-50 dark:hover:bg-slate-700"
+                                    : "text-muted-foreground"
+                            )}
+                        >
+                            <CalendarRange className="h-4 w-4" />
+                            <span className="hidden sm:inline-block">Faturas</span>
                         </Button>
                     </Link>
 

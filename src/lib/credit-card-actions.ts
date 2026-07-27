@@ -122,41 +122,77 @@ export async function importCreditCardInvoice(data: CreditCardInvoiceInput) {
                 const category = await getOrCreateInvoiceCategory(tx, userId);
                 const paymentMethod = await getOrCreateProvisionedPaymentMethod(tx, userId);
 
+                // Todo item marcado precisa ser carimbado (installment_group_id/number/total),
+                // mesmo que seja a última parcela e não gere nenhuma parcela futura.
+                const stamps: { idx: number; groupId: string; number: number; total: number }[] = [];
+                // Plano das parcelas futuras a gerar (pode vir de vários itens marcados no
+                // mesmo import) — só existe pra quem não é a última parcela.
+                type FutureInstallmentPlan = {
+                    item: (typeof validatedData.items)[number];
+                    num: number; total: number; groupId: string; month: number; year: number;
+                };
+                const plan: FutureInstallmentPlan[] = [];
                 for (let idx = 0; idx < validatedData.items.length; idx++) {
                     const item = validatedData.items[idx];
                     if (!item.isInstallment || !item.installmentsCount) continue;
-
                     const startNum = item.installmentNumber ?? 1;
                     const total = item.installmentsCount;
                     const groupId = crypto.randomUUID();
-
-                    await tx.creditCardInvoiceItem.update({
-                        where: { id: createdItems[idx].id },
-                        data: { installment_group_id: groupId, installment_number: startNum, installment_total: total },
-                    });
-
+                    stamps.push({ idx, groupId, number: startNum, total });
                     for (let num = startNum + 1; num <= total; num++) {
-                        const offset = num - startNum;
-                        const { month: fm, year: fy } = addInvoiceMonths(month, year, offset);
-                        const futureHeader = await findOrCreateProvisionedHeader(tx, {
-                            userId, card: creditCard, invoiceMonth: fm, invoiceYear: fy,
+                        const { month: fm, year: fy } = addInvoiceMonths(month, year, num - startNum);
+                        plan.push({ item, num, total, groupId, month: fm, year: fy });
+                    }
+                }
+
+                if (stamps.length > 0) {
+                    // Carimba os itens reais importados marcados como parcelados — independente
+                    // entre si, seguro em paralelo.
+                    await Promise.all(stamps.map(s =>
+                        tx.creditCardInvoiceItem.update({
+                            where: { id: createdItems[s.idx].id },
+                            data: { installment_group_id: s.groupId, installment_number: s.number, installment_total: s.total },
+                        })
+                    ));
+                }
+
+                if (plan.length > 0) {
+                    // Resolve os cabeçalhos de fatura projetada ÚNICOS necessários primeiro,
+                    // sequencialmente (find-or-create não é seguro em paralelo pro mesmo
+                    // cartão+mês — duas parcelas de itens diferentes podem cair no mesmo mês).
+                    // Normalmente são poucos meses distintos, então isso é rápido.
+                    const headerByMonth = new Map<string, Awaited<ReturnType<typeof findOrCreateProvisionedHeader>>>();
+                    for (const p of plan) {
+                        const key = `${p.month}-${p.year}`;
+                        if (headerByMonth.has(key)) continue;
+                        const header = await findOrCreateProvisionedHeader(tx, {
+                            userId, card: creditCard, invoiceMonth: p.month, invoiceYear: p.year,
                             categoryId: category.id, paymentMethodId: paymentMethod.id,
                         });
-                        await tx.creditCardInvoiceItem.create({
-                            data: {
-                                transactionId: futureHeader.id,
-                                descricao: `${item.descricao} (${String(num).padStart(2, "0")}/${String(total).padStart(2, "0")})`,
-                                valor: item.valor,
-                                data_compra: item.data_compra,
-                                categoria_id: item.categoria_id,
-                                is_provisioned: true,
-                                installment_group_id: groupId,
-                                installment_number: num,
-                                installment_total: total,
-                            },
-                        });
-                        await tx.transaction.update({ where: { id: futureHeader.id }, data: { valor: { increment: item.valor } } });
+                        headerByMonth.set(key, header);
                     }
+
+                    // Com os cabeçalhos já resolvidos, cria os itens + incrementa os valores
+                    // em paralelo (sem risco de duplicidade — increment é atômico no banco).
+                    await Promise.all(plan.map(p => {
+                        const header = headerByMonth.get(`${p.month}-${p.year}`)!;
+                        return Promise.all([
+                            tx.creditCardInvoiceItem.create({
+                                data: {
+                                    transactionId: header.id,
+                                    descricao: `${p.item.descricao} (${String(p.num).padStart(2, "0")}/${String(p.total).padStart(2, "0")})`,
+                                    valor: p.item.valor,
+                                    data_compra: p.item.data_compra,
+                                    categoria_id: p.item.categoria_id,
+                                    is_provisioned: true,
+                                    installment_group_id: p.groupId,
+                                    installment_number: p.num,
+                                    installment_total: p.total,
+                                },
+                            }),
+                            tx.transaction.update({ where: { id: header.id }, data: { valor: { increment: p.item.valor } } }),
+                        ]);
+                    }));
                 }
             }
 

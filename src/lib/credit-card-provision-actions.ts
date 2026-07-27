@@ -158,7 +158,11 @@ export async function provisionCardInstallmentPurchase(data: CardInstallmentPurc
             const category = await getOrCreateInvoiceCategory(tx, userId);
             const paymentMethod = await getOrCreateProvisionedPaymentMethod(tx, userId);
 
-            for (let i = 0; i < installments.length; i++) {
+            // Cada parcela cai num mês distinto (addInvoiceMonths com offsets únicos), então
+            // as N cadeias find-or-create/create/update podem rodar em paralelo com segurança
+            // (sem risco de duas parcelas disputarem o mesmo cabeçalho) — evita estourar o
+            // timeout padrão da transação interativa do Prisma em parcelamentos longos.
+            await Promise.all(installments.map(async (installment, i) => {
                 const { month, year } = addInvoiceMonths(reference.month, reference.year, i);
                 const header = await findOrCreateProvisionedHeader(tx, {
                     userId,
@@ -169,7 +173,7 @@ export async function provisionCardInstallmentPurchase(data: CardInstallmentPurc
                     paymentMethodId: paymentMethod.id,
                 });
 
-                const value = installments[i].value;
+                const value = installment.value;
                 await tx.creditCardInvoiceItem.create({
                     data: {
                         transactionId: header.id,
@@ -187,8 +191,8 @@ export async function provisionCardInstallmentPurchase(data: CardInstallmentPurc
                     where: { id: header.id },
                     data: { valor: { increment: value.toNumber() } },
                 });
-            }
-        });
+            }));
+        }, { timeout: 20000 });
 
         revalidatePath("/dashboard");
         revalidatePath("/reports");
@@ -221,13 +225,14 @@ export async function provisionEstimatedExpense(data: EstimatedExpenseInput) {
                     // aqui não existe uma data de compra real.
                     const installments = splitInstallments(new Decimal(validatedData.valor), validatedData.installmentsCount!);
                     const groupId = crypto.randomUUID();
-                    for (let i = 0; i < installments.length; i++) {
+                    // Meses distintos por parcela -> seguro paralelizar (ver provisionCardInstallmentPurchase)
+                    await Promise.all(installments.map(async (installment, i) => {
                         const { month, year } = addInvoiceMonths(validatedData.invoice_month, validatedData.invoice_year, i);
                         const header = await findOrCreateProvisionedHeader(tx, {
                             userId, card, invoiceMonth: month, invoiceYear: year,
                             categoryId: category.id, paymentMethodId: paymentMethod.id,
                         });
-                        const value = installments[i].value;
+                        const value = installment.value;
                         await tx.creditCardInvoiceItem.create({
                             data: {
                                 transactionId: header.id,
@@ -242,7 +247,7 @@ export async function provisionEstimatedExpense(data: EstimatedExpenseInput) {
                             },
                         });
                         await tx.transaction.update({ where: { id: header.id }, data: { valor: { increment: value.toNumber() } } });
-                    }
+                    }));
                 } else {
                     const header = await findOrCreateProvisionedHeader(tx, {
                         userId,
@@ -273,6 +278,10 @@ export async function provisionEstimatedExpense(data: EstimatedExpenseInput) {
                 if (!validatedData.tipo_pagamento_id || !validatedData.institution_id) {
                     throw new Error("Informe um cartão ou um meio de pagamento + instituição.");
                 }
+                // Extraídos em const pra manter o narrowing acima dentro do closure do Promise.all abaixo
+                // (TS não propaga o narrowing de `validatedData.campo` pra dentro de funções aninhadas).
+                const tipoPagamentoId = validatedData.tipo_pagamento_id;
+                const institutionId = validatedData.institution_id;
                 const startDate = new Date(validatedData.invoice_year, validatedData.invoice_month - 1, 1);
 
                 if (isInstallment) {
@@ -284,9 +293,9 @@ export async function provisionEstimatedExpense(data: EstimatedExpenseInput) {
                     const installmentValue = totalValue.dividedBy(count).toDecimalPlaces(2, Decimal.ROUND_DOWN);
                     const lastInstallmentValue = totalValue.minus(installmentValue.times(count - 1));
 
-                    for (let i = 0; i < count; i++) {
+                    await Promise.all(Array.from({ length: count }, (_, i) => {
                         const value = i === count - 1 ? lastInstallmentValue : installmentValue;
-                        await tx.transaction.create({
+                        return tx.transaction.create({
                             data: {
                                 descricao: `${validatedData.descricao} (${String(i + 1).padStart(2, "0")}/${String(count).padStart(2, "0")})`,
                                 valor: value.toNumber(),
@@ -296,11 +305,11 @@ export async function provisionEstimatedExpense(data: EstimatedExpenseInput) {
                                 is_provisioned: true,
                                 userId,
                                 categoria_id: validatedData.categoria_id,
-                                tipo_pagamento_id: validatedData.tipo_pagamento_id,
-                                institution_id: validatedData.institution_id,
+                                tipo_pagamento_id: tipoPagamentoId,
+                                institution_id: institutionId,
                             },
                         });
-                    }
+                    }));
                 } else {
                     await tx.transaction.create({
                         data: {
@@ -318,7 +327,7 @@ export async function provisionEstimatedExpense(data: EstimatedExpenseInput) {
                     });
                 }
             }
-        });
+        }, { timeout: 20000 });
 
         revalidatePath("/dashboard");
         revalidatePath("/reports");

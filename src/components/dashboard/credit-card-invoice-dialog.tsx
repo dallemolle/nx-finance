@@ -16,7 +16,7 @@ import { InstitutionCombobox } from "@/components/dashboard/institution-combobox
 import { importCreditCardInvoice } from "@/lib/credit-card-actions";
 import { getCreditCards } from "@/lib/credit-card-provision-actions";
 import { getMappingSuggestions } from "@/lib/csv-actions";
-import { getMerchantSignature } from "@/lib/dashboard-utils";
+import { getMerchantSignature, detectInstallmentInDescription } from "@/lib/dashboard-utils";
 import { cn, getErrorMessage } from "@/lib/utils";
 import { createCategory, createPaymentMethod } from "@/lib/actions";
 import { Combobox } from "@/components/ui/combobox";
@@ -164,6 +164,21 @@ export function CreditCardInvoiceDialog({ userId, className }: { userId: string;
         setParsedData(prev => prev.map(row => row.id === id
             ? { ...row, [field]: value, ...(field === "category_id" ? { matchedByHistory: false } : {}) }
             : row
+        ));
+    };
+
+    // Ativa/desativa o parcelamento manualmente. Só ao ATIVAR, tenta reconhecer
+    // "Parcela 1/3", "1-5", "1 de 5" etc. no título pra pré-preencher os campos
+    // — nunca ativa sozinho, e nunca altera o texto da descrição.
+    const handleToggleInstallment = (row: ParsedInvoiceRow) => {
+        if (row.isInstallment) {
+            handleRowChange(row.id, "isInstallment", false);
+            return;
+        }
+        const detected = detectInstallmentInDescription(row.title);
+        setParsedData(prev => prev.map(r => r.id === row.id
+            ? { ...r, isInstallment: true, installmentNumber: detected?.number ?? r.installmentNumber, installmentsCount: detected?.total ?? r.installmentsCount }
+            : r
         ));
     };
 
@@ -400,7 +415,7 @@ export function CreditCardInvoiceDialog({ userId, className }: { userId: string;
                                                                         size="sm"
                                                                         variant={row.isInstallment ? "secondary" : "outline"}
                                                                         className="h-7 text-xs"
-                                                                        onClick={() => handleRowChange(row.id, "isInstallment", !row.isInstallment)}
+                                                                        onClick={() => handleToggleInstallment(row)}
                                                                     >
                                                                         {row.isInstallment ? "Ativado" : "Ativar"}
                                                                     </Button>

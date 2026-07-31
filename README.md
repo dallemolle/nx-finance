@@ -27,8 +27,9 @@ NxFinance é uma aplicação full-stack de finanças pessoais construída com Ne
 - **Busca global** — Ctrl/Cmd+K abre uma paleta de comando para buscar transações por descrição.
 - **Gestão de transações** — CRUD completo com status calculado dinamicamente (`PENDENTE` / `PAGO` / `ATRASADO`).
 - **Parcelamento inteligente** — divisão de valores com `decimal.js` (arredondamento para baixo + centavo residual na última parcela), datas de vencimento incrementais por mês, descrições editáveis por parcela.
-- **Importação de fatura de cartão de crédito** — upload de CSV que gera uma transação-cabeçalho (`is_invoice_header`) com N itens categorizados individualmente; reconhece estornos/reembolsos (valores negativos reduzem o total da fatura), sugere categoria automaticamente com base no histórico, e permite marcar um item como parcela de uma compra (o restante das parcelas é projetado nas faturas futuras).
+- **Importação de fatura de cartão de crédito** — upload de CSV que gera uma transação-cabeçalho (`is_invoice_header`) com N itens categorizados individualmente; reconhece estornos/reembolsos (valores negativos reduzem o total da fatura), sugere categoria automaticamente com base no histórico, e permite marcar um item como parcela de uma compra (o restante das parcelas é projetado nas faturas futuras) — ao ativar, o número/total da parcela são pré-preenchidos automaticamente se a descrição já trouxer esse padrão (ex.: "Parcela 1/3", "1-5", "1 de 5").
 - **Compras parceladas no cartão e despesas previstas** — cadastro de cartões (dia de fechamento/vencimento), lançamento de compras parceladas com projeção automática nas faturas futuras corretas (respeitando o ciclo de fechamento), despesas previstas (com ou sem cartão, com ou sem parcelamento) pra planejamento, timeline de faturas confirmado vs. previsto e indicador de comprometimento mensal da renda. Despesas previstas genéricas podem ser efetivadas (valor/data reais) ou excluídas a qualquer momento.
+- **Página de Faturas** (`/faturas`) — análise dedicada das faturas futuras por cartão: uma seção por cartão com gráfico mês a mês e a lista (já expandida) de quais despesas compõem o total de cada mês.
 - **Importação de CSV genérica** — mapeamento automático de colunas (título/valor/data), sugestão de categoria por histórico (`MappingSuggestion`, casamento por assinatura de estabelecimento) e criação inline de categorias/meios de pagamento.
 - **Relatórios filtráveis** — tabela paginada (TanStack Table) com filtros por status, categoria, instituição financeira e meio de pagamento.
 - **Agrupamento inteligente de categorias** — normaliza variações de nome (ex.: "Mercado Extra", "Mercadinho" → "Mercado") na agregação do gráfico.
@@ -69,6 +70,7 @@ src/
 │   ├── page.tsx                  # Dashboard principal (rota "/")
 │   ├── auth/                     # Login (com campo 2FA condicional) e registro
 │   ├── reports/                  # Relatórios com filtros
+│   ├── faturas/                  # Análise de faturas futuras por cartão, mês a mês
 │   ├── dashboard/settings/       # Instituições, categorias, meios de pagamento, cartões, segurança (2FA)
 │   └── api/version/route.ts      # Endpoint público: commit/branch/ambiente atuais (ver "Verificando o deploy")
 ├── components/
@@ -86,6 +88,7 @@ src/
 │   │   ├── card-installment-purchase-dialog.tsx # Nova compra parcelada no cartão
 │   │   ├── estimated-expense-dialog.tsx   # Nova despesa prevista (cartão ou genérica)
 │   │   ├── invoice-timeline-chart.tsx     # Timeline de faturas confirmado vs. previsto
+│   │   ├── stacked-invoice-bar-chart.tsx  # Gráfico de barras reaproveitado em /faturas
 │   │   ├── monthly-commitment-card.tsx    # % da renda já comprometida
 │   │   ├── confirm-estimated-expense-button.tsx # Efetiva despesa prevista genérica
 │   │   ├── cancel-provisioned-button.tsx  # Exclui lançamento previsto

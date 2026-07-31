@@ -69,6 +69,44 @@ export const capToTopNPlusOthers = (slices: CategorySlice[], n = 5): CategorySli
     return [...top, others];
 };
 
+export interface DetectedInstallment {
+    number: number;
+    total: number;
+}
+
+// Padrões tentados em ordem de confiança: primeiro os que trazem a palavra
+// "parcela"/"parc" explícita (baixo risco de falso positivo), depois padrões
+// soltos (N/M, N-M, N de M) que extratos de alguns bancos usam sem palavra-chave.
+const INSTALLMENT_PATTERNS: RegExp[] = [
+    /parc(?:ela)?s?\.?\s*:?\s*(\d{1,2})\s*(?:\/|de)\s*(\d{1,2})/i,
+    /\(?\b(\d{1,2})\s*\/\s*(\d{1,2})\)?\b/,
+    /\b(\d{1,2})\s*-\s*(\d{1,2})\b/,
+    /\b(\d{1,2})\s+de\s+(\d{1,2})\b/i,
+];
+
+// Tenta reconhecer uma indicação de parcela embutida na descrição de um
+// lançamento (extratos de cartão costumam trazer isso no próprio título,
+// ex: "Pb*Coffee Mais - Parcela 1/3"). Só o número/total são extraídos — a
+// descrição do lançamento nunca é alterada por essa função. Chamada apenas
+// quando o usuário ativa o parcelamento manualmente na revisão do import,
+// pra pré-preencher os campos (não pra ativar nada sozinho).
+// Descarta matches sem sentido (parcela > total, total < 2 ou > 48 — isso
+// também evita confundir uma data tipo "01/2026" com parcela, já que
+// 2026 > 48) — nesses casos retorna null e o usuário preenche manualmente.
+export function detectInstallmentInDescription(descricao: string): DetectedInstallment | null {
+    for (const pattern of INSTALLMENT_PATTERNS) {
+        const match = descricao.match(pattern);
+        if (!match) continue;
+
+        const number = parseInt(match[1], 10);
+        const total = parseInt(match[2], 10);
+        if (!(number >= 1 && total >= 2 && number <= total && total <= 48)) continue;
+
+        return { number, total };
+    }
+    return null;
+}
+
 // Assinatura curta de estabelecimento usada para aprender/casar sugestões de
 // categoria entre importações. Extratos reais variam número de referência,
 // cidade, data etc. a cada lançamento do mesmo estabelecimento — as 2

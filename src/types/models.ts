@@ -1,6 +1,12 @@
-import type { Category, PaymentMethod, FinancialInstitution, TransactionStatus, TransactionType } from "@prisma/client";
+import type { Category, PaymentMethod, FinancialInstitution, CreditCard, TransactionStatus, TransactionType } from "@prisma/client";
 
-export type { Category, PaymentMethod, FinancialInstitution, TransactionStatus, TransactionType };
+export type { Category, PaymentMethod, FinancialInstitution, CreditCard, TransactionStatus, TransactionType };
+
+// CreditCard após Decimal → number (limite) e com a instituição emissora incluída.
+export interface CreditCardDisplay extends Omit<CreditCard, "limite"> {
+    limite: number | null;
+    institution?: FinancialInstitution;
+}
 
 // Shape of a CreditCardInvoiceItem after Decimal → number serialization,
 // with the linked Category included and optional report-only display fields.
@@ -14,6 +20,10 @@ export interface InvoiceItemDisplay {
     transactionId?: string;
     categoria_id: string;
     category: Category;
+    is_provisioned?: boolean;
+    installment_group_id?: string | null;
+    installment_number?: number | null;
+    installment_total?: number | null;
     formattedAmount?: string;
     displayDate?: string;
 }
@@ -32,6 +42,9 @@ export interface TransactionDisplay {
     status: TransactionStatus | "ATRASADO";
     tipo: TransactionType;
     is_invoice_header?: boolean;
+    is_provisioned?: boolean;
+    invoice_month?: number | null;
+    invoice_year?: number | null;
     userId?: string;
     categoria_id: string;
     category: Category;
@@ -39,6 +52,8 @@ export interface TransactionDisplay {
     paymentMethod?: PaymentMethod | null;
     institution_id?: string;
     institution?: FinancialInstitution | null;
+    credit_card_id?: string | null;
+    creditCard?: CreditCard | null;
     invoiceItems?: InvoiceItemDisplay[];
     isInvoiceItem?: boolean;
     formattedAmount?: string;

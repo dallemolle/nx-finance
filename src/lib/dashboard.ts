@@ -26,14 +26,16 @@ export async function getDashboardData(userId: string, month: number, year: numb
     const prevEndDate = endOfMonth(prevMonthDate);
 
     // Fetch current and previous month transactions
+    // is_provisioned:false exclui faturas/despesas projetadas para meses futuros
+    // (ver credit-card-provision-actions.ts) — elas não são gasto real ainda.
     const [transactions, prevTransactions, firstTransaction] = await Promise.all([
         db.transaction.findMany({
-            where: { userId, data_vencimento: { gte: startDate, lte: endDate } },
+            where: { userId, data_vencimento: { gte: startDate, lte: endDate }, is_provisioned: false },
             include: { category: true, institution: true },
             orderBy: { data_vencimento: "desc" },
         }),
         db.transaction.findMany({
-            where: { userId, data_vencimento: { gte: prevStartDate, lte: prevEndDate } },
+            where: { userId, data_vencimento: { gte: prevStartDate, lte: prevEndDate }, is_provisioned: false },
         }),
         db.transaction.findFirst({ where: { userId }, select: { id: true } }),
     ]);
@@ -67,7 +69,7 @@ export async function getDashboardData(userId: string, month: number, year: numb
 
     const invoiceItems = invoiceHeaderIds.length > 0
         ? await db.creditCardInvoiceItem.findMany({
-            where: { transactionId: { in: invoiceHeaderIds } },
+            where: { transactionId: { in: invoiceHeaderIds }, is_provisioned: false },
             include: { category: true },
         })
         : [];
@@ -150,6 +152,59 @@ export async function getDashboardData(userId: string, month: number, year: numb
         };
     });
 
+    // Busca lançamentos previstos (is_provisioned:true) do mesmo período, só para
+    // exibição nas listas (badge "Previsto") — NÃO entram em categoryData/summary/
+    // forecast/healthScore acima, que continuam derivando só do confirmado.
+    const provisionedTransactions = await db.transaction.findMany({
+        where: { userId, data_vencimento: { gte: startDate, lte: endDate }, is_provisioned: true },
+        include: { category: true, institution: true },
+        orderBy: { data_vencimento: "desc" },
+    });
+
+    const provisionedHeaderIds = provisionedTransactions.filter(t => t.is_invoice_header).map(t => t.id);
+    const provisionedInvoiceItems = provisionedHeaderIds.length > 0
+        ? await db.creditCardInvoiceItem.findMany({
+            where: { transactionId: { in: provisionedHeaderIds }, is_provisioned: true },
+            include: { category: true },
+        })
+        : [];
+
+    const provisionedItemsByHeader = new Map<string, (Omit<typeof provisionedInvoiceItems[number], "valor"> & { valor: number })[]>();
+    for (const item of provisionedInvoiceItems) {
+        const list = provisionedItemsByHeader.get(item.transactionId) || [];
+        list.push({ ...item, valor: Number(item.valor) });
+        provisionedItemsByHeader.set(item.transactionId, list);
+    }
+
+    const provisionedRows = provisionedTransactions.map(t => ({
+        ...t,
+        valor: Number(t.valor),
+        invoiceItems: provisionedItemsByHeader.get(t.id)?.map(item => ({
+            ...item,
+            id: `inv-${item.id}`,
+            data_vencimento: item.data_compra,
+        })) || [],
+    }));
+
+    const provisionedTransactionMap = new Map(provisionedTransactions.map(t => [t.id, t]));
+    const provisionedItemsAsTransactions = provisionedInvoiceItems.map(item => {
+        const parent = provisionedTransactionMap.get(item.transactionId);
+        return {
+            id: `inv-${item.id}`,
+            descricao: item.descricao,
+            valor: Number(item.valor),
+            data_vencimento: item.data_compra,
+            status: "PENDENTE" as const,
+            tipo: "SAIDA" as const,
+            categoria_id: item.categoria_id,
+            category: item.category,
+            institution: parent?.institution || null,
+            paymentMethod: null,
+            isInvoiceItem: true,
+            is_provisioned: true,
+        };
+    });
+
     return {
         summary: {
             saldoTotal,
@@ -160,7 +215,7 @@ export async function getDashboardData(userId: string, month: number, year: numb
             deltaSaldo: calculateDelta(saldoTotal, prevSummary.totalEntradas - prevSummary.totalSaidas),
         },
         categoryData,
-        monthlyTransactions: [...monthlyTransactions, ...invoiceItemsAsTransactions],
+        monthlyTransactions: [...monthlyTransactions, ...invoiceItemsAsTransactions, ...provisionedRows, ...provisionedItemsAsTransactions],
         metrics: {
             forecast,
             healthScore,
@@ -179,7 +234,7 @@ export async function getMonthlyTrend(userId: string, month: number, year: numbe
     const rangeEnd = endOfMonth(targetDate);
 
     const transactions = await db.transaction.findMany({
-        where: { userId, data_vencimento: { gte: rangeStart, lte: rangeEnd } },
+        where: { userId, data_vencimento: { gte: rangeStart, lte: rangeEnd }, is_provisioned: false },
         select: { valor: true, tipo: true, data_vencimento: true },
     });
 

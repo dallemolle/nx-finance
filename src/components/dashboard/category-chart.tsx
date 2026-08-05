@@ -10,6 +10,7 @@ import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { getCategoryGroupName, mergeSimilarCategories, capToTopNPlusOthers } from "@/lib/dashboard-utils";
 import { useIsPrivacyMode } from "./privacy-provider";
+import { ProvisionedBadge } from "./provisioned-badge";
 import type { TransactionDisplay } from "@/types/models";
 
 interface CategoryChartProps {
@@ -148,6 +149,11 @@ export function CategoryChart({ data, transactions = [] }: CategoryChartProps) {
                         const categoryTransactions = transactions.filter(t =>
                             t.tipo === "SAIDA" && (categoryItem?.sourceNames.includes(getCategoryGroupName(t.category?.nome || "")) ?? false)
                         );
+                        // categoryItem.value soma só o confirmado (categoryData não inclui
+                        // previstos) — o previsto é mostrado à parte, sem misturar no total.
+                        const provisionedTotal = categoryTransactions
+                            .filter(t => t.is_provisioned)
+                            .reduce((sum, t) => sum + Number(t.valor), 0);
 
                         // "Outros" junta várias categorias — a lista de despesas é agrupada
                         // por categoria em vez de exibida como uma lista plana.
@@ -176,7 +182,10 @@ export function CategoryChart({ data, transactions = [] }: CategoryChartProps) {
                                         <ArrowDownRight className="w-5 h-5" />
                                     </div>
                                     <div className="flex flex-col">
-                                        <span className="font-semibold text-slate-800 dark:text-slate-200 text-sm md:text-base line-clamp-1">{t.descricao}</span>
+                                        <span className="font-semibold text-slate-800 dark:text-slate-200 text-sm md:text-base line-clamp-1 flex items-center gap-2">
+                                            {t.descricao}
+                                            {t.is_provisioned && <ProvisionedBadge />}
+                                        </span>
                                         <div className="flex items-center gap-3 text-xs text-slate-500 mt-1">
                                             <span className="flex items-center gap-1">
                                                 <ScrollText className="w-3 h-3" />
@@ -215,6 +224,9 @@ export function CategoryChart({ data, transactions = [] }: CategoryChartProps) {
                                             </DialogTitle>
                                             <DialogDescription className="text-sm font-medium">
                                                 Total no período: <span className="text-slate-900 dark:text-white font-bold">{formatCurrency(categoryItem?.value || 0)}</span> ({categoryTransactions.length} transações)
+                                                {provisionedTotal > 0 && (
+                                                    <span className="text-amber-600 dark:text-amber-400"> · + {formatCurrency(provisionedTotal)} previsto</span>
+                                                )}
                                             </DialogDescription>
                                         </div>
                                     </div>

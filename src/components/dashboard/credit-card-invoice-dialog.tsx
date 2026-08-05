@@ -8,18 +8,20 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { CreditCard, Upload, ChevronRight, X, AlertCircle, Loader2 } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { CreditCard, Upload, ChevronRight, X, AlertCircle, Loader2, Repeat } from "lucide-react";
 import Papa from "papaparse";
 import { getCategories, getPaymentMethods, getFinancialInstitutions } from "@/lib/reports";
 import { InstitutionCombobox } from "@/components/dashboard/institution-combobox";
 import { importCreditCardInvoice } from "@/lib/credit-card-actions";
+import { getCreditCards } from "@/lib/credit-card-provision-actions";
 import { getMappingSuggestions } from "@/lib/csv-actions";
-import { getMerchantSignature } from "@/lib/dashboard-utils";
+import { getMerchantSignature, detectInstallmentInDescription } from "@/lib/dashboard-utils";
 import { cn, getErrorMessage } from "@/lib/utils";
 import { createCategory, createPaymentMethod } from "@/lib/actions";
 import { Combobox } from "@/components/ui/combobox";
 import { toast } from "sonner";
-import type { Category, PaymentMethod, FinancialInstitution } from "@/types/models";
+import type { Category, PaymentMethod, FinancialInstitution, CreditCardDisplay } from "@/types/models";
 
 interface ParsedInvoiceRow {
     id: number;
@@ -28,6 +30,9 @@ interface ParsedInvoiceRow {
     date: string;
     category_id: string;
     matchedByHistory: boolean;
+    isInstallment: boolean;
+    installmentNumber: number;
+    installmentsCount: number;
 }
 
 export function CreditCardInvoiceDialog({ userId, className }: { userId: string; className?: string }) {
@@ -43,11 +48,13 @@ export function CreditCardInvoiceDialog({ userId, className }: { userId: string;
     const [dueDate, setDueDate] = useState<string>("");
     const [paymentMethodId, setPaymentMethodId] = useState<string>("none");
     const [institutionId, setInstitutionId] = useState<string>("");
+    const [creditCardId, setCreditCardId] = useState<string>("none");
 
     // Data
     const [categories, setCategories] = useState<Category[]>([]);
     const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
     const [institutions, setInstitutions] = useState<FinancialInstitution[]>([]);
+    const [creditCards, setCreditCards] = useState<CreditCardDisplay[]>([]);
     const [suggestions, setSuggestions] = useState<Awaited<ReturnType<typeof getMappingSuggestions>>>([]);
 
     const [parsedData, setParsedData] = useState<ParsedInvoiceRow[]>([]);
@@ -62,12 +69,14 @@ export function CreditCardInvoiceDialog({ userId, className }: { userId: string;
             setDueDate("");
             setPaymentMethodId("none");
             setInstitutionId("");
+            setCreditCardId("none");
             setParsedData([]);
             setError(null);
 
             getCategories(userId).then(setCategories);
             getPaymentMethods(userId).then(setPaymentMethods);
             getFinancialInstitutions(userId).then(setInstitutions);
+            getCreditCards(userId).then(setCreditCards);
             getMappingSuggestions().then(setSuggestions).catch(console.error);
         }
     }, [open, userId]);
@@ -129,6 +138,9 @@ export function CreditCardInvoiceDialog({ userId, className }: { userId: string;
                             date: date,
                             category_id: guess ? guess.categoria_id : "",
                             matchedByHistory: !!guess,
+                            isInstallment: false,
+                            installmentNumber: 1,
+                            installmentsCount: 2,
                         };
                     });
 
@@ -152,6 +164,21 @@ export function CreditCardInvoiceDialog({ userId, className }: { userId: string;
         setParsedData(prev => prev.map(row => row.id === id
             ? { ...row, [field]: value, ...(field === "category_id" ? { matchedByHistory: false } : {}) }
             : row
+        ));
+    };
+
+    // Ativa/desativa o parcelamento manualmente. Só ao ATIVAR, tenta reconhecer
+    // "Parcela 1/3", "1-5", "1 de 5" etc. no título pra pré-preencher os campos
+    // — nunca ativa sozinho, e nunca altera o texto da descrição.
+    const handleToggleInstallment = (row: ParsedInvoiceRow) => {
+        if (row.isInstallment) {
+            handleRowChange(row.id, "isInstallment", false);
+            return;
+        }
+        const detected = detectInstallmentInDescription(row.title);
+        setParsedData(prev => prev.map(r => r.id === row.id
+            ? { ...r, isInstallment: true, installmentNumber: detected?.number ?? r.installmentNumber, installmentsCount: detected?.total ?? r.installmentsCount }
+            : r
         ));
     };
 
@@ -189,6 +216,14 @@ export function CreditCardInvoiceDialog({ userId, className }: { userId: string;
             return;
         }
 
+        const hasInvalidInstallments = parsedData.some(
+            r => r.isInstallment && (!r.installmentsCount || r.installmentNumber > r.installmentsCount)
+        );
+        if (hasInvalidInstallments) {
+            setError("Corrija o número de parcelas dos itens marcados como parcelados.");
+            return;
+        }
+
         if (parsedData.length === 0) {
             setError("Nenhum item para importar.");
             return;
@@ -203,11 +238,15 @@ export function CreditCardInvoiceDialog({ userId, className }: { userId: string;
                 data_vencimento: dueDate,
                 institution_id: institutionId,
                 tipo_pagamento_id: paymentMethodId,
+                credit_card_id: creditCardId === "none" ? null : creditCardId,
                 items: parsedData.map(row => ({
                     descricao: row.title,
                     valor: row.amount,
                     categoria_id: row.category_id,
                     data_compra: row.date,
+                    isInstallment: row.isInstallment,
+                    installmentNumber: row.isInstallment ? row.installmentNumber : null,
+                    installmentsCount: row.isInstallment ? row.installmentsCount : null,
                 })),
             });
 
@@ -309,6 +348,21 @@ export function CreditCardInvoiceDialog({ userId, className }: { userId: string;
                                     />
                                 </div>
                             </div>
+
+                            <div className="space-y-2">
+                                <Label>Cartão de Crédito (opcional)</Label>
+                                <Combobox
+                                    options={creditCards.map(c => ({ value: c.id, label: c.nome }))}
+                                    value={creditCardId === "none" ? "" : creditCardId}
+                                    onValueChange={(v) => setCreditCardId(v || "none")}
+                                    placeholder="Nenhum..."
+                                    searchPlaceholder="Procurar cartão..."
+                                    emptyMessage="Nenhum cartão cadastrado."
+                                />
+                                <p className="text-xs text-muted-foreground">
+                                    Vincular a um cartão habilita a conciliação com faturas projetadas e a marcação de itens parcelados na revisão.
+                                </p>
+                            </div>
                         </div>
                     ) : (
                         <div className="space-y-4">
@@ -334,11 +388,69 @@ export function CreditCardInvoiceDialog({ userId, className }: { userId: string;
                                         {parsedData.map((row) => (
                                             <TableRow key={row.id}>
                                                 <TableCell className="p-2">
-                                                    <Input
-                                                        value={row.title}
-                                                        onChange={(e) => handleRowChange(row.id, "title", e.target.value)}
-                                                        className="h-8 text-sm min-w-[240px]"
-                                                    />
+                                                    <div className="flex items-center gap-1">
+                                                        <Input
+                                                            value={row.title}
+                                                            onChange={(e) => handleRowChange(row.id, "title", e.target.value)}
+                                                            className={cn("h-8 text-sm min-w-[200px]", row.isInstallment && "bg-indigo-50/60 border-indigo-200 dark:bg-indigo-950/20 dark:border-indigo-900")}
+                                                        />
+                                                        <Popover>
+                                                            <PopoverTrigger asChild>
+                                                                <Button
+                                                                    type="button"
+                                                                    variant="ghost"
+                                                                    size="icon"
+                                                                    disabled={creditCardId === "none"}
+                                                                    title={creditCardId === "none" ? "Selecione um cartão no passo anterior para marcar parcelamento" : "Marcar como compra parcelada"}
+                                                                    className={cn("h-8 w-8 shrink-0", row.isInstallment ? "text-indigo-600 dark:text-indigo-400" : "text-slate-400")}
+                                                                >
+                                                                    <Repeat className="w-4 h-4" />
+                                                                </Button>
+                                                            </PopoverTrigger>
+                                                            <PopoverContent className="w-64 space-y-3" align="start">
+                                                                <div className="flex items-center justify-between">
+                                                                    <Label className="text-xs font-semibold">Compra parcelada</Label>
+                                                                    <Button
+                                                                        type="button"
+                                                                        size="sm"
+                                                                        variant={row.isInstallment ? "secondary" : "outline"}
+                                                                        className="h-7 text-xs"
+                                                                        onClick={() => handleToggleInstallment(row)}
+                                                                    >
+                                                                        {row.isInstallment ? "Ativado" : "Ativar"}
+                                                                    </Button>
+                                                                </div>
+                                                                {row.isInstallment && (
+                                                                    <div className="grid grid-cols-2 gap-2">
+                                                                        <div className="space-y-1">
+                                                                            <Label className="text-[10px] text-muted-foreground">Esta é a parcela nº</Label>
+                                                                            <Input
+                                                                                type="number"
+                                                                                min={1}
+                                                                                value={row.installmentNumber}
+                                                                                onChange={(e) => handleRowChange(row.id, "installmentNumber", Math.max(1, parseInt(e.target.value) || 1))}
+                                                                                className="h-8 text-sm"
+                                                                            />
+                                                                        </div>
+                                                                        <div className="space-y-1">
+                                                                            <Label className="text-[10px] text-muted-foreground">De quantas parcelas</Label>
+                                                                            <Input
+                                                                                type="number"
+                                                                                min={2}
+                                                                                max={48}
+                                                                                value={row.installmentsCount}
+                                                                                onChange={(e) => handleRowChange(row.id, "installmentsCount", Math.max(2, parseInt(e.target.value) || 2))}
+                                                                                className="h-8 text-sm"
+                                                                            />
+                                                                        </div>
+                                                                        <p className="col-span-2 text-[10px] text-muted-foreground leading-tight">
+                                                                            As parcelas restantes serão projetadas nas próximas faturas, com o mesmo valor desta.
+                                                                        </p>
+                                                                    </div>
+                                                                )}
+                                                            </PopoverContent>
+                                                        </Popover>
+                                                    </div>
                                                 </TableCell>
                                                 <TableCell className="p-2">
                                                     <Input

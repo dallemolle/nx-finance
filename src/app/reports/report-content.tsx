@@ -4,6 +4,7 @@ import { useMemo, useState, type ReactNode } from "react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { ProvisionedBadge } from "@/components/dashboard/provisioned-badge";
 import { ReportFilters } from "./report-filters";
 import { ChevronRight, ChevronDown, ChevronLeft, CreditCard } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -200,7 +201,7 @@ export function ReportContent({ transactions, categories, institutions, paymentM
                                     <TableCell className={`text-sm font-black tracking-tight ${t.tipo === 'ENTRADA' ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
                                         {t.tipo === 'ENTRADA' ? '+' : '-'} {t.formattedAmount}
                                     </TableCell>
-                                    <TableCell>{getStatusBadge(t.status)}</TableCell>
+                                    <TableCell>{t.is_provisioned ? <ProvisionedBadge /> : getStatusBadge(t.status)}</TableCell>
                                 </TableRow>
                             );
 
@@ -231,7 +232,7 @@ export function ReportContent({ transactions, categories, institutions, paymentM
                                             )}>
                                                 {item.valor < 0 ? "+" : "-"} {formatCurrency(Math.abs(item.valor))}
                                             </TableCell>
-                                            <TableCell />
+                                            <TableCell>{item.is_provisioned && <ProvisionedBadge />}</TableCell>
                                         </TableRow>
                                     );
                                 });

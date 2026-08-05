@@ -17,6 +17,9 @@ import { CreditCardInvoiceDialog } from "@/components/dashboard/credit-card-invo
 import { EmptyDashboardState } from "@/components/dashboard/empty-dashboard-state";
 import { MonthlyTrendChart } from "@/components/dashboard/monthly-trend-chart";
 import { PrivacyProvider, PrivacyToggleButton } from "@/components/dashboard/privacy-provider";
+import { InvoiceTimelineChart } from "@/components/dashboard/invoice-timeline-chart";
+import { MonthlyCommitmentCard } from "@/components/dashboard/monthly-commitment-card";
+import { getCreditCards, getInvoiceTimeline } from "@/lib/credit-card-provision-actions";
 
 interface DashboardPageProps {
     searchParams: Promise<{ month?: string; year?: string }>;
@@ -35,6 +38,8 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
 
     const data = await getDashboardData(session.user.id, month, year);
     const trend = data.hasAnyTransactions ? await getMonthlyTrend(session.user.id, month, year) : [];
+    const creditCards = await getCreditCards(session.user.id);
+    const invoiceTimeline = creditCards.length > 0 ? await getInvoiceTimeline(session.user.id) : [];
 
     return (
         <PrivacyProvider>
@@ -89,6 +94,19 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                             />
                             <MonthlyTrendChart data={trend} />
                         </div>
+
+                        {creditCards.length > 0 && (
+                            <div className="grid gap-6 md:grid-cols-3">
+                                <div className="col-span-1 md:col-span-2">
+                                    <InvoiceTimelineChart userId={session.user.id} data={invoiceTimeline} />
+                                </div>
+                                <MonthlyCommitmentCard
+                                    label={invoiceTimeline[1]?.label ?? ""}
+                                    committedValue={invoiceTimeline[1]?.total ?? 0}
+                                    incomeReference={data.summary.totalEntradas}
+                                />
+                            </div>
+                        )}
                     </>
                 ) : (
                     <EmptyDashboardState userId={session.user.id} />

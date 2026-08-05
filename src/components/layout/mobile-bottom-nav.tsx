@@ -3,12 +3,13 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useSession } from "next-auth/react";
-import { LayoutDashboard, FileText, Settings } from "lucide-react";
+import { LayoutDashboard, FileText, Settings, CalendarRange } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const NAV_ITEMS = [
     { href: "/", label: "Dashboard", icon: LayoutDashboard, match: (p: string) => p === "/" },
     { href: "/reports", label: "Relatórios", icon: FileText, match: (p: string) => p.startsWith("/reports") },
+    { href: "/faturas", label: "Faturas", icon: CalendarRange, match: (p: string) => p.startsWith("/faturas") },
     { href: "/dashboard/settings", label: "Config.", icon: Settings, match: (p: string) => p.startsWith("/dashboard/settings") },
 ];
 

@@ -31,6 +31,7 @@ NxFinance é uma aplicação full-stack de finanças pessoais construída com Ne
 - **Compras parceladas no cartão e despesas previstas** — cadastro de cartões (dia de fechamento/vencimento), lançamento de compras parceladas com projeção automática nas faturas futuras corretas (respeitando o ciclo de fechamento), despesas previstas (com ou sem cartão, com ou sem parcelamento) pra planejamento, timeline de faturas confirmado vs. previsto e indicador de comprometimento mensal da renda. Despesas previstas genéricas podem ser efetivadas (valor/data reais) ou excluídas a qualquer momento.
 - **Página de Faturas** (`/faturas`) — análise dedicada das faturas futuras por cartão: uma seção por cartão com gráfico mês a mês e a lista (já expandida) de quais despesas compõem o total de cada mês.
 - **Importação de CSV genérica** — mapeamento automático de colunas (título/valor/data), sugestão de categoria por histórico (`MappingSuggestion`, casamento por assinatura de estabelecimento) e criação inline de categorias/meios de pagamento.
+- **Central de notificações** — sino no topo com avisos calculados na hora (sem cadastro/cron): despesa vencendo em breve, despesa atrasada, despesa prevista genérica ainda não efetivada e fatura de cartão projetada vencendo sem a fatura real ter sido importada.
 - **Relatórios filtráveis** — tabela paginada (TanStack Table) com filtros por status, categoria, instituição financeira e meio de pagamento.
 - **Agrupamento inteligente de categorias** — normaliza variações de nome (ex.: "Mercado Extra", "Mercadinho" → "Mercado") na agregação do gráfico.
 - **Autenticação com 2FA (TOTP)** — login via Credentials Provider (NextAuth) com sessão JWT; segundo fator opcional via app autenticador (QR code de setup em Configurações → Segurança).
@@ -93,7 +94,7 @@ src/
 │   │   ├── confirm-estimated-expense-button.tsx # Efetiva despesa prevista genérica
 │   │   ├── cancel-provisioned-button.tsx  # Exclui lançamento previsto
 │   │   └── provisioned-badge.tsx          # Badge "Previsto" (âmbar)
-│   ├── layout/                   # Navegação (top-nav.tsx, mobile-bottom-nav.tsx)
+│   ├── layout/                   # Navegação (top-nav.tsx, mobile-bottom-nav.tsx, notification-bell.tsx)
 │   ├── command-palette.tsx       # Busca global (Ctrl/Cmd+K)
 │   └── ui/                       # Primitivas shadcn/ui
 ├── lib/
@@ -103,6 +104,7 @@ src/
 │   ├── dashboard.ts              # Agregações do dashboard + tendência mensal (exclui provisionado)
 │   ├── dashboard-utils.ts        # Normalização/agrupamento de categorias, assinatura de estabelecimento
 │   ├── reports.ts                # Dados de relatórios + busca global
+│   ├── notifications.ts          # Central de notificações (calculada na hora, sem tabela nova)
 │   ├── credit-card-actions.ts    # Importação de fatura + reconciliação com faturas projetadas
 │   ├── credit-card-cycle.ts      # Matemática pura do ciclo de fatura (fechamento/vencimento/split)
 │   ├── credit-card-provision-actions.ts # CRUD de cartão + provisionamento + efetivar/excluir previstos

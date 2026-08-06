@@ -1,6 +1,6 @@
 # Contexto do Projeto: NxFinance
 
-> Documento técnico de referência para IAs e desenvolvedores. Reflete o estado real do código na branch atual (`feature/2026-07-24_previsao_provisao_gasto`, derivada de `staging`). Não documenta features de outras branches não mergeadas — ver seção 6.
+> Documento técnico de referência para IAs e desenvolvedores. Reflete o estado real do código na branch atual (`feature/2026-08-06_notificacao`, derivada de `staging`). Não documenta features de outras branches não mergeadas — ver seção 6.
 
 ## 1. Stack Tecnológica Principal
 
@@ -42,7 +42,7 @@ postinstall → prisma generate
 - Rodados via `npx tsx scripts/<arquivo>.ts` — `tsx` é devDependency justamente para isso (não há Jest/Vitest no projeto).
 - Convenção: imports relativos (não `@/`) para evitar problemas de resolução de path alias fora do Next.js; scripts de integração usam `PrismaClient` bruto (não o singleton `db.ts`) e checam que `DATABASE_URL` aponta pra `localhost`/`127.0.0.1` antes de rodar, abortando caso contrário — nunca devem tocar staging/produção.
 - `verify-billing-cycle.ts` / `verify-estimated-installments.ts` / `verify-installment-detection.ts`: matemática/heurísticas puras (ciclo de fatura, parcelamento, reconhecimento de padrão de parcela na descrição — sem banco).
-- `verify-reconciliation.ts` / `verify-csv-installment-import.ts` / `verify-confirm-estimate.ts` / `verify-invoice-timeline-detail.ts`: integração contra o banco de dev, criam e limpam seus próprios dados de teste (usuário descartável, cascade delete).
+- `verify-reconciliation.ts` / `verify-csv-installment-import.ts` / `verify-confirm-estimate.ts` / `verify-invoice-timeline-detail.ts` / `verify-notifications.ts`: integração contra o banco de dev, criam e limpam seus próprios dados de teste (usuário descartável, cascade delete).
 
 **Configurações notáveis:**
 - `tsconfig.json`: strict mode, path alias `@/` → `src/`, target ES2017, moduleResolution bundler
@@ -124,8 +124,9 @@ postinstall → prisma generate
 
 | Arquivo | Tipo | Propósito |
 |---------|------|-----------|
-| `top-nav.tsx` | Client Component | Barra de navegação superior fixa com backdrop-blur; logo linka pra `/`; gatilho de busca central (abre `CommandPalette`); links Dashboard/Relatórios/**Faturas**/Configurações ocultos em mobile (`hidden sm:flex` — substituídos pelo `MobileBottomNav`); links hardcoded um a um (não array-driven) |
+| `top-nav.tsx` | Client Component | Barra de navegação superior fixa com backdrop-blur; logo linka pra `/`; gatilho de busca central (abre `CommandPalette`); `NotificationBell` sempre visível (fora do `div` que esconde os links em mobile); links Dashboard/Relatórios/**Faturas**/Configurações ocultos em mobile (`hidden sm:flex` — substituídos pelo `MobileBottomNav`); links hardcoded um a um (não array-driven) |
 | `mobile-bottom-nav.tsx` | Client Component | Barra fixa inferior (`sm:hidden`) com os mesmos links de navegação (array `NAV_ITEMS`, incluindo Faturas), para mobile; oculta em rotas `/auth/*` |
+| `notification-bell.tsx` | Client Component | Sino de notificações (`useSession()` p/ `userId`, sem prop-threading): busca `getNotifications()` ao montar e sempre que o `Popover` reabre; badge com contagem (9+ acima de 9); item colorido por tipo (rose=atrasado, orange=vencendo, âmbar=previsto/projetado, ver 4.10) e clicável (`href` leva pro mês certo no dashboard ou pra `/faturas`); estado vazio com ícone de check |
 
 ### `src/components/` — Outros Componentes
 
@@ -157,6 +158,7 @@ postinstall → prisma generate
 | `credit-card-shared.ts` | Utilitário | Helpers compartilhados entre `credit-card-actions.ts` e `credit-card-provision-actions.ts` (extraídos pra evitar import circular): `getOrCreateInvoiceCategory()`, `getOrCreateProvisionedPaymentMethod()`, `findProvisionedHeader()` |
 | `credit-card-provision-actions.ts` | Server Actions | CRUD de `CreditCard`; `provisionCardInstallmentPurchase()` (compra parcelada real → projeta parcelas em faturas futuras); `provisionEstimatedExpense()` (despesa prevista, com ou sem parcelamento, no cartão ou genérica); `confirmEstimatedExpense()` (efetiva despesa prevista **genérica**, guarda `is_provisioned:true && credit_card_id:null` no servidor); `deleteProvisionedInvoiceItem()` (cancela item avulso de fatura projetada, recalcula/remove o cabeçalho); `reconcileProvisionedInstallments()` (migra parcelas provisionadas pra fatura real importada); `getInvoiceTimeline()` (buckets mensais confirmado/provisionado, somado entre todos os cartões — usado pelo dashboard principal); `getInvoiceTimelineDetail()` (mesmo range, mas por cartão e preservando os itens individuais de cada mês — usado pela página `/faturas`); `findOrCreateProvisionedHeader()` (exportado, reusado por `credit-card-actions.ts`) |
 | `csv-actions.ts` | Server Actions | `processBatchTransactions()`, `getMappingSuggestions()`, `saveMappingSuggestion()` — casamento/aprendizado via `getMerchantSignature()` |
+| `notifications.ts` | Server Actions | `getNotifications(userId)` — central de notificações computada sob demanda (sem tabela nova, sem cron), 4 queries em `Promise.all` (vencendo em D+3, atrasada, despesa prevista genérica não efetivada, fatura projetada vencendo em D+7 sem import). Confere `userId` recebido contra `getServerSession()` antes de consultar — ver 4.11 |
 | `db.ts` | Singleton | Instância singleton do PrismaClient (cache em `globalThis`) — **usado por todas as Server Actions** |
 
 ### `src/proxy.ts` — Middleware
@@ -438,6 +440,18 @@ Todas as Server Actions usam `try/catch` com `console.error(...)` seguido de `th
 
 Âmbar (`amber-500`/`#f59e0b`) com opacidade reduzida é a cor reservada pra tudo que é provisionado/estimado, em contraste com índigo (confirmado/cabeçalho de fatura) e emerald/rose (entradas/saídas efetivas): `InvoiceTimelineChart` usa `fill="#f59e0b" fillOpacity={0.6}` na série "Provisionado"; `ProvisionedBadge` usa `bg-amber-50 text-amber-600 dark:bg-amber-950/40 dark:text-amber-400`, mesmo formato dos badges de status (`border-none px-2 py-0 text-[10px] uppercase font-bold tracking-tight`). Não reutilizar âmbar pra outro estado.
 
+### 4.11 Central de Notificações
+
+- **Sem infraestrutura nova**: nada de e-mail (removido de propósito, ver 6), push ou cron/agendamento. `getNotifications(userId)` (`src/lib/notifications.ts`) recalcula a lista a cada chamada, mesmo padrão dinâmico já usado pro status `ATRASADO` (3.5/3.8) — uma notificação "some" sozinha quando a causa é resolvida (paga, efetiva, importa a fatura real), sem estado de "lida" persistido.
+- **4 tipos**, cada um mapeado pra `AppNotification { id, type, title, description, valor, date, href }`:
+  1. `due_soon` — `Transaction` com `is_provisioned:false`, `status != PAGO`, vencendo nos próximos 3 dias.
+  2. `overdue` — mesma base, `data_vencimento < now()` (replica a condição de `ATRASADO`).
+  3. `estimate_pending` — despesa prevista **genérica** (`is_provisioned:true, credit_card_id:null`) com vencimento até o fim do mês corrente — escopo restrito à genérica de propósito, mesma fronteira de `confirmEstimatedExpense()` (só ela pode ser efetivada pela UI).
+  4. `invoice_pending_import` — fatura projetada de cartão (`is_invoice_header:true, is_provisioned:true, credit_card_id` preenchido) vencendo nos próximos 7 dias, ainda sem a fatura real importada.
+- Ordenação: `overdue` primeiro, depois `due_soon`/`invoice_pending_import` por data crescente, `estimate_pending` por último. `href` de cada item leva pro mês certo no dashboard (`/?month=&year=`, derivado de `data_vencimento`) ou pra `/faturas` (fatura projetada).
+- `NotificationBell` (`src/components/layout/notification-bell.tsx`) renderiza o sino sempre visível no `TopNav` (inclusive mobile); busca ao montar e a cada abertura do `Popover` — sem polling/websocket, mesmo padrão de refetch-on-open já usado em vários diálogos do app.
+- `getNotifications()` é a primeira Server Action deste projeto chamada **direto de um Client Component com um `userId` vindo de `useSession()`** (sem estar atrás de uma página protegida que já valide o dono do dado) — por isso ela confere o `userId` recebido contra `getServerSession()` e lança se não bater, mesmo o middleware já protegendo as rotas que a usam. As demais `getX(userId)` do projeto (ex. `getCreditCards`) não têm essa checagem própria — não retrofitado aqui, fora de escopo desta feature (ver 6).
+
 ---
 
 ## 5. Convenções de Código
@@ -481,5 +495,6 @@ Seção para evitar que futuras sessões assumam que algo funciona apenas porque
 - **Detalhamento por categoria com itens previstos**: o total no cabeçalho do diálogo (`categoryItem.value`) soma só o confirmado; linhas previstas aparecem na lista com um subtotal "+ R$X previsto" separado — mas o agrupamento "Outros" (quando clicado) soma confirmado e previsto juntos no subtotal por categoria dentro do grupo, sem essa mesma separação.
 - **Legenda do gráfico de categorias não é mascarada pelo toggle de privacidade**: só o total central do donut e os 3 KPIs/lista de lançamentos são mascarados — decisão de escopo, não bug (ver 3.9).
 - **`db-sync.yml`** aplica `prisma db push` direto contra o banco de produção/staging a cada push nessas branches, sem histórico de migração — mudanças de schema que impliquem perda de dados (drop de coluna/tabela não vazia) bloqueiam o workflow até alguém decidir manualmente entre `--accept-data-loss` ou uma correção manual no banco (ex.: rename).
+- **Checagem de dono do `userId` é inconsistente entre Server Actions**: `getNotifications()` (4.11) confere o `userId` recebido contra a sessão real antes de consultar; funções mais antigas com a mesma assinatura (`getCreditCards(userId)` e outras `getX(userId)`) confiam no `userId` que o chamador manda, sem essa checagem própria. Não é um bug ativamente explorável hoje (todo chamador atual já é autenticado e passa o próprio `userId`), mas é uma inconsistência a ter em mente antes de expor qualquer uma dessas funções a um novo caminho de chamada.
 
 **Já resolvido nesta branch (histórico, para não reabrir por engano):** 2FA agora é TOTP funcional de ponta a ponta (ver 3.6); `prisma.ts`, `mail.ts`/`mail.js` e o `dashboard/page.tsx` mock foram removidos (código morto); `export-buttons.tsx` exporta CSV/PDF de verdade; `data_pagamento` é preenchido por `payTransaction()`; `@auth/prisma-adapter` e `nodemailer` foram removidos do `package.json`; módulo completo de compras parceladas/despesa prevista/provisionamento de fatura futura implementado do zero nesta branch (ver 3.10) — as branches antigas que tentavam isso (`feature/2026-07-15_lancto_previsao_despesa`, `07-17_prev_desp`, `07-18_prev-desc-new_table`) não foram portadas e podem ser ignoradas/descartadas; timeout de transação interativa (P2028) em `importCreditCardInvoice`/`provisionCardInstallmentPurchase`/`provisionEstimatedExpense` corrigido reduzindo o número de queries dentro da transação (`createMany` + lookups/aprendizado movidos pra fora, ver nota em 3.4) — a primeira tentativa (só paralelizar via `Promise.all`) não foi suficiente, porque uma transação interativa roda numa única conexão e `Promise.all` não paraleliza de verdade no banco. Se esse erro reaparecer, confirmar primeiro via `/api/version` (4.8) se o commit da correção já está de fato em staging antes de investigar mais.

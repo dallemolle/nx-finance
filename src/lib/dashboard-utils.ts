@@ -107,6 +107,31 @@ export function detectInstallmentInDescription(descricao: string): DetectedInsta
     return null;
 }
 
+// Remove um padrão de parcela reconhecido (mesmas regras/validações de
+// detectInstallmentInDescription) do texto — usado só ao montar a descrição
+// de um registro NOVO gerado internamente (parcela futura projetada), nunca
+// para alterar a descrição de um lançamento que o usuário digitou/importou.
+// Sem isso, uma parcela futura gerada a partir de um texto como "Compra -
+// Parcela 1/10" ficaria com dois números de parcela contraditórios na mesma
+// string (o original "1/10" e o sufixo real "(02/10)").
+export function stripInstallmentPattern(descricao: string): string {
+    for (const pattern of INSTALLMENT_PATTERNS) {
+        const match = descricao.match(pattern);
+        if (!match) continue;
+
+        const number = parseInt(match[1], 10);
+        const total = parseInt(match[2], 10);
+        if (!(number >= 1 && total >= 2 && number <= total && total <= 48)) continue;
+
+        return descricao
+            .replace(pattern, "")
+            .replace(/[-–—:]+\s*$/, "")
+            .replace(/\s{2,}/g, " ")
+            .trim();
+    }
+    return descricao;
+}
+
 // Assinatura curta de estabelecimento usada para aprender/casar sugestões de
 // categoria entre importações. Extratos reais variam número de referência,
 // cidade, data etc. a cada lançamento do mesmo estabelecimento — as 2

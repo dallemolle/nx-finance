@@ -6,6 +6,7 @@ import { LayoutDashboard, FileText, Settings, Search, CalendarRange } from "luci
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { OPEN_COMMAND_PALETTE_EVENT } from "@/components/command-palette";
+import { NotificationBell } from "@/components/layout/notification-bell";
 
 export function TopNav() {
     const pathname = usePathname();
@@ -33,6 +34,9 @@ export function TopNav() {
                         <span className="hidden sm:inline-block ml-auto text-[10px] font-semibold border border-slate-300 dark:border-slate-700 rounded px-1.5 py-0.5">Ctrl+K</span>
                     </button>
                 </div>
+
+                {/* Notificações — sempre visível (também no mobile, ao contrário dos links abaixo) */}
+                <NotificationBell />
 
                 {/* Primary Nav Links */}
                 <div className="hidden sm:flex items-center gap-1 sm:gap-2">

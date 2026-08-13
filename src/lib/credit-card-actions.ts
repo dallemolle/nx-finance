@@ -6,7 +6,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { creditCardInvoiceSchema, type CreditCardInvoiceInput } from "@/lib/validations";
 import { getErrorMessage, getPrismaErrorMessage } from "@/lib/utils";
-import { getMerchantSignature } from "@/lib/dashboard-utils";
+import { getMerchantSignature, stripInstallmentPattern } from "@/lib/dashboard-utils";
 import { getOrCreateInvoiceCategory, getOrCreateProvisionedPaymentMethod } from "@/lib/credit-card-shared";
 import { getReferenceMonthFromDueDate, addInvoiceMonths } from "@/lib/credit-card-cycle";
 import { reconcileProvisionedInstallments, findOrCreateProvisionedHeader } from "@/lib/credit-card-provision-actions";
@@ -189,7 +189,12 @@ export async function importCreditCardInvoice(data: CreditCardInvoiceInput) {
                             tx.creditCardInvoiceItem.create({
                                 data: {
                                     transactionId: header.id,
-                                    descricao: `${p.item.descricao} (${String(p.num).padStart(2, "0")}/${String(p.total).padStart(2, "0")})`,
+                                    // Remove um padrão de parcela pré-existente no texto do extrato
+                                    // (ex. "Parcela 1/10") antes de anexar o número real da parcela
+                                    // projetada — senão o registro gerado fica com dois números
+                                    // contraditórios na mesma descrição. Não afeta o item realmente
+                                    // importado (item.descricao, acima, permanece intocado).
+                                    descricao: `${stripInstallmentPattern(p.item.descricao)} (${String(p.num).padStart(2, "0")}/${String(p.total).padStart(2, "0")})`,
                                     valor: p.item.valor,
                                     data_compra: p.item.data_compra,
                                     categoria_id: p.item.categoria_id,

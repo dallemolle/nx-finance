@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { Decimal } from "decimal.js";
-import { format, startOfMonth, endOfMonth, addMonths } from "date-fns";
+import { format, startOfMonth, endOfMonth, addMonths, differenceInCalendarMonths } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import {
     creditCardSchema,
@@ -121,9 +121,14 @@ export async function findOrCreateProvisionedHeader(
     if (existing) return existing;
 
     const dueDate = computeInvoiceDueDate(args.invoiceMonth, args.invoiceYear, args.card.closingDay, args.card.dueDay);
+    // O nome usa o mês/ano CALENDÁRIO do vencimento real (dueDate), não o
+    // invoiceMonth/invoiceYear (mês de ciclo de fechamento — só serve pra
+    // dedup/offset interno, ver 4.11/nota em getInvoiceTimeline). Se usasse
+    // invoiceMonth direto, um cartão com dueDay<=closingDay teria fatura com
+    // vencimento em setembro nomeada "08/2026", parecendo estar em agosto.
     return tx.transaction.create({
         data: {
-            descricao: `Fatura Prevista - ${args.card.nome} - ${String(args.invoiceMonth).padStart(2, "0")}/${args.invoiceYear}`,
+            descricao: `Fatura Prevista - ${args.card.nome} - ${String(dueDate.getMonth() + 1).padStart(2, "0")}/${dueDate.getFullYear()}`,
             valor: 0,
             data_vencimento: dueDate,
             status: "PENDENTE",
@@ -459,6 +464,10 @@ export async function reconcileProvisionedInstallments(
 // --- Timeline de faturas / comprometimento mensal ---
 
 const TIMELINE_MONTHS_DEFAULT = 6;
+// Teto de segurança pra janela dinâmica de /faturas (evita uma consulta
+// aberta indefinidamente caso um usuário tenha um parcelamento absurdamente
+// longo, ex. 48x) — ver getInvoiceTimelineDetail.
+const TIMELINE_MONTHS_MAX = 36;
 
 export async function getInvoiceTimeline(userId: string, monthsAhead: number = TIMELINE_MONTHS_DEFAULT) {
     const now = new Date();
@@ -493,8 +502,12 @@ export async function getInvoiceTimeline(userId: string, monthsAhead: number = T
     const bucketByKey = new Map(buckets.map(b => [b.key, b]));
 
     for (const header of headers) {
-        if (header.invoice_month == null || header.invoice_year == null || !header.credit_card_id) continue;
-        const key = `${header.invoice_year}-${header.invoice_month}`;
+        if (!header.credit_card_id) continue;
+        // Agrupa pelo mês CALENDÁRIO do vencimento real (data_vencimento), não
+        // por invoice_month/invoice_year — esse é só o ciclo de fechamento
+        // (deslocado -1 mês quando dueDay<=closingDay), usado internamente pra
+        // dedup/offset de parcelas, não pro mês que aparece pro usuário.
+        const key = `${header.data_vencimento.getFullYear()}-${header.data_vencimento.getMonth() + 1}`;
         const bucket = bucketByKey.get(key);
         if (!bucket) continue;
 
@@ -528,10 +541,28 @@ export async function getInvoiceTimeline(userId: string, monthsAhead: number = T
 // Igual a getInvoiceTimeline, mas preserva os itens individuais de cada fatura
 // (em vez de só somar) — usado pela tela dedicada de análise por cartão
 // (/faturas), onde o usuário precisa ver quais despesas compõem cada mês.
-export async function getInvoiceTimelineDetail(userId: string, monthsAhead: number = TIMELINE_MONTHS_DEFAULT) {
+// Quando monthsAhead não é informado (uso normal via /faturas), a janela se
+// estende automaticamente até o vencimento mais distante entre as faturas
+// provisionadas do usuário — sem isso, um parcelamento de 10x+ tem parcelas
+// que existem no banco mas nunca aparecem nessa tela (janela fixa de 6 meses
+// só cobre o começo do parcelamento). Teto de segurança em TIMELINE_MONTHS_MAX.
+export async function getInvoiceTimelineDetail(userId: string, monthsAhead?: number) {
     const now = new Date();
+
+    let effectiveMonthsAhead = monthsAhead ?? TIMELINE_MONTHS_DEFAULT;
+    if (monthsAhead === undefined) {
+        const furthest = await db.transaction.aggregate({
+            where: { userId, is_invoice_header: true, is_provisioned: true, credit_card_id: { not: null } },
+            _max: { data_vencimento: true },
+        });
+        if (furthest._max.data_vencimento) {
+            const monthsUntilFurthest = differenceInCalendarMonths(startOfMonth(furthest._max.data_vencimento), startOfMonth(now)) + 1;
+            effectiveMonthsAhead = Math.min(Math.max(effectiveMonthsAhead, monthsUntilFurthest), TIMELINE_MONTHS_MAX);
+        }
+    }
+
     const rangeStart = startOfMonth(now);
-    const rangeEnd = endOfMonth(addMonths(now, monthsAhead - 1));
+    const rangeEnd = endOfMonth(addMonths(now, effectiveMonthsAhead - 1));
 
     const [headers, cards] = await Promise.all([
         db.transaction.findMany({
@@ -551,7 +582,7 @@ export async function getInvoiceTimelineDetail(userId: string, monthsAhead: numb
         db.creditCard.findMany({ where: { userId }, orderBy: { nome: "asc" } }),
     ]);
 
-    const monthBuckets = Array.from({ length: monthsAhead }, (_, i) => {
+    const monthBuckets = Array.from({ length: effectiveMonthsAhead }, (_, i) => {
         const bucketDate = addMonths(now, i);
         return {
             month: bucketDate.getMonth() + 1,
@@ -564,8 +595,12 @@ export async function getInvoiceTimelineDetail(userId: string, monthsAhead: numb
         const months = monthBuckets.map(b => {
             // filter (não find): nada impede duas faturas reais pro mesmo cartão+mês
             // em cenários incomuns (ver gap conhecido em CONTEXT.md) — soma todas.
+            // Agrupa pelo mês calendário de data_vencimento, não invoice_month
+            // (ciclo de fechamento — ver nota em getInvoiceTimeline).
             const matchingHeaders = headers.filter(
-                h => h.credit_card_id === card.id && h.invoice_month === b.month && h.invoice_year === b.year
+                h => h.credit_card_id === card.id
+                    && h.data_vencimento.getMonth() + 1 === b.month
+                    && h.data_vencimento.getFullYear() === b.year
             );
             const items = matchingHeaders.flatMap(h =>
                 h.invoiceItems.map(item => ({

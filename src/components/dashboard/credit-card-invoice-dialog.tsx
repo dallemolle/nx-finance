@@ -8,12 +8,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { CreditCard, Upload, ChevronRight, X, AlertCircle, Loader2, Repeat } from "lucide-react";
 import Papa from "papaparse";
 import { getCategories, getPaymentMethods, getFinancialInstitutions } from "@/lib/reports";
 import { InstitutionCombobox } from "@/components/dashboard/institution-combobox";
-import { importCreditCardInvoice } from "@/lib/credit-card-actions";
+import { importCreditCardInvoice, findPossibleDuplicateInstallments } from "@/lib/credit-card-actions";
 import { getCreditCards } from "@/lib/credit-card-provision-actions";
 import { getMappingSuggestions } from "@/lib/csv-actions";
 import { getMerchantSignature, detectInstallmentInDescription } from "@/lib/dashboard-utils";
@@ -229,6 +230,38 @@ export function CreditCardInvoiceDialog({ userId, className }: { userId: string;
             return;
         }
 
+        // Parcela marcada direto num número > 1 pode já ter sido provisionada numa
+        // importação anterior (reimportação acidental) — avisa antes de gerar uma
+        // segunda cadeia de parcelas duplicada. Só uma rede de segurança de UX:
+        // se a checagem falhar, segue o import normalmente.
+        let finalData = parsedData;
+        if (creditCardId !== "none") {
+            const candidates = parsedData
+                .filter(r => r.isInstallment && r.installmentNumber > 1)
+                .map(r => ({ idx: r.id, descricao: r.title, installmentNumber: r.installmentNumber, installmentsCount: r.installmentsCount }));
+
+            if (candidates.length > 0) {
+                try {
+                    const matches = await findPossibleDuplicateInstallments(creditCardId, candidates);
+                    const rejectedIds = new Set<number>();
+                    for (const match of matches) {
+                        const row = finalData.find(r => r.id === match.idx);
+                        if (!row) continue;
+                        const confirmed = confirm(
+                            `A despesa "${row.title}" (parcela ${row.installmentNumber}/${row.installmentsCount}) pode já ter sido lançada antes (encontramos "${match.matchDescricao}" em ${new Date(match.matchDate).toLocaleDateString("pt-BR")}). Deseja mesmo assim gerar esta parcela e projetar as parcelas futuras?`
+                        );
+                        if (!confirmed) rejectedIds.add(match.idx);
+                    }
+                    if (rejectedIds.size > 0) {
+                        finalData = finalData.map(r => rejectedIds.has(r.id) ? { ...r, isInstallment: false } : r);
+                        setParsedData(finalData);
+                    }
+                } catch (e: unknown) {
+                    console.error("Error checking possible duplicate installments:", e);
+                }
+            }
+        }
+
         setIsLoading(true);
         setError(null);
 
@@ -239,7 +272,7 @@ export function CreditCardInvoiceDialog({ userId, className }: { userId: string;
                 institution_id: institutionId,
                 tipo_pagamento_id: paymentMethodId,
                 credit_card_id: creditCardId === "none" ? null : creditCardId,
-                items: parsedData.map(row => ({
+                items: finalData.map(row => ({
                     descricao: row.title,
                     valor: row.amount,
                     categoria_id: row.category_id,
@@ -274,7 +307,7 @@ export function CreditCardInvoiceDialog({ userId, className }: { userId: string;
                     Importar Fatura
                 </Button>
             </DialogTrigger>
-            <DialogContent className="sm:max-w-[800px] h-[80vh] flex flex-col">
+            <DialogContent className="sm:max-w-[960px] h-[80vh] flex flex-col">
                 <DialogHeader className="shrink-0">
                     <DialogTitle>Importar Fatura de Cartão de Crédito</DialogTitle>
                 </DialogHeader>
@@ -374,14 +407,14 @@ export function CreditCardInvoiceDialog({ userId, className }: { userId: string;
                                 </div>
                             </div>
                             <div className="border rounded-lg overflow-x-auto">
-                                <Table>
+                                <Table className="table-fixed">
                                     <TableHeader className="bg-muted/50">
                                         <TableRow>
-                                            <TableHead className="font-bold">Item</TableHead>
-                                            <TableHead className="font-bold">Valor</TableHead>
-                                            <TableHead className="font-bold">Data</TableHead>
-                                            <TableHead className="font-bold">Categoria</TableHead>
-                                            <TableHead className="w-[50px]"></TableHead>
+                                            <TableHead className="font-bold w-[320px]">Item</TableHead>
+                                            <TableHead className="font-bold w-[100px]">Valor</TableHead>
+                                            <TableHead className="font-bold w-[150px]">Data</TableHead>
+                                            <TableHead className="font-bold w-[220px]">Categoria</TableHead>
+                                            <TableHead className="w-[56px] sticky right-0 bg-muted/50"></TableHead>
                                         </TableRow>
                                     </TableHeader>
                                     <TableBody>
@@ -392,8 +425,13 @@ export function CreditCardInvoiceDialog({ userId, className }: { userId: string;
                                                         <Input
                                                             value={row.title}
                                                             onChange={(e) => handleRowChange(row.id, "title", e.target.value)}
-                                                            className={cn("h-8 text-sm min-w-[200px]", row.isInstallment && "bg-indigo-50/60 border-indigo-200 dark:bg-indigo-950/20 dark:border-indigo-900")}
+                                                            className={cn("h-8 text-sm flex-1 min-w-0", row.isInstallment && "bg-indigo-50/60 border-indigo-200 dark:bg-indigo-950/20 dark:border-indigo-900")}
                                                         />
+                                                        {row.isInstallment && (
+                                                            <Badge className="bg-indigo-50 text-indigo-600 dark:bg-indigo-950/40 dark:text-indigo-400 hover:bg-indigo-100 border-none px-1.5 py-0 text-[10px] font-bold tracking-tight shrink-0">
+                                                                {row.installmentNumber}/{row.installmentsCount}
+                                                            </Badge>
+                                                        )}
                                                         <Popover>
                                                             <PopoverTrigger asChild>
                                                                 <Button
@@ -506,7 +544,7 @@ export function CreditCardInvoiceDialog({ userId, className }: { userId: string;
                                                         </SelectContent>
                                                     </Select>
                                                 </TableCell>
-                                                <TableCell className="p-2 text-center">
+                                                <TableCell className="p-2 text-center sticky right-0 bg-background">
                                                     <Button
                                                         variant="ghost"
                                                         size="icon"

@@ -17,37 +17,93 @@ interface InvoiceAnalysisContentProps {
 }
 
 export function InvoiceAnalysisContent({ groups }: InvoiceAnalysisContentProps) {
-    // Guarda só as chaves FECHADAS — vazio significa "tudo aberto", o padrão pedido.
-    const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+    // Guarda as chaves ABERTAS — vazio significa "tudo fechado", o padrão pedido
+    // (só o gráfico aparece até o usuário pedir mais detalhe, em 2 níveis).
+    const [expandedCards, setExpandedCards] = useState<Set<string>>(new Set());
+    const [expandedMonths, setExpandedMonths] = useState<Set<string>>(new Set());
 
-    const toggle = (key: string) => {
-        setCollapsed(prev => {
+    const toggleCard = (cardId: string) => {
+        setExpandedCards(prev => {
+            const next = new Set(prev);
+            if (next.has(cardId)) next.delete(cardId); else next.add(cardId);
+            return next;
+        });
+    };
+
+    const toggleMonth = (key: string) => {
+        setExpandedMonths(prev => {
             const next = new Set(prev);
             if (next.has(key)) next.delete(key); else next.add(key);
             return next;
         });
     };
 
+    const expandAllMonths = (cardId: string, months: InvoiceTimelineGroups[number]["months"]) => {
+        setExpandedMonths(prev => {
+            const next = new Set(prev);
+            months.forEach(m => next.add(`${cardId}-${m.year}-${m.month}`));
+            return next;
+        });
+    };
+
+    const collapseAllMonths = (cardId: string, months: InvoiceTimelineGroups[number]["months"]) => {
+        setExpandedMonths(prev => {
+            const next = new Set(prev);
+            months.forEach(m => next.delete(`${cardId}-${m.year}-${m.month}`));
+            return next;
+        });
+    };
+
     return (
         <div className="space-y-6">
-            {groups.map(group => (
+            {groups.map(group => {
+                const isCardOpen = expandedCards.has(group.cardId);
+                return (
                 <Card key={group.cardId} className="border-none shadow-lg bg-white dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-800">
-                    <CardHeader className="flex flex-row items-center gap-3 pb-2">
-                        <div className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: group.cardCor || "#6366f1" }} />
-                        <CardTitle className="text-lg font-bold text-slate-800 dark:text-slate-200 tracking-tight">{group.cardNome}</CardTitle>
+                    <CardHeader className="flex flex-row items-center justify-between gap-3 pb-2">
+                        <div className="flex items-center gap-3">
+                            <div className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: group.cardCor || "#6366f1" }} />
+                            <CardTitle className="text-lg font-bold text-slate-800 dark:text-slate-200 tracking-tight">{group.cardNome}</CardTitle>
+                        </div>
+                        <button
+                            type="button"
+                            onClick={() => toggleCard(group.cardId)}
+                            className="flex items-center gap-1 text-xs font-semibold text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 transition-colors shrink-0"
+                        >
+                            {isCardOpen ? "Ocultar meses" : "Ver meses"}
+                            {isCardOpen ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+                        </button>
                     </CardHeader>
                     <CardContent className="space-y-6">
                         <StackedInvoiceBarChart data={group.months} height={180} />
 
+                        {isCardOpen && (
                         <div className="space-y-3">
+                            <div className="flex items-center justify-end gap-3 text-xs font-semibold">
+                                <button
+                                    type="button"
+                                    onClick={() => expandAllMonths(group.cardId, group.months)}
+                                    className="text-indigo-600 dark:text-indigo-400 hover:underline"
+                                >
+                                    Expandir todos os meses
+                                </button>
+                                <span className="text-slate-300 dark:text-slate-700">|</span>
+                                <button
+                                    type="button"
+                                    onClick={() => collapseAllMonths(group.cardId, group.months)}
+                                    className="text-slate-500 dark:text-slate-400 hover:underline"
+                                >
+                                    Recolher todos os meses
+                                </button>
+                            </div>
                             {group.months.map(month => {
                                 const key = `${group.cardId}-${month.year}-${month.month}`;
-                                const isOpen = !collapsed.has(key);
+                                const isOpen = expandedMonths.has(key);
                                 return (
                                     <div key={key} className="border border-slate-100 dark:border-slate-800/50 rounded-xl overflow-hidden">
                                         <button
                                             type="button"
-                                            onClick={() => toggle(key)}
+                                            onClick={() => toggleMonth(key)}
                                             className="w-full flex items-center justify-between px-4 py-3 bg-slate-50/50 dark:bg-slate-800/30 hover:bg-slate-100/50 dark:hover:bg-slate-800/50 transition-colors"
                                         >
                                             <div className="flex items-center gap-2">
@@ -111,9 +167,11 @@ export function InvoiceAnalysisContent({ groups }: InvoiceAnalysisContentProps) 
                                 );
                             })}
                         </div>
+                        )}
                     </CardContent>
                 </Card>
-            ))}
+                );
+            })}
         </div>
     );
 }

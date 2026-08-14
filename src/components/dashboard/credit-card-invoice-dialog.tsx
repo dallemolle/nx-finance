@@ -168,17 +168,46 @@ export function CreditCardInvoiceDialog({ userId, className }: { userId: string;
         ));
     };
 
+    // Parcela marcada num número > 1 pode já ter sido provisionada numa
+    // importação anterior (reimportação acidental) — avisa no momento em que o
+    // número é definido (ativação ou edição manual), não só ao confirmar a
+    // fatura inteira. Só uma rede de segurança de UX: se a checagem falhar,
+    // deixa passar (não bloqueia o usuário por causa de um erro de rede).
+    const checkAndConfirmDuplicate = async (row: ParsedInvoiceRow, installmentNumber: number, installmentsCount: number) => {
+        if (creditCardId === "none" || installmentNumber <= 1) return true;
+        try {
+            const matches = await findPossibleDuplicateInstallments(creditCardId, [
+                { idx: row.id, descricao: row.title, installmentNumber, installmentsCount },
+            ]);
+            if (matches.length === 0) return true;
+            const match = matches[0];
+            return confirm(
+                `A despesa "${row.title}" (parcela ${installmentNumber}/${installmentsCount}) pode já ter sido lançada antes (encontramos "${match.matchDescricao}" em ${new Date(match.matchDate).toLocaleDateString("pt-BR")}). Deseja mesmo assim gerar esta parcela e projetar as parcelas futuras?`
+            );
+        } catch (e: unknown) {
+            console.error("Error checking possible duplicate installments:", e);
+            return true;
+        }
+    };
+
     // Ativa/desativa o parcelamento manualmente. Só ao ATIVAR, tenta reconhecer
     // "Parcela 1/3", "1-5", "1 de 5" etc. no título pra pré-preencher os campos
-    // — nunca ativa sozinho, e nunca altera o texto da descrição.
-    const handleToggleInstallment = (row: ParsedInvoiceRow) => {
+    // — nunca ativa sozinho, e nunca altera o texto da descrição. Se a parcela
+    // resultante for nº > 1, confirma possível duplicidade antes de ativar.
+    const handleToggleInstallment = async (row: ParsedInvoiceRow) => {
         if (row.isInstallment) {
             handleRowChange(row.id, "isInstallment", false);
             return;
         }
         const detected = detectInstallmentInDescription(row.title);
+        const number = detected?.number ?? row.installmentNumber;
+        const total = detected?.total ?? row.installmentsCount;
+
+        const ok = await checkAndConfirmDuplicate(row, number, total);
+        if (!ok) return;
+
         setParsedData(prev => prev.map(r => r.id === row.id
-            ? { ...r, isInstallment: true, installmentNumber: detected?.number ?? r.installmentNumber, installmentsCount: detected?.total ?? r.installmentsCount }
+            ? { ...r, isInstallment: true, installmentNumber: number, installmentsCount: total }
             : r
         ));
     };
@@ -230,38 +259,6 @@ export function CreditCardInvoiceDialog({ userId, className }: { userId: string;
             return;
         }
 
-        // Parcela marcada direto num número > 1 pode já ter sido provisionada numa
-        // importação anterior (reimportação acidental) — avisa antes de gerar uma
-        // segunda cadeia de parcelas duplicada. Só uma rede de segurança de UX:
-        // se a checagem falhar, segue o import normalmente.
-        let finalData = parsedData;
-        if (creditCardId !== "none") {
-            const candidates = parsedData
-                .filter(r => r.isInstallment && r.installmentNumber > 1)
-                .map(r => ({ idx: r.id, descricao: r.title, installmentNumber: r.installmentNumber, installmentsCount: r.installmentsCount }));
-
-            if (candidates.length > 0) {
-                try {
-                    const matches = await findPossibleDuplicateInstallments(creditCardId, candidates);
-                    const rejectedIds = new Set<number>();
-                    for (const match of matches) {
-                        const row = finalData.find(r => r.id === match.idx);
-                        if (!row) continue;
-                        const confirmed = confirm(
-                            `A despesa "${row.title}" (parcela ${row.installmentNumber}/${row.installmentsCount}) pode já ter sido lançada antes (encontramos "${match.matchDescricao}" em ${new Date(match.matchDate).toLocaleDateString("pt-BR")}). Deseja mesmo assim gerar esta parcela e projetar as parcelas futuras?`
-                        );
-                        if (!confirmed) rejectedIds.add(match.idx);
-                    }
-                    if (rejectedIds.size > 0) {
-                        finalData = finalData.map(r => rejectedIds.has(r.id) ? { ...r, isInstallment: false } : r);
-                        setParsedData(finalData);
-                    }
-                } catch (e: unknown) {
-                    console.error("Error checking possible duplicate installments:", e);
-                }
-            }
-        }
-
         setIsLoading(true);
         setError(null);
 
@@ -272,7 +269,7 @@ export function CreditCardInvoiceDialog({ userId, className }: { userId: string;
                 institution_id: institutionId,
                 tipo_pagamento_id: paymentMethodId,
                 credit_card_id: creditCardId === "none" ? null : creditCardId,
-                items: finalData.map(row => ({
+                items: parsedData.map(row => ({
                     descricao: row.title,
                     valor: row.amount,
                     categoria_id: row.category_id,
@@ -418,19 +415,40 @@ export function CreditCardInvoiceDialog({ userId, className }: { userId: string;
                                         </TableRow>
                                     </TableHeader>
                                     <TableBody>
-                                        {parsedData.map((row) => (
+                                        {parsedData.map((row) => {
+                                            // Linha "candidata": descrição parece parcela 1/N e ainda não foi
+                                            // ativada — só um destaque + atalho de 1 clique, nunca ativa sozinho.
+                                            const candidate = !row.isInstallment && creditCardId !== "none"
+                                                ? detectInstallmentInDescription(row.title)
+                                                : null;
+                                            const isCandidate = !!candidate && candidate.number === 1;
+                                            return (
                                             <TableRow key={row.id}>
                                                 <TableCell className="p-2">
                                                     <div className="flex items-center gap-1">
                                                         <Input
                                                             value={row.title}
                                                             onChange={(e) => handleRowChange(row.id, "title", e.target.value)}
-                                                            className={cn("h-8 text-sm flex-1 min-w-0", row.isInstallment && "bg-indigo-50/60 border-indigo-200 dark:bg-indigo-950/20 dark:border-indigo-900")}
+                                                            className={cn(
+                                                                "h-8 text-sm flex-1 min-w-0",
+                                                                row.isInstallment && "bg-indigo-50/60 border-indigo-200 dark:bg-indigo-950/20 dark:border-indigo-900",
+                                                                isCandidate && "bg-sky-50/60 border-sky-200 dark:bg-sky-950/20 dark:border-sky-900"
+                                                            )}
                                                         />
                                                         {row.isInstallment && (
                                                             <Badge className="bg-indigo-50 text-indigo-600 dark:bg-indigo-950/40 dark:text-indigo-400 hover:bg-indigo-100 border-none px-1.5 py-0 text-[10px] font-bold tracking-tight shrink-0">
                                                                 {row.installmentNumber}/{row.installmentsCount}
                                                             </Badge>
+                                                        )}
+                                                        {isCandidate && candidate && (
+                                                            <button
+                                                                type="button"
+                                                                title="Descrição parece parcela 1 de uma compra parcelada — clique pra ativar e projetar as parcelas futuras"
+                                                                onClick={() => handleToggleInstallment(row)}
+                                                                className="shrink-0 flex items-center gap-1 rounded-md border border-sky-200 dark:border-sky-900 bg-sky-50 dark:bg-sky-950/40 text-sky-600 dark:text-sky-400 hover:bg-sky-100 dark:hover:bg-sky-900/40 px-1.5 py-0.5 text-[10px] font-bold tracking-tight transition-colors"
+                                                            >
+                                                                {candidate.number}/{candidate.total} · Ativar
+                                                            </button>
                                                         )}
                                                         <Popover>
                                                             <PopoverTrigger asChild>
@@ -467,6 +485,12 @@ export function CreditCardInvoiceDialog({ userId, className }: { userId: string;
                                                                                 min={1}
                                                                                 value={row.installmentNumber}
                                                                                 onChange={(e) => handleRowChange(row.id, "installmentNumber", Math.max(1, parseInt(e.target.value) || 1))}
+                                                                                onBlur={async (e) => {
+                                                                                    const num = Math.max(1, parseInt(e.target.value) || 1);
+                                                                                    if (num <= 1) return;
+                                                                                    const ok = await checkAndConfirmDuplicate(row, num, row.installmentsCount);
+                                                                                    if (!ok) handleRowChange(row.id, "isInstallment", false);
+                                                                                }}
                                                                                 className="h-8 text-sm"
                                                                             />
                                                                         </div>
@@ -555,7 +579,8 @@ export function CreditCardInvoiceDialog({ userId, className }: { userId: string;
                                                     </Button>
                                                 </TableCell>
                                             </TableRow>
-                                        ))}
+                                            );
+                                        })}
                                     </TableBody>
                                 </Table>
                             </div>

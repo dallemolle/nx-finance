@@ -253,6 +253,59 @@ export async function importCreditCardInvoice(data: CreditCardInvoiceInput) {
     }
 }
 
+export interface PossibleDuplicateInstallmentCheck {
+    idx: number;
+    descricao: string;
+    installmentNumber: number;
+    installmentsCount: number;
+}
+
+export interface PossibleDuplicateInstallmentMatch {
+    idx: number;
+    matchDescricao: string;
+    matchDate: Date;
+}
+
+// Verifica se um item marcado como "parcela nº > 1" (ex: usuário começou a
+// marcar direto na parcela 3/6) pode já ter sido provisionado numa importação
+// anterior — sinal de reimportação acidental do mesmo parcelamento, que hoje
+// geraria uma segunda cadeia (installment_group_id novo) duplicada. Não é uma
+// trava: é um aviso de UX, então só faz a checagem (leitura), quem decide o
+// que fazer com o resultado é o chamador. Reaproveita getMerchantSignature()
+// (mesmo helper do aprendizado de categoria) em vez de comparar texto exato.
+export async function findPossibleDuplicateInstallments(
+    creditCardId: string,
+    items: PossibleDuplicateInstallmentCheck[]
+): Promise<PossibleDuplicateInstallmentMatch[]> {
+    const userId = await getUserId();
+    const candidates = items.filter(i => i.installmentNumber > 1);
+    if (candidates.length === 0) return [];
+
+    const totals = [...new Set(candidates.map(i => i.installmentsCount))];
+    const existingItems = await db.creditCardInvoiceItem.findMany({
+        where: {
+            transaction: { userId, credit_card_id: creditCardId },
+            installment_total: { in: totals },
+            installment_number: { not: null },
+        },
+        select: { descricao: true, data_compra: true, installment_number: true, installment_total: true },
+    });
+
+    const matches: PossibleDuplicateInstallmentMatch[] = [];
+    for (const candidate of candidates) {
+        const signature = getMerchantSignature(candidate.descricao);
+        const match = existingItems.find(e =>
+            e.installment_total === candidate.installmentsCount
+            && e.installment_number! < candidate.installmentNumber
+            && getMerchantSignature(e.descricao) === signature
+        );
+        if (match) {
+            matches.push({ idx: candidate.idx, matchDescricao: match.descricao, matchDate: match.data_compra });
+        }
+    }
+    return matches;
+}
+
 export async function getInvoiceItems(transactionId: string) {
     try {
         const userId = await getUserId();

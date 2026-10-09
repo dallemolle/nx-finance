@@ -28,9 +28,10 @@ interface InstitutionComboboxProps {
   value?: string | null;
   onValueChange: (value: string) => void;
   onAdded?: (newInstitution: FinancialInstitution) => void;
+  id?: string;
 }
 
-export function InstitutionCombobox({ options, value, onValueChange, onAdded }: InstitutionComboboxProps) {
+export function InstitutionCombobox({ options, value, onValueChange, onAdded, id }: InstitutionComboboxProps) {
   const [open, setOpen] = React.useState(false);
   const [dialogOpen, setDialogOpen] = React.useState(false);
   const [searchValue, setSearchValue] = React.useState("");
@@ -76,6 +77,7 @@ export function InstitutionCombobox({ options, value, onValueChange, onAdded }: 
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
           <Button
+            id={id}
             variant="outline"
             role="combobox"
             aria-expanded={open}

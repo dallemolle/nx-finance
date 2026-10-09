@@ -74,10 +74,10 @@ export function CreditCardInvoiceDialog({ userId, className }: { userId: string;
             setParsedData([]);
             setError(null);
 
-            getCategories(userId).then(setCategories);
-            getPaymentMethods(userId).then(setPaymentMethods);
-            getFinancialInstitutions(userId).then(setInstitutions);
-            getCreditCards(userId).then(setCreditCards);
+            getCategories().then(setCategories);
+            getPaymentMethods().then(setPaymentMethods);
+            getFinancialInstitutions().then(setInstitutions);
+            getCreditCards().then(setCreditCards);
             getMappingSuggestions().then(setSuggestions).catch(console.error);
         }
     }, [open, userId]);

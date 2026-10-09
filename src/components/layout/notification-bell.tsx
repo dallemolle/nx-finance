@@ -26,7 +26,7 @@ export function NotificationBell() {
     const [notifications, setNotifications] = useState<AppNotification[]>([]);
 
     useEffect(() => {
-        if (userId) getNotifications(userId).then(setNotifications).catch(console.error);
+        if (userId) getNotifications().then(setNotifications).catch(console.error);
     }, [userId]);
 
     if (!userId) return null;
@@ -36,7 +36,7 @@ export function NotificationBell() {
             open={open}
             onOpenChange={(next) => {
                 setOpen(next);
-                if (next) getNotifications(userId).then(setNotifications).catch(console.error);
+                if (next) getNotifications().then(setNotifications).catch(console.error);
             }}
         >
             <PopoverTrigger asChild>

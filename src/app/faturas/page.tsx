@@ -15,8 +15,8 @@ export default async function FaturasPage() {
         redirect("/auth/login");
     }
 
-    const creditCards = await getCreditCards(session.user.id);
-    const groups = creditCards.length > 0 ? await getInvoiceTimelineDetail(session.user.id) : [];
+    const creditCards = await getCreditCards();
+    const groups = creditCards.length > 0 ? await getInvoiceTimelineDetail() : [];
 
     return (
         <>

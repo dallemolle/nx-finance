@@ -30,10 +30,10 @@ export default async function ReportsPage({ searchParams }: ReportsPageProps) {
 
     // Buscamos todas as transações do mês e os dados auxiliares
     const [allTransactions, categories, institutions, paymentMethods] = await Promise.all([
-        getReportData(session.user.id, month, year),
-        getCategories(session.user.id),
-        getFinancialInstitutions(session.user.id),
-        getPaymentMethods(session.user.id)
+        getReportData(month, year),
+        getCategories(),
+        getFinancialInstitutions(),
+        getPaymentMethods()
     ]);
 
     return (

@@ -23,7 +23,7 @@ export default async function SettingsPage() {
         db.financialInstitution.findMany({ where: { userId }, orderBy: { nome: "asc" } }),
         db.paymentMethod.findMany({ where: { userId }, orderBy: { nome: "asc" } }),
         db.user.findUnique({ where: { id: userId }, select: { status_2fa: true } }),
-        getCreditCards(userId),
+        getCreditCards(),
     ]);
 
     return (

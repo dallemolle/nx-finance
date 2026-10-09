@@ -1,6 +1,7 @@
 "use server";
 
 import { db } from "@/lib/db";
+import { getSessionUserId } from "@/lib/session";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { getServerSession } from "next-auth";
@@ -13,7 +14,8 @@ export interface ReportFilters {
     institution_id?: string;
 }
 
-export async function getReportData(userId: string, month: number, year: number, filters?: ReportFilters) {
+export async function getReportData(month: number, year: number, filters?: ReportFilters) {
+    const userId = await getSessionUserId();
     const startDate = new Date(year, month - 1, 1);
     const endDate = new Date(year, month, 0);
 
@@ -78,15 +80,18 @@ export async function getReportData(userId: string, month: number, year: number,
     });
 }
 
-export async function getCategories(userId: string) {
+export async function getCategories() {
+    const userId = await getSessionUserId();
     return db.category.findMany({ where: { userId } });
 }
 
-export async function getPaymentMethods(userId: string) {
+export async function getPaymentMethods() {
+    const userId = await getSessionUserId();
     return db.paymentMethod.findMany({ where: { userId } });
 }
 
-export async function getFinancialInstitutions(userId: string) {
+export async function getFinancialInstitutions() {
+    const userId = await getSessionUserId();
     return db.financialInstitution.findMany({ where: { userId } });
 }
 

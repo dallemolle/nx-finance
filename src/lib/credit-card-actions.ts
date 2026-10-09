@@ -1,6 +1,7 @@
 "use server";
 
 import { db } from "@/lib/db";
+import { getSessionUserId } from "@/lib/session";
 import { revalidatePath } from "next/cache";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
@@ -76,7 +77,8 @@ export async function getInvoiceItems(transactionId: string) {
     }
 }
 
-export async function getInvoiceHeaders(userId: string, month: number, year: number) {
+export async function getInvoiceHeaders(month: number, year: number) {
+    const userId = await getSessionUserId();
     const startDate = new Date(year, month - 1, 1);
     const endDate = new Date(year, month, 0);
 

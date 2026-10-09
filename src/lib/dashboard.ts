@@ -1,6 +1,7 @@
 "use server";
 
 import { db } from "@/lib/db";
+import { getSessionUserId } from "@/lib/session";
 import { startOfMonth, endOfMonth, isBefore, subMonths, getDaysInMonth, format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { getCategoryGroupName } from "./dashboard-utils";
@@ -17,7 +18,8 @@ interface CategorizedEntry {
     category: { nome: string; cor: string };
 }
 
-export async function getDashboardData(userId: string, month: number, year: number) {
+export async function getDashboardData(month: number, year: number) {
+    const userId = await getSessionUserId();
     const targetDate = new Date(year, month - 1);
     const startDate = startOfMonth(targetDate);
     const endDate = endOfMonth(targetDate);
@@ -233,7 +235,8 @@ export async function getDashboardData(userId: string, month: number, year: numb
 
 const TREND_MONTHS_COUNT = 6;
 
-export async function getMonthlyTrend(userId: string, month: number, year: number) {
+export async function getMonthlyTrend(month: number, year: number) {
+    const userId = await getSessionUserId();
     const targetDate = new Date(year, month - 1);
     const rangeStart = startOfMonth(subMonths(targetDate, TREND_MONTHS_COUNT - 1));
     const rangeEnd = endOfMonth(targetDate);

@@ -2,7 +2,7 @@ import { describe, expect, test } from "vitest";
 import { addMonths } from "date-fns";
 import { db } from "@/lib/db";
 import { findPossibleDuplicateInstallmentsForUser, importCreditCardInvoiceForUser } from "./credit-card-import";
-import { getInvoiceTimelineDetail } from "@/lib/credit-card-provision-actions";
+import { getInvoiceTimelineDetailForUser } from "./credit-card-provision";
 import { createUserWithCard, type Scenario } from "../../../test/fixtures";
 import type { CreditCardInvoiceInput } from "@/lib/validations";
 
@@ -118,7 +118,7 @@ describe("importCreditCardInvoiceForUser", () => {
         expect(future[0].descricao).toBe(`Fatura Prevista - Cartão Teste - ${mm}/${next.getFullYear()}`);
         expect(future[0].invoiceItems[0].descricao).toBe("Compra Loja (02/03)");
 
-        const [group] = await getInvoiceTimelineDetail(s.user.id);
+        const [group] = await getInvoiceTimelineDetailForUser(s.user.id);
         const itemsByMonth = group.months.map(m => m.items.map(i => i.installment_number));
         expect(itemsByMonth.slice(0, 3)).toEqual([[1], [2], [3]]);
     });

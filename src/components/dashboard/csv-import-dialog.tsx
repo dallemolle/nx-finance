@@ -63,9 +63,9 @@ export function CsvImportDialog({ userId, className }: { userId: string, classNa
             setParsedData([]);
             setError(null);
 
-            getCategories(userId).then(setCategories);
-            getPaymentMethods(userId).then(setPaymentMethods);
-            getFinancialInstitutions(userId).then(setInstitutions);
+            getCategories().then(setCategories);
+            getPaymentMethods().then(setPaymentMethods);
+            getFinancialInstitutions().then(setInstitutions);
             getMappingSuggestions().then(setSuggestions).catch(console.error);
         }
     }, [open, userId]);

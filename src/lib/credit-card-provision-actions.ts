@@ -1,11 +1,12 @@
 "use server";
 
 import { db } from "@/lib/db";
+import { getSessionUserId } from "@/lib/session";
 import { revalidatePath } from "next/cache";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { Decimal } from "decimal.js";
-import { format, startOfMonth, endOfMonth, addMonths, differenceInCalendarMonths } from "date-fns";
+import { format, startOfMonth, endOfMonth, addMonths } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import {
     creditCardSchema,
@@ -24,7 +25,9 @@ import {
 import {
     confirmEstimatedExpenseForUser,
     findOrCreateProvisionedHeader,
+    getInvoiceTimelineDetailForUser,
     provisionCardInstallmentPurchaseForUser,
+    TIMELINE_MONTHS_DEFAULT,
 } from "@/lib/services/credit-card-provision";
 
 async function getUserId() {
@@ -35,7 +38,8 @@ async function getUserId() {
 
 // --- CRUD CreditCard ---
 
-export async function getCreditCards(userId: string) {
+export async function getCreditCards() {
+    const userId = await getSessionUserId();
     const cards = await db.creditCard.findMany({
         where: { userId },
         include: { institution: true },
@@ -293,13 +297,8 @@ export async function confirmEstimatedExpense(id: string, data: ConfirmEstimated
 
 // --- Timeline de faturas / comprometimento mensal ---
 
-const TIMELINE_MONTHS_DEFAULT = 6;
-// Teto de segurança pra janela dinâmica de /faturas (evita uma consulta
-// aberta indefinidamente caso um usuário tenha um parcelamento absurdamente
-// longo, ex. 48x) — ver getInvoiceTimelineDetail.
-const TIMELINE_MONTHS_MAX = 36;
-
-export async function getInvoiceTimeline(userId: string, monthsAhead: number = TIMELINE_MONTHS_DEFAULT) {
+export async function getInvoiceTimeline(monthsAhead: number = TIMELINE_MONTHS_DEFAULT) {
+    const userId = await getSessionUserId();
     const now = new Date();
     const rangeStart = startOfMonth(now);
     const rangeEnd = endOfMonth(addMonths(now, monthsAhead - 1));
@@ -368,94 +367,8 @@ export async function getInvoiceTimeline(userId: string, monthsAhead: number = T
     }));
 }
 
-// Igual a getInvoiceTimeline, mas preserva os itens individuais de cada fatura
-// (em vez de só somar) — usado pela tela dedicada de análise por cartão
-// (/faturas), onde o usuário precisa ver quais despesas compõem cada mês.
-// Quando monthsAhead não é informado (uso normal via /faturas), a janela se
-// estende automaticamente até o vencimento mais distante entre as faturas
-// provisionadas do usuário — sem isso, um parcelamento de 10x+ tem parcelas
-// que existem no banco mas nunca aparecem nessa tela (janela fixa de 6 meses
-// só cobre o começo do parcelamento). Teto de segurança em TIMELINE_MONTHS_MAX.
-export async function getInvoiceTimelineDetail(userId: string, monthsAhead?: number) {
-    const now = new Date();
-
-    let effectiveMonthsAhead = monthsAhead ?? TIMELINE_MONTHS_DEFAULT;
-    if (monthsAhead === undefined) {
-        const furthest = await db.transaction.aggregate({
-            where: { userId, is_invoice_header: true, is_provisioned: true, credit_card_id: { not: null } },
-            _max: { data_vencimento: true },
-        });
-        if (furthest._max.data_vencimento) {
-            const monthsUntilFurthest = differenceInCalendarMonths(startOfMonth(furthest._max.data_vencimento), startOfMonth(now)) + 1;
-            effectiveMonthsAhead = Math.min(Math.max(effectiveMonthsAhead, monthsUntilFurthest), TIMELINE_MONTHS_MAX);
-        }
-    }
-
-    const rangeStart = startOfMonth(now);
-    const rangeEnd = endOfMonth(addMonths(now, effectiveMonthsAhead - 1));
-
-    const [headers, cards] = await Promise.all([
-        db.transaction.findMany({
-            where: {
-                userId,
-                is_invoice_header: true,
-                data_vencimento: { gte: rangeStart, lte: rangeEnd },
-                credit_card_id: { not: null },
-            },
-            include: {
-                invoiceItems: {
-                    include: { category: true },
-                    orderBy: { data_compra: "asc" },
-                },
-            },
-        }),
-        db.creditCard.findMany({ where: { userId }, orderBy: { nome: "asc" } }),
-    ]);
-
-    const monthBuckets = Array.from({ length: effectiveMonthsAhead }, (_, i) => {
-        const bucketDate = addMonths(now, i);
-        return {
-            month: bucketDate.getMonth() + 1,
-            year: bucketDate.getFullYear(),
-            label: format(bucketDate, "MMM/yy", { locale: ptBR }),
-        };
-    });
-
-    return cards.map(card => {
-        const months = monthBuckets.map(b => {
-            // filter (não find): nada impede duas faturas reais pro mesmo cartão+mês
-            // em cenários incomuns (ver gap conhecido em CONTEXT.md) — soma todas.
-            // Agrupa pelo mês calendário de data_vencimento, não invoice_month
-            // (ciclo de fechamento — ver nota em getInvoiceTimeline).
-            const matchingHeaders = headers.filter(
-                h => h.credit_card_id === card.id
-                    && h.data_vencimento.getMonth() + 1 === b.month
-                    && h.data_vencimento.getFullYear() === b.year
-            );
-            const items = matchingHeaders.flatMap(h =>
-                h.invoiceItems.map(item => ({
-                    id: item.id,
-                    descricao: item.descricao,
-                    valor: Number(item.valor),
-                    data_compra: item.data_compra,
-                    is_provisioned: item.is_provisioned,
-                    installment_number: item.installment_number,
-                    installment_total: item.installment_total,
-                    category: item.category ? { nome: item.category.nome, cor: item.category.cor } : null,
-                }))
-            );
-            const confirmed = items.filter(i => !i.is_provisioned).reduce((sum, i) => sum + i.valor, 0);
-            const provisioned = items.filter(i => i.is_provisioned).reduce((sum, i) => sum + i.valor, 0);
-            return {
-                label: b.label,
-                month: b.month,
-                year: b.year,
-                confirmed,
-                provisioned,
-                total: confirmed + provisioned,
-                items,
-            };
-        });
-        return { cardId: card.id, cardNome: card.nome, cardCor: card.cor, months };
-    });
+// Regra em services/credit-card-provision.ts (getInvoiceTimelineDetailForUser).
+export async function getInvoiceTimelineDetail(monthsAhead?: number) {
+    const userId = await getSessionUserId();
+    return getInvoiceTimelineDetailForUser(userId, monthsAhead);
 }

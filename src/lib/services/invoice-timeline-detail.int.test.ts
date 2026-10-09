@@ -1,10 +1,10 @@
 import { describe, expect, test } from "vitest";
 import { addMonths } from "date-fns";
-import { db } from "./db";
-import { getInvoiceTimelineDetail } from "./credit-card-provision-actions";
-import { createUserWithCard, invoiceHeaderData } from "../../test/fixtures";
+import { db } from "@/lib/db";
+import { getInvoiceTimelineDetailForUser } from "./credit-card-provision";
+import { createUserWithCard, invoiceHeaderData } from "../../../test/fixtures";
 
-describe("getInvoiceTimelineDetail", () => {
+describe("getInvoiceTimelineDetailForUser", () => {
     test("agrupa itens por cartão e mês de vencimento, separando confirmado de previsto", async () => {
         const s = await createUserWithCard();
         const now = new Date();
@@ -30,7 +30,7 @@ describe("getInvoiceTimelineDetail", () => {
             data: { transactionId: provisioned.id, descricao: "Estimativa C", valor: 75, data_compra: now, categoria_id: s.category.id, is_provisioned: true },
         });
 
-        const groups = await getInvoiceTimelineDetail(s.user.id);
+        const groups = await getInvoiceTimelineDetailForUser(s.user.id);
 
         expect(groups).toHaveLength(1);
         expect(groups[0].cardId).toBe(s.card.id);
@@ -62,7 +62,7 @@ describe("getInvoiceTimelineDetail", () => {
             data: { transactionId: header.id, descricao: "Do outro", valor: 999, data_compra: now, categoria_id: other.category.id },
         });
 
-        const groups = await getInvoiceTimelineDetail(mine.user.id);
+        const groups = await getInvoiceTimelineDetailForUser(mine.user.id);
 
         expect(groups.flatMap(g => g.months.flatMap(m => m.items))).toEqual([]);
     });

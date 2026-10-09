@@ -36,10 +36,10 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     const month = monthParam ? parseInt(monthParam) : now.getMonth() + 1;
     const year = yearParam ? parseInt(yearParam) : now.getFullYear();
 
-    const data = await getDashboardData(session.user.id, month, year);
-    const trend = data.hasAnyTransactions ? await getMonthlyTrend(session.user.id, month, year) : [];
-    const creditCards = await getCreditCards(session.user.id);
-    const invoiceTimeline = creditCards.length > 0 ? await getInvoiceTimeline(session.user.id) : [];
+    const data = await getDashboardData(month, year);
+    const trend = data.hasAnyTransactions ? await getMonthlyTrend(month, year) : [];
+    const creditCards = await getCreditCards();
+    const invoiceTimeline = creditCards.length > 0 ? await getInvoiceTimeline() : [];
 
     return (
         <PrivacyProvider>

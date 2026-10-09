@@ -68,10 +68,10 @@ Auditoria completa do projeto (Next.js 16 + TypeScript + Prisma/PostgreSQL) sob 
 
 ## Próximos Candidatos (por esforço)
 
-Todos os 16 itens da auditoria original foram concluídos. Melhorias futuras identificadas durante a implementação do 2FA (fora do escopo original, não implementadas):
+Todos os 16 itens da auditoria original foram concluídos. As melhorias futuras identificadas durante a implementação do 2FA agora são acompanhadas no [BACKLOG.md](BACKLOG.md):
 
-- Códigos de recuperação/backup para 2FA (caso o usuário perca o dispositivo com o app autenticador).
-- Exigir senha (não só o código TOTP atual) para desativar o 2FA, como camada extra de confirmação.
+- Códigos de recuperação/backup para 2FA → **BL-021**.
+- Exigir senha (não só o código TOTP atual) para desativar o 2FA → **BL-022**.
 
 ## Verificação
 

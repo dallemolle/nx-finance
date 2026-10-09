@@ -1,6 +1,6 @@
 # Backlog
 
-Melhorias levantadas na revisão de usabilidade, testes e segurança de 2026-10-09.
+Melhorias levantadas na revisão de usabilidade, testes e segurança de 2026-10-09. Os pontos ainda abertos da auditoria anterior ([AUDIT.md](AUDIT.md), cujos 16 itens já estão concluídos) também foram trazidos para cá.
 
 ## Como usar
 
@@ -58,6 +58,13 @@ O fluxo mais usado no dia a dia. Arquivo principal: `src/components/dashboard/cr
   O `npm audit` aponta 13 vulnerabilidades, todas em ferramentas de desenvolvimento e build: Tailwind 3 (resolvida no 4), a CLI do Prisma (via `effect`, resolvida no 8) e o `eslint-config-next`. Cada uma é uma migração; tratar como projeto próprio.
 - [ ] **BL-018: deploy da Vercel sem sincronia com o banco.** **Baixa.**
   A Vercel publica o código sem esperar o CI, então o código novo pode entrar no ar antes do `db push`. Enquanto isso não muda, mudanças que removem algo do schema devem ir em dois deploys. Se o schema passar a mudar com frequência, avaliar a migração para `prisma migrate` (histórico e `migrate deploy`).
+
+### Segurança da conta (vindo do AUDIT.md)
+
+- [ ] **BL-021: códigos de recuperação do 2FA.** **Média.**
+  Hoje, quem perde o celular com o app autenticador perde o acesso à conta. Gerar códigos de uso único na ativação do 2FA, guardados com hash, e aceitá-los no lugar do código TOTP.
+- [ ] **BL-022: pedir a senha para desativar o 2FA.** **Baixa.**
+  Hoje basta o código TOTP atual. Exigir também a senha, como confirmação extra. Arquivo: `src/lib/two-factor-actions.ts`.
 
 ### Ações do usuário
 

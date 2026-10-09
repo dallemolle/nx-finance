@@ -10,6 +10,17 @@ Melhorias levantadas na revisão de usabilidade, testes e segurança de 2026-10-
 - Ao concluir um item: troque `[ ]` por `[x]`, preencha **Concluído em** com a data e o commit, e mova o item para a seção [Concluídos](#concluídos).
 - Prioridade: **Alta** (afeta o uso diário ou a segurança), **Média** (incomoda, mas tem contorno) ou **Baixa** (limpeza, ou só vale a pena com outra mudança).
 
+## Ordem de execução
+
+Combinada em 2026-10-09. Cada etapa vai no seu próprio branch `feature/...`.
+
+1. **Importação de fatura:** BL-001, BL-002, BL-003, BL-005, BL-004, BL-006 e a parte de BL-012 que toca nesse diálogo. Em seguida, BL-023.
+2. **Dashboard e faturas:** BL-007, BL-009, BL-011, BL-008, BL-010 e o restante de BL-012.
+3. **Código:** BL-013 junto com BL-014, depois BL-015 e BL-016.
+4. **Segurança da conta:** BL-021, depois BL-022.
+5. **Depois, só com motivo concreto:** BL-017 e BL-018.
+6. **Com o usuário:** BL-019 (de preferência antes do primeiro PR) e BL-020.
+
 ## Pendentes
 
 ### Importação de fatura
@@ -26,8 +37,12 @@ O fluxo mais usado no dia a dia. Arquivo principal: `src/components/dashboard/cr
   A área tracejada sugere que dá para arrastar o CSV, mas não existe `onDrop`.
 - [ ] **BL-005: valores em formato de moeda e estornos destacados.** **Média.**
   A revisão mostra `245,9` em vez de `R$ 245,90`, e os valores negativos (estornos) não têm destaque visual.
-- [ ] **BL-006: detectar parcela N/M quando N > 1.** **Média.** 🟡 **Aguardando decisão.**
-  A detecção automática só oferece o atalho para "parcela 1/N" (ver o comentário em `credit-card-invoice-dialog.tsx`). Se o primeiro import de um cartão vier com "Parcela 3/6", as parcelas 4 a 6 nunca são projetadas. Decidir se isso é intencional ou se deve passar a detectar qualquer N.
+- [ ] **BL-006: detectar parcela N/M quando N > 1.** **Média.**
+  A detecção automática só oferece o atalho para "parcela 1/N" (ver o comentário em `credit-card-invoice-dialog.tsx`). Se o primeiro import de um cartão vier com "Parcela 3/6", as parcelas 4 a 6 nunca são projetadas.
+  **Decisão (2026-10-09):** oferecer o mesmo atalho de 1 clique para qualquer parcela que não seja a última, projetando as que faltam. O aviso de duplicidade que já existe (`findPossibleDuplicateInstallments`) protege contra projetar o mesmo parcelamento duas vezes.
+
+- [ ] **BL-023: teste de ponta a ponta da importação de fatura.** **Média.**
+  Teste com Playwright (`@playwright/test`) que passa pela tela: sobe um CSV, escolhe o cartão, ativa uma parcela, categoriza e importa, conferindo o resultado no dashboard e em `/faturas`. Protege o fluxo mais usado contra regressões de tela, que os testes de integração não pegam. Fazer depois de BL-001 a BL-006.
 
 ### Dashboard e faturas
 

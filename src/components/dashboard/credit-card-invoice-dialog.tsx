@@ -62,8 +62,10 @@ export function CreditCardInvoiceDialog({ userId, className }: { userId: string;
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
-    useEffect(() => {
-        if (open) {
+    // Formulário limpo a cada abertura: feito no evento de abrir (não num
+    // effect), pra não disparar uma segunda renderização em cascata.
+    const handleOpenChange = (next: boolean) => {
+        if (next) {
             setStep(1);
             setFile(null);
             setInvoiceDescription("");
@@ -73,7 +75,12 @@ export function CreditCardInvoiceDialog({ userId, className }: { userId: string;
             setCreditCardId("none");
             setParsedData([]);
             setError(null);
+        }
+        setOpen(next);
+    };
 
+    useEffect(() => {
+        if (open) {
             getCategories().then(setCategories);
             getPaymentMethods().then(setPaymentMethods);
             getFinancialInstitutions().then(setInstitutions);
@@ -297,7 +304,7 @@ export function CreditCardInvoiceDialog({ userId, className }: { userId: string;
         new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
 
     return (
-        <Dialog open={open} onOpenChange={setOpen}>
+        <Dialog open={open} onOpenChange={handleOpenChange}>
             <DialogTrigger asChild>
                 <Button className={cn("flex items-center gap-2", className)}>
                     <CreditCard className="h-4 w-4" />

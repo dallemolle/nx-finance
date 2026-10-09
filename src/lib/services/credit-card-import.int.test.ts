@@ -1,7 +1,7 @@
 import { describe, expect, test } from "vitest";
 import { addMonths } from "date-fns";
 import { db } from "@/lib/db";
-import { findPossibleDuplicateInstallmentsForUser, importCreditCardInvoiceForUser } from "./credit-card-import";
+import { deleteImportedInvoiceForUser, findPossibleDuplicateInstallmentsForUser, importCreditCardInvoiceForUser } from "./credit-card-import";
 import { getInvoiceTimelineDetailForUser, provisionCardInstallmentPurchaseForUser } from "./credit-card-provision";
 import { createUserWithCard, type Scenario } from "../../../test/fixtures";
 import type { CreditCardInvoiceInput } from "@/lib/validations";
@@ -193,5 +193,43 @@ describe("findPossibleDuplicateInstallmentsForUser", () => {
         expect(await findPossibleDuplicateInstallmentsForUser(other.user.id, owner.card.id, [
             { idx: 0, descricao: "Pb*Coffee Mais - Parcela 2/3", installmentNumber: 2, installmentsCount: 3 },
         ])).toEqual([]);
+    });
+});
+
+describe("deleteImportedInvoiceForUser (BL-029)", () => {
+    test("apaga a fatura importada e os itens dela, sem tocar nas previstas", async () => {
+        const s = await createUserWithCard({ closingDay: 25, dueDay: 5 });
+        const { transaction } = await importInvoice(s, new Date(2026, 8, 5), [
+            { descricao: "Mercado", valor: 200 },
+            { descricao: "Notebook", valor: 150, isInstallment: true, installmentNumber: 1, installmentsCount: 3 },
+        ]);
+        const provisionedBefore = await db.creditCardInvoiceItem.count({ where: { is_provisioned: true } });
+
+        const result = await deleteImportedInvoiceForUser(s.user.id, transaction.id);
+
+        expect(result).toEqual({ deletedItems: 2 });
+        expect(await db.transaction.findUnique({ where: { id: transaction.id } })).toBeNull();
+        expect(await db.creditCardInvoiceItem.count({ where: { transactionId: transaction.id } })).toBe(0);
+        expect(await db.creditCardInvoiceItem.count({ where: { is_provisioned: true } })).toBe(provisionedBefore);
+    });
+
+    test("recusa fatura prevista, lançamento comum e fatura de outro usuário", async () => {
+        const s = await createUserWithCard({ closingDay: 25, dueDay: 5 });
+        const other = await createUserWithCard();
+        const { transaction: real } = await importInvoice(s, new Date(2026, 8, 5), [
+            { descricao: "Notebook", valor: 150, isInstallment: true, installmentNumber: 1, installmentsCount: 2 },
+        ]);
+        const provisioned = await db.transaction.findFirstOrThrow({ where: { userId: s.user.id, is_provisioned: true } });
+        const plain = await db.transaction.create({
+            data: {
+                descricao: "Aluguel", valor: 1000, data_vencimento: new Date(2026, 8, 10), status: "PENDENTE", tipo: "SAIDA",
+                userId: s.user.id, categoria_id: s.category.id, tipo_pagamento_id: s.paymentMethod.id, institution_id: s.institution.id,
+            },
+        });
+
+        await expect(deleteImportedInvoiceForUser(s.user.id, provisioned.id)).rejects.toThrow(/não encontrada/);
+        await expect(deleteImportedInvoiceForUser(s.user.id, plain.id)).rejects.toThrow(/não encontrada/);
+        await expect(deleteImportedInvoiceForUser(other.user.id, real.id)).rejects.toThrow(/não encontrada/);
+        expect(await db.transaction.count({ where: { id: { in: [real.id, provisioned.id, plain.id] } } })).toBe(3);
     });
 });

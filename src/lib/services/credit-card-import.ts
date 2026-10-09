@@ -277,3 +277,20 @@ export async function findPossibleDuplicateInstallmentsForUser(
     }
     return matches;
 }
+
+// Apaga uma fatura importada (real) e os itens dela — pra refazer uma
+// importação errada. Só aceita cabeçalho de fatura confirmado do próprio
+// usuário: faturas previstas e lançamentos comuns ficam de fora (as previstas
+// têm exclusão própria, deleteProvisionedInvoiceItemsForUser). As faturas
+// previstas geradas a partir desta importação não são tocadas.
+export async function deleteImportedInvoiceForUser(userId: string, transactionId: string): Promise<{ deletedItems: number }> {
+    const invoice = await db.transaction.findFirst({
+        where: { id: transactionId, userId, is_invoice_header: true, is_provisioned: false },
+        select: { id: true, _count: { select: { invoiceItems: true } } },
+    });
+    if (!invoice) throw new Error("Fatura importada não encontrada.");
+
+    // Itens saem junto (onDelete: Cascade em CreditCardInvoiceItem).
+    await db.transaction.delete({ where: { id: invoice.id } });
+    return { deletedItems: invoice._count.invoiceItems };
+}

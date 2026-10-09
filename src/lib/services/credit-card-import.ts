@@ -6,7 +6,7 @@ import { creditCardInvoiceSchema, type CreditCardInvoiceInput } from "@/lib/vali
 import { getMerchantSignature, stripInstallmentPattern } from "@/lib/dashboard-utils";
 import { getOrCreateInvoiceCategory, getOrCreateProvisionedPaymentMethod } from "@/lib/credit-card-shared";
 import { getReferenceMonthFromDueDate, addInvoiceMonths } from "@/lib/credit-card-cycle";
-import { reconcileProvisionedInstallments, findOrCreateProvisionedHeader } from "@/lib/services/credit-card-provision";
+import { replaceProvisionedInvoice, findOrCreateProvisionedHeader } from "@/lib/services/credit-card-provision";
 
 export async function importCreditCardInvoiceForUser(userId: string, data: CreditCardInvoiceInput) {
     const validatedData = creditCardInvoiceSchema.parse(data);
@@ -93,8 +93,8 @@ export async function importCreditCardInvoiceForUser(userId: string, data: Credi
         }
         const itemsCount = validatedData.items.length;
 
-        // Se a fatura importada está vinculada a um cartão, concilia parcelas
-        // já provisionadas pra esse cartão/mês (migra pra essa fatura real)
+        // Se a fatura importada está vinculada a um cartão, ela substitui a
+        // fatura prevista desse cartão/mês (ver replaceProvisionedInvoice).
         if (creditCard) {
             const { month, year } = getReferenceMonthFromDueDate(
                 validatedData.data_vencimento,
@@ -105,12 +105,11 @@ export async function importCreditCardInvoiceForUser(userId: string, data: Credi
                 where: { id: transaction.id },
                 data: { invoice_month: month, invoice_year: year },
             });
-            await reconcileProvisionedInstallments(tx, {
+            await replaceProvisionedInvoice(tx, {
                 userId,
                 creditCardId: creditCard.id,
                 invoiceMonth: month,
                 invoiceYear: year,
-                newHeaderId: transaction.id,
             });
 
             // Itens marcados como "compra parcelada" na revisão: o item importado

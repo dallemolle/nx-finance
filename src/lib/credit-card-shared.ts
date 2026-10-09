@@ -34,22 +34,3 @@ export async function getOrCreateProvisionedPaymentMethod(tx: Tx, userId: string
         }))
     );
 }
-
-// Fun para achar (ou não achar) a fatura futura já provisionada de um cartão
-// pra um determinado mês de referência.
-export async function findProvisionedHeader(
-    tx: Tx,
-    args: { userId: string; creditCardId: string; invoiceMonth: number; invoiceYear: number }
-) {
-    return tx.transaction.findFirst({
-        where: {
-            userId: args.userId,
-            credit_card_id: args.creditCardId,
-            is_invoice_header: true,
-            is_provisioned: true,
-            invoice_month: args.invoiceMonth,
-            invoice_year: args.invoiceYear,
-        },
-        include: { invoiceItems: true },
-    });
-}

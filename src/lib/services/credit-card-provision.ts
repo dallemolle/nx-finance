@@ -19,7 +19,6 @@ import {
     splitInstallments,
 } from "@/lib/credit-card-cycle";
 import {
-    findProvisionedHeader,
     getOrCreateInvoiceCategory,
     getOrCreateProvisionedPaymentMethod,
 } from "@/lib/credit-card-shared";
@@ -128,52 +127,38 @@ export async function provisionCardInstallmentPurchaseForUser(userId: string, da
     }, { timeout: 20000 });
 }
 
-// Chamada de dentro de importCreditCardInvoice (credit-card-actions.ts) quando
-// a fatura real importada informa um credit_card_id. Só concilia parcelas
-// (installment_group_id preenchido) — geradas pelo próprio sistema, então o
-// casamento é exato. Estimativas avulsas (installment_group_id null) não são
-// tocadas: ficam pendentes até o usuário limpar manualmente.
-export async function reconcileProvisionedInstallments(
+// Chamada de dentro de importCreditCardInvoice quando a fatura real importada
+// informa um credit_card_id. A fatura real substitui a prevista do mesmo
+// cartão e ciclo: o extrato do banco já traz tudo o que foi cobrado naquele
+// mês (inclusive a parcela do mês de cada compra parcelada), então a prevista
+// é apagada inteira — parcelas e estimativas — em vez de ter itens movidos pra
+// real, o que duplicava a parcela (BL-026). As previstas de outros ciclos
+// continuam como estão.
+export async function replaceProvisionedInvoice(
     tx: Tx,
-    args: { userId: string; creditCardId: string; invoiceMonth: number; invoiceYear: number; newHeaderId: string }
-): Promise<{ carriedCount: number; carriedTotal: number }> {
-    const provisioned = await findProvisionedHeader(tx, {
-        userId: args.userId,
-        creditCardId: args.creditCardId,
-        invoiceMonth: args.invoiceMonth,
-        invoiceYear: args.invoiceYear,
+    args: { userId: string; creditCardId: string; invoiceMonth: number; invoiceYear: number }
+): Promise<{ removedCount: number; removedTotal: number }> {
+    const provisioned = await tx.transaction.findMany({
+        where: {
+            userId: args.userId,
+            credit_card_id: args.creditCardId,
+            is_invoice_header: true,
+            is_provisioned: true,
+            invoice_month: args.invoiceMonth,
+            invoice_year: args.invoiceYear,
+        },
+        include: { invoiceItems: { select: { valor: true } } },
     });
-    if (!provisioned) return { carriedCount: 0, carriedTotal: 0 };
+    if (provisioned.length === 0) return { removedCount: 0, removedTotal: 0 };
 
-    const toCarry = provisioned.invoiceItems.filter(i => i.installment_group_id !== null);
-    if (toCarry.length === 0) return { carriedCount: 0, carriedTotal: 0 };
+    const items = provisioned.flatMap(h => h.invoiceItems);
+    // Itens saem junto com o cabeçalho (onDelete: Cascade em CreditCardInvoiceItem).
+    await tx.transaction.deleteMany({ where: { id: { in: provisioned.map(h => h.id) } } });
 
-    const carriedTotal = toCarry.reduce((sum, i) => sum + Number(i.valor), 0);
-
-    await tx.creditCardInvoiceItem.updateMany({
-        where: { id: { in: toCarry.map(i => i.id) } },
-        data: { transactionId: args.newHeaderId, is_provisioned: false },
-    });
-    await tx.transaction.update({
-        where: { id: args.newHeaderId },
-        data: { valor: { increment: carriedTotal } },
-    });
-
-    const remaining = await tx.creditCardInvoiceItem.count({ where: { transactionId: provisioned.id } });
-    if (remaining === 0) {
-        await tx.transaction.delete({ where: { id: provisioned.id } });
-    } else {
-        const sum = await tx.creditCardInvoiceItem.aggregate({
-            where: { transactionId: provisioned.id },
-            _sum: { valor: true },
-        });
-        await tx.transaction.update({
-            where: { id: provisioned.id },
-            data: { valor: sum._sum.valor ?? 0 },
-        });
-    }
-
-    return { carriedCount: toCarry.length, carriedTotal };
+    return {
+        removedCount: items.length,
+        removedTotal: items.reduce((sum, i) => sum + Number(i.valor), 0),
+    };
 }
 
 // "Efetiva" uma despesa prevista GENÉRICA (sem cartão): confirma o valor real

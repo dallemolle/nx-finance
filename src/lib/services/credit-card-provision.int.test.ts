@@ -3,7 +3,7 @@ import { db } from "@/lib/db";
 import {
     confirmEstimatedExpenseForUser,
     provisionCardInstallmentPurchaseForUser,
-    reconcileProvisionedInstallments,
+    replaceProvisionedInvoice,
 } from "./credit-card-provision";
 import { createUserWithCard, invoiceHeaderData, type Scenario } from "../../../test/fixtures";
 
@@ -102,8 +102,8 @@ describe("provisionCardInstallmentPurchaseForUser", () => {
     });
 });
 
-describe("reconcileProvisionedInstallments", () => {
-    test("fatura real importada absorve as parcelas previstas do mesmo ciclo", async () => {
+describe("replaceProvisionedInvoice (BL-026)", () => {
+    test("apaga a fatura prevista do mesmo cartão e ciclo, inteira, sem mexer nas outras", async () => {
         const s = await createUserWithCard({ closingDay: 25, dueDay: 5 });
         await provisionCardInstallmentPurchaseForUser(s.user.id, {
             credit_card_id: s.card.id,
@@ -113,31 +113,43 @@ describe("reconcileProvisionedInstallments", () => {
             installmentsCount: 3,
             categoria_id: s.category.id,
         });
-        const augustProvisioned = await db.transaction.findFirstOrThrow({
+        const august = await db.transaction.findFirstOrThrow({
             where: { userId: s.user.id, is_provisioned: true, invoice_month: 8, invoice_year: 2026 },
         });
-
-        // chega a fatura real de agosto com 1 compra avulsa de R$ 50
-        const real = await db.transaction.create({
-            data: invoiceHeaderData(s, { invoiceMonth: 8, invoiceYear: 2026, dueDate: new Date(2026, 8, 5), provisioned: false, valor: 50 }),
-        });
+        // uma estimativa avulsa (sem parcelamento) na mesma fatura prevista também sai
         await db.creditCardInvoiceItem.create({
-            data: { transactionId: real.id, descricao: "Mercado", valor: 50, data_compra: new Date(2026, 7, 10), categoria_id: s.category.id },
+            data: { transactionId: august.id, descricao: "Mercado (estimativa)", valor: 400, data_compra: new Date(2026, 7, 1), categoria_id: s.category.id, is_provisioned: true },
         });
 
-        const result = await db.$transaction(tx => reconcileProvisionedInstallments(tx, {
-            userId: s.user.id, creditCardId: s.card.id, invoiceMonth: 8, invoiceYear: 2026, newHeaderId: real.id,
+        const result = await db.$transaction(tx => replaceProvisionedInvoice(tx, {
+            userId: s.user.id, creditCardId: s.card.id, invoiceMonth: 8, invoiceYear: 2026,
         }));
 
-        expect(result).toEqual({ carriedCount: 1, carriedTotal: 100 });
-        expect(await db.transaction.findUnique({ where: { id: augustProvisioned.id } })).toBeNull();
+        expect(result).toEqual({ removedCount: 2, removedTotal: 500 });
+        expect(await db.transaction.findUnique({ where: { id: august.id } })).toBeNull();
+        expect(await db.creditCardInvoiceItem.count({ where: { transactionId: august.id } })).toBe(0);
+        // setembro e outubro continuam previstos
+        expect((await db.transaction.findMany({
+            where: { userId: s.user.id, is_provisioned: true },
+            orderBy: { invoice_month: "asc" },
+        })).map(h => h.invoice_month)).toEqual([9, 10]);
+    });
 
-        const realAfter = await db.transaction.findUniqueOrThrow({ where: { id: real.id }, include: { invoiceItems: true } });
-        expect(Number(realAfter.valor)).toBe(150);
-        expect(realAfter.invoiceItems).toHaveLength(2);
-        expect(realAfter.invoiceItems.every(i => !i.is_provisioned)).toBe(true);
+    test("não toca na fatura prevista de outro cartão", async () => {
+        const s = await createUserWithCard({ closingDay: 25, dueDay: 5 });
+        const otherCard = await db.creditCard.create({
+            data: { nome: "Outro", closingDay: 25, dueDay: 5, institution_id: s.institution.id, userId: s.user.id },
+        });
+        await provisionCardInstallmentPurchaseForUser(s.user.id, {
+            credit_card_id: otherCard.id, descricao: "tv", valor: 200,
+            data_compra: new Date(2026, 6, 27), installmentsCount: 2, categoria_id: s.category.id,
+        });
 
-        // setembro continua previsto
-        expect(await db.transaction.count({ where: { userId: s.user.id, is_provisioned: true, invoice_month: 9 } })).toBe(1);
+        const result = await db.$transaction(tx => replaceProvisionedInvoice(tx, {
+            userId: s.user.id, creditCardId: s.card.id, invoiceMonth: 8, invoiceYear: 2026,
+        }));
+
+        expect(result).toEqual({ removedCount: 0, removedTotal: 0 });
+        expect(await db.transaction.count({ where: { credit_card_id: otherCard.id, is_provisioned: true } })).toBe(2);
     });
 });

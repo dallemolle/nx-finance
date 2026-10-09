@@ -247,7 +247,7 @@ export async function provisionEstimatedExpense(data: EstimatedExpenseInput) {
 
 // Cancela/exclui um item avulso de fatura projetada (parcela futura ou
 // estimativa no cartão). Recalcula o valor do header ou o remove, se ficar
-// vazio — mesma limpeza usada em reconcileProvisionedInstallments.
+// vazio.
 export async function deleteProvisionedInvoiceItem(itemId: string) {
     try {
         const userId = await getUserId();

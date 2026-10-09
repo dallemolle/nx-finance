@@ -9,7 +9,7 @@ import { getErrorMessage, getPrismaErrorMessage } from "@/lib/utils";
 import { getMerchantSignature, stripInstallmentPattern } from "@/lib/dashboard-utils";
 import { getOrCreateInvoiceCategory, getOrCreateProvisionedPaymentMethod } from "@/lib/credit-card-shared";
 import { getReferenceMonthFromDueDate, addInvoiceMonths } from "@/lib/credit-card-cycle";
-import { reconcileProvisionedInstallments, findOrCreateProvisionedHeader } from "@/lib/credit-card-provision-actions";
+import { reconcileProvisionedInstallments, findOrCreateProvisionedHeader } from "@/lib/services/credit-card-provision";
 
 async function getUserId() {
     const session = await getServerSession(authOptions);

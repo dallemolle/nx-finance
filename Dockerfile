@@ -12,10 +12,16 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
+# DATABASE_URL is required to construct the Prisma Client and satisfy
+# prisma.config.ts's schema validation at build time, but neither
+# `prisma generate` nor `next build` actually connect to the database —
+# the real URL is only needed at runtime (injected via docker-compose).
+ENV DATABASE_URL="postgresql://user:password@localhost:5432/db?schema=public"
+
 # Generate Prisma Client
 RUN npx prisma generate
 
-RUN npm run build
+RUN npx next build
 
 # Production image, copy all the files and run next
 FROM base AS runner
@@ -29,6 +35,14 @@ RUN adduser --system --uid 1001 nextjs
 COPY --from=builder /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
+COPY --from=deps --chown=nextjs:nodejs /app/node_modules ./node_modules
+COPY --from=builder --chown=nextjs:nodejs /app/node_modules/.prisma ./node_modules/.prisma
+COPY --from=builder --chown=nextjs:nodejs /app/prisma ./prisma
+COPY --from=builder /app/package.json ./package.json
+
+# Copy entrypoint
+COPY --chown=nextjs:nodejs docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
 USER nextjs
 
@@ -38,4 +52,5 @@ ENV PORT 3000
 # set hostname to localhost
 ENV HOSTNAME "0.0.0.0"
 
+ENTRYPOINT ["docker-entrypoint.sh"]
 CMD ["node", "server.js"]

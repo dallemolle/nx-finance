@@ -2,7 +2,7 @@ import { SummaryCards } from "../components/dashboard/summary-cards";
 import { CategoryChart } from "../components/dashboard/category-chart";
 import { RecentTransactions } from "../components/dashboard/recent-transactions";
 import { MonthPicker } from "../components/dashboard/month-picker";
-import { getDashboardData } from "@/lib/dashboard";
+import { getDashboardData, getMonthlyTrend } from "@/lib/dashboard";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { redirect } from "next/navigation";
@@ -13,6 +13,13 @@ import { ExportButtons } from "../components/dashboard/export-buttons";
 import { ThemeToggle } from "../components/theme-toggle";
 import { TopNav } from "@/components/layout/top-nav";
 import { CsvImportDialog } from "@/components/dashboard/csv-import-dialog";
+import { CreditCardInvoiceDialog } from "@/components/dashboard/credit-card-invoice-dialog";
+import { EmptyDashboardState } from "@/components/dashboard/empty-dashboard-state";
+import { MonthlyTrendChart } from "@/components/dashboard/monthly-trend-chart";
+import { PrivacyProvider, PrivacyToggleButton } from "@/components/dashboard/privacy-provider";
+import { InvoiceTimelineChart } from "@/components/dashboard/invoice-timeline-chart";
+import { MonthlyCommitmentCard } from "@/components/dashboard/monthly-commitment-card";
+import { getCreditCards, getInvoiceTimeline } from "@/lib/credit-card-provision-actions";
 
 interface DashboardPageProps {
     searchParams: Promise<{ month?: string; year?: string }>;
@@ -30,46 +37,81 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     const year = yearParam ? parseInt(yearParam) : now.getFullYear();
 
     const data = await getDashboardData(session.user.id, month, year);
+    const trend = data.hasAnyTransactions ? await getMonthlyTrend(session.user.id, month, year) : [];
+    const creditCards = await getCreditCards(session.user.id);
+    const invoiceTimeline = creditCards.length > 0 ? await getInvoiceTimeline(session.user.id) : [];
 
     return (
-        <>
+        <PrivacyProvider>
             <TopNav />
-            <div className="px-8 pb-8 pt-4 space-y-6 animate-in fade-in duration-700 max-w-7xl mx-auto">
+            <div className="px-8 pb-24 sm:pb-8 pt-4 space-y-6 animate-in fade-in duration-700 max-w-7xl mx-auto">
                 <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                     <div>
                         <h1 className="text-4xl font-black tracking-tighter text-slate-900 dark:text-slate-100 italic">Dashboard</h1>
                         <p className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Bem-vindo ao seu centro financeiro premium.</p>
                     </div>
-                    <div className="flex items-center gap-3">
-                        <ThemeToggle />
-                        <ExportButtons />
-                        <CsvImportDialog userId={session.user.id} />
-                        <NewTransactionDialog userId={session.user.id} />
-                        <MonthPicker
-                            month={month}
-                            year={year}
-                        />
+                    <div className="flex flex-col md:flex-row md:items-center gap-3 w-full md:w-auto">
+                        <div className="flex items-center justify-between w-full md:w-auto gap-3">
+                            <div className="flex items-center gap-2">
+                                <ThemeToggle />
+                                <PrivacyToggleButton />
+                            </div>
+                            <div className="md:hidden">
+                                <MonthPicker month={month} year={year} />
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 md:flex md:flex-row gap-3 w-full md:w-auto">
+                            <ExportButtons transactions={data.monthlyTransactions} month={month} year={year} className="w-full" />
+                            <CsvImportDialog userId={session.user.id} className="w-full" />
+                            <CreditCardInvoiceDialog userId={session.user.id} className="w-full" />
+                            <NewTransactionDialog userId={session.user.id} className="w-full" />
+                        </div>
+
+                        <div className="hidden md:block">
+                            <MonthPicker month={month} year={year} />
+                        </div>
                     </div>
                 </div>
 
-                <SummaryCards summary={data.summary} />
+                {data.hasAnyTransactions ? (
+                    <>
+                        <SummaryCards summary={data.summary} />
 
-                <div className="grid gap-6 md:grid-cols-3">
-                    <CategoryChart data={data.categoryData} />
-                    <div className="col-span-1 md:col-span-2">
-                        <RecentTransactions transactions={data.monthlyTransactions} userId={session.user.id} />
-                    </div>
-                </div>
+                        <div className="grid gap-6 md:grid-cols-3">
+                            <CategoryChart data={data.categoryData} transactions={data.monthlyTransactions} />
+                            <div className="col-span-1 md:col-span-2">
+                                <RecentTransactions transactions={data.monthlyTransactions} userId={session.user.id} />
+                            </div>
+                        </div>
 
-                <div className="grid gap-6 md:grid-cols-2">
-                    <FinancialHealth score={data.metrics.healthScore} />
-                    <Forecast
-                        forecast={data.metrics.forecast}
-                        daysPassed={data.metrics.daysPassed}
-                        totalDays={data.metrics.totalDays}
-                    />
-                </div>
+                        <div className="grid gap-6 md:grid-cols-3">
+                            <FinancialHealth score={data.metrics.healthScore} />
+                            <Forecast
+                                forecast={data.metrics.forecast}
+                                daysPassed={data.metrics.daysPassed}
+                                totalDays={data.metrics.totalDays}
+                            />
+                            <MonthlyTrendChart data={trend} />
+                        </div>
+
+                        {creditCards.length > 0 && (
+                            <div className="grid gap-6 md:grid-cols-3">
+                                <div className="col-span-1 md:col-span-2">
+                                    <InvoiceTimelineChart userId={session.user.id} data={invoiceTimeline} />
+                                </div>
+                                <MonthlyCommitmentCard
+                                    label={invoiceTimeline[1]?.label ?? ""}
+                                    committedValue={invoiceTimeline[1]?.total ?? 0}
+                                    incomeReference={data.summary.totalEntradas}
+                                />
+                            </div>
+                        )}
+                    </>
+                ) : (
+                    <EmptyDashboardState userId={session.user.id} />
+                )}
             </div>
-        </>
+        </PrivacyProvider>
     );
 }

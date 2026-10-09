@@ -2,6 +2,11 @@ import { NextAuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
 import { db } from "@/lib/db";
 import bcrypt from "bcryptjs";
+import { verify } from "otplib";
+
+// Tolerância de 1 time-step (30s) pra frente e pra trás, absorvendo pequeno
+// drift de relógio entre o servidor e o app autenticador do usuário.
+const EPOCH_TOLERANCE = 30;
 
 export const authOptions: NextAuthOptions = {
     providers: [
@@ -23,9 +28,18 @@ export const authOptions: NextAuthOptions = {
                     throw new Error("Credenciais inválidas");
                 }
 
-                // Logic for 2FA verification would go here (simplified for now)
-                if (user.status_2fa && !credentials.code) {
-                    throw new Error("2FA_REQUIRED");
+                if (user.status_2fa) {
+                    if (!credentials.code) {
+                        throw new Error("2FA_REQUIRED");
+                    }
+                    const result = await verify({
+                        secret: user.secret_2fa!,
+                        token: credentials.code,
+                        epochTolerance: EPOCH_TOLERANCE,
+                    });
+                    if (!result.valid) {
+                        throw new Error("Código de verificação inválido");
+                    }
                 }
 
                 return {

@@ -19,13 +19,15 @@ import { Switch } from "@/components/ui/switch";
 import { addMonths, format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Decimal } from "decimal.js";
-import { cn } from "@/lib/utils";
+import { cn, getErrorMessage } from "@/lib/utils";
+import type { TransactionFormValues, TransactionInput } from "@/lib/validations";
+import type { Category, PaymentMethod, FinancialInstitution, TransactionDisplay } from "@/types/models";
 
 interface TransactionFormProps {
-    categories: any[];
-    paymentMethods: any[];
-    institutions: any[];
-    initialData?: any;
+    categories: Category[];
+    paymentMethods: PaymentMethod[];
+    institutions: FinancialInstitution[];
+    initialData?: TransactionDisplay;
     onSuccess: () => void;
 }
 
@@ -35,6 +37,10 @@ export function TransactionForm({ categories: initialCategories, paymentMethods:
     const [categories, setCategories] = useState(initialCategories);
     const [paymentMethods, setPaymentMethods] = useState(initialPaymentMethods);
     const [institutions, setInstitutions] = useState(initialInstitutions);
+
+    // Dynamic installments descriptions state
+    const [installmentNames, setInstallmentNames] = useState<string[]>([]);
+    const [manualEdits, setManualEdits] = useState<Set<number>>(new Set());
 
     // Sync state with props when they change
     useEffect(() => {
@@ -49,12 +55,17 @@ export function TransactionForm({ categories: initialCategories, paymentMethods:
         setInstitutions(initialInstitutions);
     }, [initialInstitutions]);
 
-    const { register, handleSubmit, setValue, watch, reset, formState: { errors } } = useForm({
+    const { register, handleSubmit, setValue, watch, reset, formState: { errors } } = useForm<TransactionInput, unknown, TransactionFormValues>({
         resolver: zodResolver(transactionSchema),
         defaultValues: initialData ? {
-            ...initialData,
-            data_vencimento: new Date(initialData.data_vencimento),
+            descricao: initialData.descricao,
             valor: Number(initialData.valor),
+            data_vencimento: new Date(initialData.data_vencimento),
+            status: initialData.status,
+            tipo: initialData.tipo,
+            categoria_id: initialData.categoria_id,
+            tipo_pagamento_id: initialData.tipo_pagamento_id || "",
+            institution_id: initialData.institution_id || "",
         } : {
             tipo: "SAIDA",
             status: "PENDENTE",
@@ -63,28 +74,70 @@ export function TransactionForm({ categories: initialCategories, paymentMethods:
     });
 
     const tipo = watch("tipo");
-    const dataVencimento = watch("data_vencimento");
+    const baseDesc = watch("descricao");
+    const dataVencimento = new Date(watch("data_vencimento") as string | number | Date);
     const categoriaId = watch("categoria_id");
     const paymentMethodId = watch("tipo_pagamento_id");
     const institutionId = watch("institution_id");
     const isInstallment = watch("isInstallment");
-    const installmentsCount = watch("installmentsCount");
+    const installmentsCount = Number(watch("installmentsCount") || 0);
+    const valorAtual = Number(watch("valor") || 0);
 
-    const onSubmit = (data: any) => {
+    // Sync installment names when base description or count changes
+    useEffect(() => {
+        if (isInstallment && installmentsCount > 0) {
+            setInstallmentNames(prev => {
+                const count = Number(installmentsCount);
+                const newNames = [...prev];
+                
+                // Adjust size
+                if (newNames.length !== count) {
+                    newNames.length = count;
+                }
+
+                for (let i = 0; i < count; i++) {
+                    // Only update if not manually edited OR if it was empty
+                    if (!manualEdits.has(i) || !newNames[i]) {
+                        const suffix = `(${String(i + 1).padStart(2, '0')}/${String(count).padStart(2, '0')})`;
+                        newNames[i] = baseDesc ? `${baseDesc} ${suffix}` : `Parcela ${suffix}`;
+                    }
+                }
+                return newNames;
+            });
+        }
+    }, [baseDesc, installmentsCount, isInstallment, manualEdits]);
+
+    const handleInstallmentNameChange = (index: number, value: string) => {
+        setManualEdits(prev => new Set(prev).add(index));
+        setInstallmentNames(prev => {
+            const next = [...prev];
+            next[index] = value;
+            return next;
+        });
+    };
+
+    const onSubmit = (data: TransactionFormValues) => {
         setError(null);
+        const submissionData = {
+            ...data,
+            installmentDescriptions: isInstallment ? installmentNames : undefined
+        };
+
         startTransition(async () => {
             try {
                 if (initialData?.id) {
-                    await updateTransaction(initialData.id, data);
+                    await updateTransaction(initialData.id, submissionData);
                     toast.success("Transação atualizada com sucesso!");
                 } else {
-                    await createTransaction(data);
+                    await createTransaction(submissionData);
                     toast.success("Transação realizada com sucesso!");
                 }
                 reset();
+                setManualEdits(new Set());
+                setInstallmentNames([]);
                 onSuccess();
-            } catch (err: any) {
-                const message = err.message || "Erro ao salvar transação";
+            } catch (err: unknown) {
+                const message = getErrorMessage(err, "Erro ao salvar transação");
                 setError(message);
                 toast.error(message);
             }
@@ -102,8 +155,8 @@ export function TransactionForm({ categories: initialCategories, paymentMethods:
             setCategories([...categories, newCat]);
             setValue("categoria_id", newCat.id);
             toast.success(`Categoria "${name}" criada!`);
-        } catch (err: any) {
-            toast.error("Erro ao criar categoria: " + err.message);
+        } catch (err: unknown) {
+            toast.error("Erro ao criar categoria: " + getErrorMessage(err, "erro desconhecido"));
         }
     };
 
@@ -113,8 +166,8 @@ export function TransactionForm({ categories: initialCategories, paymentMethods:
             setPaymentMethods([...paymentMethods, newPM]);
             setValue("tipo_pagamento_id", newPM.id);
             toast.success(`Meio "${name}" criado!`);
-        } catch (err: any) {
-            toast.error("Erro ao criar meio de pagamento: " + err.message);
+        } catch (err: unknown) {
+            toast.error("Erro ao criar meio de pagamento: " + getErrorMessage(err, "erro desconhecido"));
         }
     };
 
@@ -129,7 +182,7 @@ export function TransactionForm({ categories: initialCategories, paymentMethods:
             <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                     <Label>Tipo</Label>
-                    <Select onValueChange={(v) => setValue("tipo", v as any)} value={tipo}>
+                    <Select onValueChange={(v) => setValue("tipo", v as TransactionFormValues["tipo"])} value={tipo}>
                         <SelectTrigger className="cursor-pointer">
                             <SelectValue placeholder="Selecione o tipo" />
                         </SelectTrigger>
@@ -142,7 +195,7 @@ export function TransactionForm({ categories: initialCategories, paymentMethods:
 
                 <div className="space-y-2">
                     <Label>Status</Label>
-                    <Select onValueChange={(v) => setValue("status", v as any)} value={watch("status")}>
+                    <Select onValueChange={(v) => setValue("status", v as TransactionFormValues["status"])} value={watch("status")}>
                         <SelectTrigger className="cursor-pointer">
                             <SelectValue placeholder="Selecione o status" />
                         </SelectTrigger>
@@ -156,14 +209,14 @@ export function TransactionForm({ categories: initialCategories, paymentMethods:
             </div>
 
             <div className="space-y-2">
-                <Label htmlFor="descricao">Descrição</Label>
+                <Label htmlFor="descricao">Descrição Geral</Label>
                 <Input id="descricao" {...register("descricao")} placeholder="Ex: Aluguel, Salário, etc" />
                 {errors.descricao && <p className="text-xs text-red-500">{errors.descricao.message as string}</p>}
             </div>
 
             <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                    <Label htmlFor="valor">Valor (R$)</Label>
+                    <Label htmlFor="valor">Valor Total (R$)</Label>
                     <Input id="valor" type="number" step="0.01" {...register("valor")} placeholder="0,00" />
                     {errors.valor && <p className="text-xs text-red-500">{errors.valor.message as string}</p>}
                 </div>
@@ -221,6 +274,7 @@ export function TransactionForm({ categories: initialCategories, paymentMethods:
                         searchPlaceholder="Procurar meio..."
                         emptyMessage="Não encontrado."
                     />
+                    {errors.tipo_pagamento_id && <p className="text-xs text-red-500">{errors.tipo_pagamento_id.message as string}</p>}
                 </div>
             </div>
 
@@ -254,36 +308,44 @@ export function TransactionForm({ categories: initialCategories, paymentMethods:
                                 placeholder="Ex: 12"
                             />
                             {errors.installmentsCount && <p className="text-xs text-red-500">{errors.installmentsCount.message as string}</p>}
-                            {watch("valor") > 0 && installmentsCount > 0 && (
+                            {valorAtual > 0 && installmentsCount > 0 && (
                                 <div className="mt-4 space-y-2 border-t pt-4">
-                                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Prévia das Parcelas</p>
-                                    <div className="max-h-[200px] overflow-y-auto rounded-md border bg-background/50">
+                                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Prévia e Personalização</p>
+                                    <div className="max-h-[300px] overflow-y-auto rounded-md border bg-background/50">
                                         <table className="w-full text-left text-xs">
                                             <thead className="sticky top-0 bg-muted/50 border-b">
                                                 <tr>
-                                                    <th className="p-2 font-medium">Parc.</th>
-                                                    <th className="p-2 font-medium">Vencimento</th>
+                                                    <th className="p-2 font-medium w-16 text-center">Parc.</th>
+                                                    <th className="p-2 font-medium">Nome da Parcela (Editável)</th>
+                                                    <th className="p-2 font-medium whitespace-nowrap">Vencimento</th>
                                                     <th className="p-2 font-medium text-right">Valor</th>
                                                 </tr>
                                             </thead>
                                             <tbody>
                                                 {Array.from({ length: installmentsCount }).map((_, i) => {
-                                                    const totalValue = new Decimal(watch("valor") || 0);
-                                                    const count = Number(installmentsCount);
+                                                    const totalValue = new Decimal(valorAtual);
+                                                    const count = installmentsCount;
                                                     const installmentValue = totalValue.dividedBy(count).toDecimalPlaces(2, Decimal.ROUND_DOWN);
                                                     const lastInstallmentValue = totalValue.minus(installmentValue.times(count - 1));
 
                                                     const currentVal = i === count - 1 ? lastInstallmentValue : installmentValue;
-                                                    const dueDate = addMonths(new Date(dataVencimento), i);
+                                                    const dueDate = addMonths(dataVencimento, i);
                                                     const isAdjusted = i === count - 1 && !lastInstallmentValue.equals(installmentValue);
 
                                                     return (
                                                         <tr key={i} className={cn("border-b last:border-0", isAdjusted && "bg-blue-50/50 dark:bg-blue-900/20")}>
-                                                            <td className="p-2">{String(i + 1).padStart(2, '0')} / {String(count).padStart(2, '0')}</td>
-                                                            <td className="p-2">{format(dueDate, "dd/MM/yyyy")}</td>
+                                                            <td className="p-2 text-center text-muted-foreground">{String(i + 1).padStart(2, '0')}</td>
+                                                            <td className="p-1">
+                                                                <Input 
+                                                                    value={installmentNames[i] || ""}
+                                                                    onChange={(e) => handleInstallmentNameChange(i, e.target.value)}
+                                                                    className="h-7 text-xs bg-transparent border-dashed hover:border-solid focus:bg-background transition-colors"
+                                                                />
+                                                            </td>
+                                                            <td className="p-2 whitespace-nowrap">{format(dueDate, "dd/MM/yy")}</td>
                                                             <td className={cn("p-2 text-right font-medium", isAdjusted && "text-blue-600 dark:text-blue-400")}>
                                                                 {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(currentVal.toNumber())}
-                                                                {isAdjusted && <span className="ml-1 text-[10px] opacity-70" title="Ajuste de centavos">*</span>}
+                                                                {isAdjusted && <span className="ml-0.5 text-[10px] opacity-70" title="Ajuste de centavos">*</span>}
                                                             </td>
                                                         </tr>
                                                     );
@@ -292,7 +354,7 @@ export function TransactionForm({ categories: initialCategories, paymentMethods:
                                         </table>
                                     </div>
                                     <p className="text-[10px] text-muted-foreground italic">
-                                        * A última parcela contém o ajuste de centavos para garantir a precisão do valor total.
+                                        * A última parcela contém o ajuste de centavos. Clique nos campos de nome para personalizar.
                                     </p>
                                 </div>
                             )}

@@ -25,24 +25,10 @@ Combinada em 2026-10-09. Cada etapa vai no seu próprio branch `feature/...`.
 
 ### Importação de fatura
 
-O fluxo mais usado no dia a dia. Arquivo principal: `src/components/dashboard/credit-card-invoice-dialog.tsx`.
-
-- [ ] **BL-001: o cartão preenche os outros campos.** **Alta.**
-  Ao escolher o cartão, preencher a instituição (`card.institution_id`), o vencimento (a partir de `card.dueDay`), o meio de pagamento ("Cartão de crédito") e a descrição (ex.: "Fatura Nubank Out/2026"). O cartão passa a ser o primeiro campo. Hoje são 5 campos para preencher; ficariam 2 (arquivo e cartão).
-- [ ] **BL-002: dizer por que "Importar" está desabilitado.** **Alta.**
-  O botão exige categoria em todas as linhas e não avisa. Mostrar "faltam N categorias", destacar as linhas pendentes e permitir aplicar uma categoria a várias linhas selecionadas.
-- [ ] **BL-003: botão "Voltar" na revisão.** **Alta.**
-  Hoje só existe "Cancelar", que perde tudo o que foi preenchido.
-- [ ] **BL-004: arrastar e soltar o arquivo.** **Média.**
-  A área tracejada sugere que dá para arrastar o CSV, mas não existe `onDrop`.
-- [ ] **BL-005: valores em formato de moeda e estornos destacados.** **Média.**
-  A revisão mostra `245,9` em vez de `R$ 245,90`, e os valores negativos (estornos) não têm destaque visual.
-- [ ] **BL-006: detectar parcela N/M quando N > 1.** **Média.**
-  A detecção automática só oferece o atalho para "parcela 1/N" (ver o comentário em `credit-card-invoice-dialog.tsx`). Se o primeiro import de um cartão vier com "Parcela 3/6", as parcelas 4 a 6 nunca são projetadas.
-  **Decisão (2026-10-09):** oferecer o mesmo atalho de 1 clique para qualquer parcela que não seja a última, projetando as que faltam. O aviso de duplicidade que já existe (`findPossibleDuplicateInstallments`) protege contra projetar o mesmo parcelamento duas vezes.
+O fluxo mais usado no dia a dia. Arquivo principal: `src/components/dashboard/credit-card-invoice-dialog.tsx`. Os itens BL-001 a BL-006 e o BL-024 foram concluídos (ver [Concluídos](#concluídos)).
 
 - [ ] **BL-023: teste de ponta a ponta da importação de fatura.** **Média.**
-  Teste com Playwright (`@playwright/test`) que passa pela tela: sobe um CSV, escolhe o cartão, ativa uma parcela, categoriza e importa, conferindo o resultado no dashboard e em `/faturas`. Protege o fluxo mais usado contra regressões de tela, que os testes de integração não pegam. Fazer depois de BL-001 a BL-006.
+  Teste com Playwright (`@playwright/test`) que passa pela tela: sobe um CSV, escolhe o cartão, ativa uma parcela, categoriza e importa, conferindo o resultado no dashboard e em `/faturas`. Protege o fluxo mais usado contra regressões de tela, que os testes de integração não pegam. Agora que BL-001 a BL-006 estão prontos, é o próximo item da etapa 1.
 
 ### Dashboard e faturas
 
@@ -57,7 +43,8 @@ O fluxo mais usado no dia a dia. Arquivo principal: `src/components/dashboard/cr
 - [ ] **BL-011: preposições em maiúscula nas descrições.** **Baixa.**
   Aparece "Imposto **De** Renda **Da** Pessoa Física". Descobrir onde a descrição vira Title Case e manter preposições (de, da, do, das, dos, e) em minúscula.
 - [ ] **BL-012: acessibilidade dos formulários e diálogos.** **Média.**
-  Na importação, os campos de data e os seletores não têm rótulo associado (`htmlFor`/`id`). Os diálogos não têm `Description`, o que gera aviso no console.
+  Os diálogos não têm `Description`, o que gera aviso no console, e há campos sem rótulo associado (`htmlFor`/`id`).
+  **Parcial (2026-10-09, `2343bdd`):** a importação de fatura já foi corrigida (rótulos ligados, `aria-label` nas linhas da revisão, `DialogDescription`). Os componentes `Combobox` e `InstitutionCombobox` agora aceitam `id`. Falta aplicar o mesmo nos outros diálogos: nova transação, editar transação, importar CSV, compra parcelada e despesa prevista.
 
 ### Técnico
 
@@ -105,3 +92,10 @@ O fluxo mais usado no dia a dia. Arquivo principal: `src/components/dashboard/cr
 | BL-C11 | Lint sem erros (de 8 para 0) | 2026-10-09 · `9d0d56b` |
 | BL-C12 | `AGENTS.md` (gerado pelo `next dev`) versionado | 2026-10-09 · `dd60ace` |
 | BL-C13 | CI (lint, tipos e testes) antes do `db push`; diff de schema nos PRs | 2026-10-09 · `ce27820` |
+| BL-001 | Importação: escolher o cartão (agora o primeiro campo) preenche instituição, vencimento, meio de pagamento e descrição | 2026-10-09 · `2343bdd` |
+| BL-002 | Importação: mostra o que falta para avançar ou importar; itens sem categoria destacados, "aplicar a todos sem categoria" e propagação da categoria para o mesmo estabelecimento | 2026-10-09 · `2343bdd` |
+| BL-003 | Importação: botão Voltar na revisão, preservando o que já foi editado | 2026-10-09 · `2343bdd` |
+| BL-004 | Importação: arrastar e soltar o CSV | 2026-10-09 · `2343bdd` |
+| BL-005 | Importação: valores em formato de moeda e estornos destacados | 2026-10-09 · `2343bdd` |
+| BL-006 | Importação: atalho de 1 clique também para parcela N/M com N > 1 (exceto a última) | 2026-10-09 · `2343bdd` |
+| BL-024 | Leitura do CSV: `02/10/2026` era lido como 10 de fevereiro e `R$ 1.234,56` como 1,234; datas com barra agora são dia/mês e o separador de milhar é tratado | 2026-10-09 · `2343bdd` |

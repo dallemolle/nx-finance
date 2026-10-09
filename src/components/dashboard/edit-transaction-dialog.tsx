@@ -23,9 +23,9 @@ export function EditTransactionDialog({ transaction, userId }: EditTransactionDi
 
     useEffect(() => {
         if (open) {
-            getCategories(userId).then(setCategories);
-            getPaymentMethods(userId).then(setPaymentMethods);
-            getFinancialInstitutions(userId).then(setInstitutions);
+            getCategories().then(setCategories);
+            getPaymentMethods().then(setPaymentMethods);
+            getFinancialInstitutions().then(setInstitutions);
         }
     }, [open, userId]);
 

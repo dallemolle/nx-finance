@@ -5,13 +5,14 @@ import { Progress } from "@/components/ui/progress";
 import { HeartPulse } from "lucide-react";
 
 interface FinancialHealthProps {
-    score: number;
+    score: number | null;
 }
 
 export function FinancialHealth({ score }: FinancialHealthProps) {
-    // Score is % of income spent. 0 = perfect, >100 = critical
-    const clampedScore = Math.min(score, 100);
+    // Score is % of income spent. 0 = perfect, >100 = critical; null = sem receita no mês
+    const clampedScore = score === null ? 0 : Math.min(score, 100);
     const getStatus = () => {
+        if (score === null) return { label: "Sem receita", color: "text-slate-500 dark:text-slate-400", bg: "bg-slate-300" };
         if (score < 50) return { label: "Excelente", color: "text-emerald-500 dark:text-emerald-400", bg: "bg-emerald-500" };
         if (score < 80) return { label: "Boa", color: "text-indigo-500 dark:text-indigo-400", bg: "bg-indigo-500" };
         if (score < 100) return { label: "Alerta", color: "text-orange-500 dark:text-orange-400", bg: "bg-orange-500" };
@@ -29,11 +30,15 @@ export function FinancialHealth({ score }: FinancialHealthProps) {
             <CardContent className="space-y-4">
                 <div className="flex items-center justify-between">
                     <span className={`text-xl font-black ${status.color}`}>{status.label}</span>
-                    <span className="text-sm font-medium text-muted-foreground">{score.toFixed(0)}% da receita gasta</span>
+                    {score !== null && (
+                        <span className="text-sm font-medium text-muted-foreground">{score.toFixed(0)}% da receita gasta</span>
+                    )}
                 </div>
                 <Progress value={clampedScore} className="h-2" indicatorClassName={status.bg} />
                 <p className="text-[10px] text-muted-foreground leading-tight italic">
-                    {score < 100 ? "Você está dentro do seu orçamento planejado." : "Atenção: seus gastos superaram sua receita este mês."}
+                    {score === null
+                        ? "Nenhuma receita registrada neste mês — registre uma entrada pra acompanhar o quanto já foi gasto."
+                        : score < 100 ? "Você está dentro do seu orçamento planejado." : "Atenção: seus gastos superaram sua receita este mês."}
                 </p>
             </CardContent>
         </Card>

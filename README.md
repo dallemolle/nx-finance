@@ -110,6 +110,7 @@ src/
 │   ├── credit-card-provision-actions.ts # CRUD de cartão + provisionamento + efetivar/excluir previstos
 │   ├── credit-card-shared.ts     # Helpers compartilhados (categoria/meio de pagamento sintéticos)
 │   ├── csv-actions.ts            # Processamento em lote de CSV
+│   ├── services/                 # Regras com userId explícito (testáveis), chamadas pelos Server Actions
 │   ├── validations.ts            # Schemas Zod
 │   ├── utils.ts                  # cn(), formatCurrency()/maskCurrency(), tratamento de erro Prisma
 │   └── db.ts                     # Singleton do PrismaClient
@@ -118,7 +119,7 @@ src/
     ├── next-auth.d.ts            # Extensões de tipo da sessão
     └── models.ts                 # Tipos de exibição (Decimal → number) e re-exports do Prisma
 
-scripts/                          # Scripts de verificação standalone (npx tsx scripts/<arquivo>.ts)
+test/                             # Setup e fixtures dos testes de integração (npm test)
 ```
 
 ### Modelo de dados (Prisma)
@@ -219,6 +220,8 @@ Sobe o PostgreSQL e a aplicação em containers; o `docker-entrypoint.sh` já ex
 | `npm run build` | Executa `prisma generate` e gera o build de produção |
 | `npm run start` | Inicia o servidor de produção (requer build prévio) |
 | `npm run lint` | Executa o linter (ESLint config do Next.js) |
+| `npm test` | Roda os testes (unit + integração no banco `<nome>_test`) |
+| `npm run test:watch` | Testes em modo watch |
 | `npx prisma studio` | Interface visual para inspecionar o banco |
 | `npx prisma db push` | Sincroniza `schema.prisma` com o banco de dados |
 
@@ -242,7 +245,7 @@ git push origin feature/nome-da-feature
 
 ## Verificando o deploy
 
-O app é publicado pela Vercel (sem workflow de deploy próprio neste repo — `.github/workflows/db-sync.yml` só sincroniza o schema do Prisma, não garante que o build/deploy do app já rodou). Pra confirmar qual commit está de fato no ar em staging/produção, sem depender de lembrar se um push específico já foi mergeado e implantado:
+O app é publicado pela Vercel (sem workflow de deploy próprio neste repo — o job `db-sync` de `.github/workflows/ci.yml` só sincroniza o schema do Prisma, não garante que o build/deploy do app já rodou). Pra confirmar qual commit está de fato no ar em staging/produção, sem depender de lembrar se um push específico já foi mergeado e implantado:
 
 - Acesse `/api/version` — retorna `{ commit, commitShort, commitMessage, branch, vercelEnv }`.
 - Ou olhe o banner laranja "AMBIENTE DE HOMOLOGAÇÃO", que mostra o hash curto do commit ao lado do texto.

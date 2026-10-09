@@ -19,8 +19,8 @@ export function CardInstallmentPurchaseDialog({ userId, className }: { userId: s
 
     useEffect(() => {
         if (open) {
-            getCategories(userId).then(setCategories);
-            getCreditCards(userId).then(setCreditCards);
+            getCategories().then(setCategories);
+            getCreditCards().then(setCreditCards);
         }
     }, [open, userId]);
 

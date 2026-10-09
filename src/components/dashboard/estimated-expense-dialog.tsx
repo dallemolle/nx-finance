@@ -43,10 +43,10 @@ export function EstimatedExpenseDialog({ userId, className }: { userId: string; 
 
     useEffect(() => {
         if (open) {
-            getCategories(userId).then(setCategories);
-            getPaymentMethods(userId).then(setPaymentMethods);
-            getFinancialInstitutions(userId).then(setInstitutions);
-            getCreditCards(userId).then(setCreditCards);
+            getCategories().then(setCategories);
+            getPaymentMethods().then(setPaymentMethods);
+            getFinancialInstitutions().then(setInstitutions);
+            getCreditCards().then(setCreditCards);
         }
     }, [open, userId]);
 

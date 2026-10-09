@@ -30,16 +30,16 @@ export default async function ReportsPage({ searchParams }: ReportsPageProps) {
 
     // Buscamos todas as transações do mês e os dados auxiliares
     const [allTransactions, categories, institutions, paymentMethods] = await Promise.all([
-        getReportData(session.user.id, month, year),
-        getCategories(session.user.id),
-        getFinancialInstitutions(session.user.id),
-        getPaymentMethods(session.user.id)
+        getReportData(month, year),
+        getCategories(),
+        getFinancialInstitutions(),
+        getPaymentMethods()
     ]);
 
     return (
         <>
             <TopNav />
-            <div className="px-8 pb-24 sm:pb-8 pt-4 space-y-6 max-w-7xl mx-auto animate-in fade-in duration-700">
+            <div className="w-full px-4 sm:px-8 pb-24 sm:pb-8 pt-4 space-y-6 max-w-7xl mx-auto animate-in fade-in duration-700">
                 <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                     <div>
                         <h1 className="text-3xl font-black tracking-tight italic">Relatórios</h1>

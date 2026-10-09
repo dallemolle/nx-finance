@@ -152,7 +152,7 @@ export function InstitutionCombobox({ options, value, onValueChange, onAdded }: 
                   onClick={() => openCreateDialog(searchValue)}
                 >
                   <Plus className="mr-2 h-4 w-4 shrink-0" />
-                  <span className="truncate text-left">Cadastrar "{searchValue}"</span>
+                  <span className="truncate text-left">Cadastrar “{searchValue}”</span>
                 </button>
               )}
             </div>

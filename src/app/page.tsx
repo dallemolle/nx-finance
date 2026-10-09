@@ -36,22 +36,22 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     const month = monthParam ? parseInt(monthParam) : now.getMonth() + 1;
     const year = yearParam ? parseInt(yearParam) : now.getFullYear();
 
-    const data = await getDashboardData(session.user.id, month, year);
-    const trend = data.hasAnyTransactions ? await getMonthlyTrend(session.user.id, month, year) : [];
-    const creditCards = await getCreditCards(session.user.id);
-    const invoiceTimeline = creditCards.length > 0 ? await getInvoiceTimeline(session.user.id) : [];
+    const data = await getDashboardData(month, year);
+    const trend = data.hasAnyTransactions ? await getMonthlyTrend(month, year) : [];
+    const creditCards = await getCreditCards();
+    const invoiceTimeline = creditCards.length > 0 ? await getInvoiceTimeline() : [];
 
     return (
         <PrivacyProvider>
             <TopNav />
-            <div className="px-8 pb-24 sm:pb-8 pt-4 space-y-6 animate-in fade-in duration-700 max-w-7xl mx-auto">
-                <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+            <div className="w-full px-4 sm:px-8 pb-24 sm:pb-8 pt-4 space-y-6 animate-in fade-in duration-700 max-w-7xl mx-auto">
+                <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
                     <div>
                         <h1 className="text-4xl font-black tracking-tighter text-slate-900 dark:text-slate-100 italic">Dashboard</h1>
                         <p className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Bem-vindo ao seu centro financeiro premium.</p>
                     </div>
-                    <div className="flex flex-col md:flex-row md:items-center gap-3 w-full md:w-auto">
-                        <div className="flex items-center justify-between w-full md:w-auto gap-3">
+                    <div className="flex flex-col md:flex-row md:flex-wrap md:items-center gap-3 w-full xl:w-auto">
+                        <div className="flex flex-wrap items-center justify-between w-full md:w-auto gap-3">
                             <div className="flex items-center gap-2">
                                 <ThemeToggle />
                                 <PrivacyToggleButton />
@@ -61,11 +61,11 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                             </div>
                         </div>
 
-                        <div className="grid grid-cols-1 sm:grid-cols-2 md:flex md:flex-row gap-3 w-full md:w-auto">
-                            <ExportButtons transactions={data.monthlyTransactions} month={month} year={year} className="w-full" />
-                            <CsvImportDialog userId={session.user.id} className="w-full" />
-                            <CreditCardInvoiceDialog userId={session.user.id} className="w-full" />
-                            <NewTransactionDialog userId={session.user.id} className="w-full" />
+                        <div className="grid grid-cols-1 sm:grid-cols-2 md:flex md:flex-wrap gap-3 w-full md:w-auto">
+                            <ExportButtons transactions={data.monthlyTransactions} month={month} year={year} className="w-full md:w-auto" />
+                            <CsvImportDialog userId={session.user.id} className="w-full md:w-auto" />
+                            <CreditCardInvoiceDialog userId={session.user.id} className="w-full md:w-auto" />
+                            <NewTransactionDialog userId={session.user.id} className="w-full md:w-auto" />
                         </div>
 
                         <div className="hidden md:block">
@@ -78,14 +78,14 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                     <>
                         <SummaryCards summary={data.summary} />
 
-                        <div className="grid gap-6 md:grid-cols-3">
+                        <div className="grid gap-6 md:grid-cols-3 [&>*]:min-w-0">
                             <CategoryChart data={data.categoryData} transactions={data.monthlyTransactions} />
                             <div className="col-span-1 md:col-span-2">
                                 <RecentTransactions transactions={data.monthlyTransactions} userId={session.user.id} />
                             </div>
                         </div>
 
-                        <div className="grid gap-6 md:grid-cols-3">
+                        <div className="grid gap-6 md:grid-cols-3 [&>*]:min-w-0">
                             <FinancialHealth score={data.metrics.healthScore} />
                             <Forecast
                                 forecast={data.metrics.forecast}
@@ -96,7 +96,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                         </div>
 
                         {creditCards.length > 0 && (
-                            <div className="grid gap-6 md:grid-cols-3">
+                            <div className="grid gap-6 md:grid-cols-3 [&>*]:min-w-0">
                                 <div className="col-span-1 md:col-span-2">
                                     <InvoiceTimelineChart userId={session.user.id} data={invoiceTimeline} />
                                 </div>

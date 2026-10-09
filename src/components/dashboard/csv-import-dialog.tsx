@@ -53,8 +53,10 @@ export function CsvImportDialog({ userId, className }: { userId: string, classNa
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
-    useEffect(() => {
-        if (open) {
+    // Formulário limpo a cada abertura: feito no evento de abrir (não num
+    // effect), pra não disparar uma segunda renderização em cascata.
+    const handleOpenChange = (next: boolean) => {
+        if (next) {
             setStep(1);
             setFile(null);
             setDueDate("");
@@ -62,10 +64,15 @@ export function CsvImportDialog({ userId, className }: { userId: string, classNa
             setInstitutionId("");
             setParsedData([]);
             setError(null);
+        }
+        setOpen(next);
+    };
 
-            getCategories(userId).then(setCategories);
-            getPaymentMethods(userId).then(setPaymentMethods);
-            getFinancialInstitutions(userId).then(setInstitutions);
+    useEffect(() => {
+        if (open) {
+            getCategories().then(setCategories);
+            getPaymentMethods().then(setPaymentMethods);
+            getFinancialInstitutions().then(setInstitutions);
             getMappingSuggestions().then(setSuggestions).catch(console.error);
         }
     }, [open, userId]);
@@ -217,7 +224,7 @@ export function CsvImportDialog({ userId, className }: { userId: string, classNa
     };
 
     return (
-        <Dialog open={open} onOpenChange={setOpen}>
+        <Dialog open={open} onOpenChange={handleOpenChange}>
             <DialogTrigger asChild>
                 <Button variant="outline" className={cn("flex items-center gap-2", className)}>
                     <Upload className="h-4 w-4" />

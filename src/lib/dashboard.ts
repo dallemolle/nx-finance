@@ -1,9 +1,11 @@
 "use server";
 
 import { db } from "@/lib/db";
+import { getSessionUserId } from "@/lib/session";
 import { startOfMonth, endOfMonth, isBefore, subMonths, getDaysInMonth, format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { getCategoryGroupName } from "./dashboard-utils";
+import { incomeCommitmentPercent, projectMonthlyOutflow } from "./dashboard-metrics";
 import type { Prisma, TransactionType } from "@prisma/client";
 
 interface TotalsEntry {
@@ -16,7 +18,8 @@ interface CategorizedEntry {
     category: { nome: string; cor: string };
 }
 
-export async function getDashboardData(userId: string, month: number, year: number) {
+export async function getDashboardData(month: number, year: number) {
+    const userId = await getSessionUserId();
     const targetDate = new Date(year, month - 1);
     const startDate = startOfMonth(targetDate);
     const endDate = endOfMonth(targetDate);
@@ -102,12 +105,16 @@ export async function getDashboardData(userId: string, month: number, year: numb
     const today = new Date();
     const isCurrentMonth = today.getMonth() === targetDate.getMonth() && today.getFullYear() === targetDate.getFullYear();
     const daysPassed = isCurrentMonth ? today.getDate() : getDaysInMonth(targetDate);
-    const dailyAverage = currentSummary.totalSaidas / daysPassed;
-    const forecast = dailyAverage * getDaysInMonth(targetDate);
+    const forecast = projectMonthlyOutflow({
+        saidas: transactions
+            .filter(t => t.tipo === "SAIDA")
+            .map(t => ({ valor: Number(t.valor), data: t.data_vencimento })),
+        today,
+        month,
+        year,
+    });
 
-    const healthScore = currentSummary.totalEntradas > 0
-        ? (currentSummary.totalSaidas / currentSummary.totalEntradas) * 100
-        : currentSummary.totalSaidas > 0 ? 100 : 0;
+    const healthScore = incomeCommitmentPercent(currentSummary.totalSaidas, currentSummary.totalEntradas);
 
     // Agrupa invoiceItems por transactionId
     const itemsByHeader = new Map<string, (Omit<typeof invoiceItems[number], "valor"> & { valor: number })[]>();
@@ -228,7 +235,8 @@ export async function getDashboardData(userId: string, month: number, year: numb
 
 const TREND_MONTHS_COUNT = 6;
 
-export async function getMonthlyTrend(userId: string, month: number, year: number) {
+export async function getMonthlyTrend(month: number, year: number) {
+    const userId = await getSessionUserId();
     const targetDate = new Date(year, month - 1);
     const rangeStart = startOfMonth(subMonths(targetDate, TREND_MONTHS_COUNT - 1));
     const rangeEnd = endOfMonth(targetDate);

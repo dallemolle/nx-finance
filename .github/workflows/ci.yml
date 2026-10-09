@@ -18,7 +18,7 @@ jobs:
     # criado pelo próprio setup do Vitest via prisma db push).
     services:
       postgres:
-        image: postgres:16
+        image: public.ecr.aws/docker/library/postgres:16  # espelho oficial; o Docker Hub limita pulls anônimos dos runners
         env:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
@@ -61,7 +61,7 @@ jobs:
     # Mesmo Postgres descartável; o Playwright usa o banco <banco>_e2e.
     services:
       postgres:
-        image: postgres:16
+        image: public.ecr.aws/docker/library/postgres:16  # espelho oficial; o Docker Hub limita pulls anônimos dos runners
         env:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres

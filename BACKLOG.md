@@ -15,6 +15,7 @@ Melhorias levantadas na revisão de usabilidade, testes e segurança de 2026-10-
 Combinada em 2026-10-09. Cada etapa vai no seu próprio branch `feature/...`.
 
 1. **Importação de fatura:** BL-001, BL-002, BL-003, BL-005, BL-004, BL-006 e a parte de BL-012 que toca nesse diálogo. Em seguida, BL-023. ✅ Concluída.
+1.1. **Correção urgente (bug em produção):** BL-026, BL-027 e BL-028, no branch `feature/2026-10-09_corrige_conciliacao_parcelas`.
 2. **Datas:** BL-025. Entrou antes da etapa de dashboard porque afeta o que todas as telas mostram.
 3. **Dashboard e faturas:** BL-007, BL-009, BL-011, BL-008, BL-010 e o restante de BL-012.
 4. **Código:** BL-013 junto com BL-014, depois BL-015 e BL-016.
@@ -27,6 +28,15 @@ Combinada em 2026-10-09. Cada etapa vai no seu próprio branch `feature/...`.
 ### Importação de fatura
 
 O fluxo mais usado no dia a dia. Arquivo principal: `src/components/dashboard/credit-card-invoice-dialog.tsx`. Os itens BL-001 a BL-006, BL-023 e BL-024 foram concluídos (ver [Concluídos](#concluídos)).
+
+- [ ] **BL-026: importar a fatura duplica as parcelas previstas.** **Alta.** 🐞 **Bug em produção.**
+  Ao importar a fatura real, `reconcileProvisionedInstallments` move as parcelas previstas daquele ciclo para dentro dela. Mas o extrato do banco já traz essa mesma parcela, então ela aparece duas vezes (ex.: "Geladeira - Parcela 3/5" do CSV + "Geladeira (03/05)" prevista). O defeito existe desde que a conciliação foi criada.
+  **Decisão (2026-10-09):** a fatura importada substitui a fatura prevista do mesmo cartão e ciclo. A prevista é apagada inteira, sem levar nada para a real, porque a cobrança daquele mês já está no arquivo. As previstas dos meses seguintes continuam.
+- [ ] **BL-027: vencimento sugerido pulava para o mês seguinte.** **Alta.** 🐞 **Regressão de BL-001, em produção.**
+  O preenchimento automático usava o próximo vencimento a partir de hoje. Importando no dia 09/10 a fatura que venceu em 08/10, sugeria 08/11, e a importação era tratada como a fatura de novembro: puxava as parcelas previstas de novembro e apagava a fatura prevista de novembro.
+  **Decisão (2026-10-09):** sugerir o dia de vencimento do cartão no mês corrente, mesmo que já tenha passado (o lançamento da fatura pode atrasar).
+- [ ] **BL-028: excluir lançamentos previstos em lote.** **Alta.**
+  Hoje só dá para excluir uma prevista por vez, pela lista do mês no dashboard. Em `/faturas`, permitir selecionar um ou mais lançamentos previstos (de um ou de vários meses) e excluí-los de uma vez. Serve também para limpar os dados de produção afetados por BL-026 e BL-027: apagar as previstas dos meses seguintes e reprojetar na próxima importação.
 
 - [ ] **BL-025: datas aparecem um dia antes no fuso de Brasília.** **Alta.**
   Encontrado pelo teste de ponta a ponta (BL-023). As datas sem hora que vêm como texto (`"2026-10-06"`) passam por `z.coerce.date` e são gravadas à meia-noite UTC. As telas formatam no fuso do navegador (`format(new Date(...))`), então em Brasília aparece o dia anterior: a compra de 06/10 vira "05 de out" e o vencimento 08/11 vira 07/11. Os 378 itens de fatura já importados no banco de dev estão nessa situação, e a produção provavelmente também.

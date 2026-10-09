@@ -110,6 +110,7 @@ src/
 │   ├── credit-card-provision-actions.ts # CRUD de cartão + provisionamento + efetivar/excluir previstos
 │   ├── credit-card-shared.ts     # Helpers compartilhados (categoria/meio de pagamento sintéticos)
 │   ├── csv-actions.ts            # Processamento em lote de CSV
+│   ├── services/                 # Regras com userId explícito (testáveis), chamadas pelos Server Actions
 │   ├── validations.ts            # Schemas Zod
 │   ├── utils.ts                  # cn(), formatCurrency()/maskCurrency(), tratamento de erro Prisma
 │   └── db.ts                     # Singleton do PrismaClient
@@ -118,7 +119,7 @@ src/
     ├── next-auth.d.ts            # Extensões de tipo da sessão
     └── models.ts                 # Tipos de exibição (Decimal → number) e re-exports do Prisma
 
-scripts/                          # Scripts de verificação standalone (npx tsx scripts/<arquivo>.ts)
+test/                             # Setup e fixtures dos testes de integração (npm test)
 ```
 
 ### Modelo de dados (Prisma)

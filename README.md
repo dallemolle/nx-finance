@@ -222,6 +222,7 @@ Sobe o PostgreSQL e a aplicação em containers; o `docker-entrypoint.sh` já ex
 | `npm run lint` | Executa o linter (ESLint config do Next.js) |
 | `npm test` | Roda os testes (unit + integração no banco `<nome>_test`) |
 | `npm run test:watch` | Testes em modo watch |
+| `npm run test:e2e` | Teste de ponta a ponta (Playwright) no banco `<nome>_e2e`; requer `npx playwright install chromium` na primeira vez |
 | `npx prisma studio` | Interface visual para inspecionar o banco |
 | `npx prisma db push` | Sincroniza `schema.prisma` com o banco de dados |
 

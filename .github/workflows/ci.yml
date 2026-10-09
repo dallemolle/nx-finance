@@ -54,11 +54,61 @@ jobs:
       - name: Testes (unit + integração)
         run: npm test
 
+  e2e:
+    name: Testes de ponta a ponta
+    runs-on: ubuntu-latest
+
+    # Mesmo Postgres descartável; o Playwright usa o banco <banco>_e2e.
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: nx_finance
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/nx_finance?schema=public
+      NEXTAUTH_SECRET: ci-e2e-secret
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Instala o Chromium do Playwright
+        run: npx playwright install --with-deps chromium
+
+      - name: Testes e2e
+        run: npm run test:e2e
+
+      - name: Relatório do Playwright
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 7
+
   # Só sincroniza o schema do banco depois que as verificações passaram.
   # (Antes isso rodava em db-sync.yml, independente de qualquer checagem.)
   db-sync:
     name: Sincroniza schema (${{ github.ref_name }})
-    needs: checks
+    needs: [checks, e2e]
     if: github.event_name == 'push'
     runs-on: ubuntu-latest
 

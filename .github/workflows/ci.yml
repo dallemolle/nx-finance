@@ -1,0 +1,77 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [staging, main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  checks:
+    name: Lint, tipos e testes
+    runs-on: ubuntu-latest
+
+    # Postgres descartável pros testes de integração (rodam em <banco>_test,
+    # criado pelo próprio setup do Vitest via prisma db push).
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: nx_finance
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/nx_finance?schema=public
+      VITE_CONFIG_NATIVE_IGNORE_WARNING: "true"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Tipos
+        run: npx tsc --noEmit
+
+      - name: Testes (unit + integração)
+        run: npm test
+
+  # Só sincroniza o schema do banco depois que as verificações passaram.
+  # (Antes isso rodava em db-sync.yml, independente de qualquer checagem.)
+  db-sync:
+    name: Sincroniza schema (${{ github.ref_name }})
+    needs: checks
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - run: npx prisma db push --skip-generate
+        env:
+          DATABASE_URL: ${{ github.ref_name == 'main' && secrets.DATABASE_URL_PRODUCTION || secrets.DATABASE_URL_STAGING }}

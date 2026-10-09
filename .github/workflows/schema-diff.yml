@@ -1,0 +1,58 @@
+name: Schema diff
+
+# Em PRs que mexem no schema, mostra o SQL que o db push vai aplicar no banco
+# de destino (main -> produção, demais -> staging) e avisa quando há operação
+# que apaga dados. O db push só recusa perda de dados óbvia; um rename, por
+# exemplo, vira DROP + ADD e só seria percebido no deploy.
+on:
+  pull_request:
+    paths:
+      - prisma/schema.prisma
+
+permissions:
+  contents: read
+
+jobs:
+  diff:
+    name: Diferença de schema → ${{ github.base_ref == 'main' && 'produção' || 'staging' }}
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Gera o SQL da diferença
+        env:
+          TARGET_DATABASE_URL: ${{ github.base_ref == 'main' && secrets.DATABASE_URL_PRODUCTION || secrets.DATABASE_URL_STAGING }}
+        run: |
+          npx prisma migrate diff \
+            --from-url "$TARGET_DATABASE_URL" \
+            --to-schema-datamodel prisma/schema.prisma \
+            --script > schema-diff.sql
+
+      - name: Publica no resumo do job
+        run: |
+          target="${{ github.base_ref == 'main' && 'produção' || 'staging' }}"
+          {
+            echo "## Mudanças de schema que o db push vai aplicar em $target"
+            echo
+            echo '```sql'
+            cat schema-diff.sql
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          if grep -Eiq 'DROP (TABLE|COLUMN|INDEX|CONSTRAINT|TYPE)|ALTER COLUMN .* (TYPE|SET NOT NULL)' schema-diff.sql; then
+            {
+              echo
+              echo "> [!WARNING]"
+              echo "> Este PR contém operações que podem apagar ou invalidar dados existentes."
+              echo "> Um rename de coluna aparece como DROP + ADD. Revise antes do merge."
+            } >> "$GITHUB_STEP_SUMMARY"
+            echo "::warning title=Schema destrutivo::O diff de schema contém DROP/ALTER que pode perder dados em $target. Veja o resumo do job."
+          fi

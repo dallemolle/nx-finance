@@ -161,6 +161,41 @@ export async function replaceProvisionedInvoice(
     };
 }
 
+// Exclui um ou mais itens de faturas previstas (parcelas futuras ou
+// estimativas no cartão), de um ou de vários meses. Só toca em itens previstos
+// do próprio usuário — itens de fatura real e de outros usuários são ignorados.
+// Cada fatura prevista afetada tem o valor recalculado, ou é removida se ficar
+// vazia. Tudo numa transação: ou exclui a seleção inteira, ou nada.
+export async function deleteProvisionedInvoiceItemsForUser(userId: string, itemIds: string[]): Promise<{ deletedCount: number }> {
+    if (itemIds.length === 0) return { deletedCount: 0 };
+
+    return db.$transaction(async (tx) => {
+        const items = await tx.creditCardInvoiceItem.findMany({
+            where: { id: { in: itemIds }, is_provisioned: true, transaction: { userId, is_provisioned: true } },
+            select: { id: true, transactionId: true },
+        });
+        if (items.length === 0) return { deletedCount: 0 };
+
+        await tx.creditCardInvoiceItem.deleteMany({ where: { id: { in: items.map(i => i.id) } } });
+
+        const headerIds = [...new Set(items.map(i => i.transactionId))];
+        const sums = await tx.creditCardInvoiceItem.groupBy({
+            by: ["transactionId"],
+            where: { transactionId: { in: headerIds } },
+            _sum: { valor: true },
+        });
+        const sumByHeader = new Map(sums.map(s => [s.transactionId, s._sum.valor ?? 0]));
+
+        const emptyHeaders = headerIds.filter(id => !sumByHeader.has(id));
+        if (emptyHeaders.length > 0) await tx.transaction.deleteMany({ where: { id: { in: emptyHeaders } } });
+        for (const [id, valor] of sumByHeader) {
+            await tx.transaction.update({ where: { id }, data: { valor } });
+        }
+
+        return { deletedCount: items.length };
+    });
+}
+
 // "Efetiva" uma despesa prevista GENÉRICA (sem cartão): confirma o valor real
 // (pode divergir do estimado, ex: conta de luz) e tira a marca de "previsto".
 // Guarda no servidor (não só na UI): só aceita is_provisioned:true e

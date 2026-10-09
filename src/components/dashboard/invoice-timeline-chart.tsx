@@ -19,7 +19,7 @@ export function InvoiceTimelineChart({ userId, data }: InvoiceTimelineChartProps
                     <CardTitle className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Linha do Tempo de Faturas</CardTitle>
                     <CalendarRange className="w-4 h-4 text-indigo-400" />
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                     <CardInstallmentPurchaseDialog userId={userId} />
                     <EstimatedExpenseDialog userId={userId} />
                 </div>

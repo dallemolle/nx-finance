@@ -104,19 +104,19 @@ export function CategoryChart({ data, transactions = [] }: CategoryChartProps) {
                                         onMouseLeave={() => setActiveName(null)}
                                         onClick={() => setSelectedCategory(item.name)}
                                     >
-                                        <div className="flex items-center gap-3">
+                                        <div className="flex items-center gap-3 min-w-0">
                                             <div
                                                 className="w-3 h-3 rounded-full flex-shrink-0"
                                                 style={{ backgroundColor: item.fill, opacity: activeName === null || activeName === item.name ? 1 : 0.4 }}
                                             />
-                                            <span className={cn(
-                                                "text-sm tracking-tight capitalize",
+                                            <span title={item.name} className={cn(
+                                                "text-sm tracking-tight capitalize truncate",
                                                 activeName === item.name ? "font-bold text-slate-900 dark:text-slate-100" : "font-normal text-slate-700 dark:text-slate-300"
                                             )}>
                                                 {item.name}
                                             </span>
                                         </div>
-                                        <div className="flex items-center gap-2 text-right">
+                                        <div className="flex items-center gap-2 text-right shrink-0 pl-2">
                                             <span className={cn(
                                                 "text-sm tracking-tight",
                                                 activeName === item.name ? "font-bold text-slate-900 dark:text-slate-100" : "font-medium text-slate-700 dark:text-slate-300"

@@ -21,7 +21,7 @@ export default async function FaturasPage() {
     return (
         <>
             <TopNav />
-            <div className="px-8 pb-24 sm:pb-8 pt-4 space-y-6 max-w-7xl mx-auto animate-in fade-in duration-700">
+            <div className="w-full px-4 sm:px-8 pb-24 sm:pb-8 pt-4 space-y-6 max-w-7xl mx-auto animate-in fade-in duration-700">
                 <div>
                     <h1 className="text-3xl font-black tracking-tight italic">Faturas</h1>
                     <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Análise de faturas futuras por cartão</p>

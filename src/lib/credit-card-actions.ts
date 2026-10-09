@@ -4,12 +4,14 @@ import { db } from "@/lib/db";
 import { revalidatePath } from "next/cache";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { creditCardInvoiceSchema, type CreditCardInvoiceInput } from "@/lib/validations";
+import type { CreditCardInvoiceInput } from "@/lib/validations";
 import { getErrorMessage, getPrismaErrorMessage } from "@/lib/utils";
-import { getMerchantSignature, stripInstallmentPattern } from "@/lib/dashboard-utils";
-import { getOrCreateInvoiceCategory, getOrCreateProvisionedPaymentMethod } from "@/lib/credit-card-shared";
-import { getReferenceMonthFromDueDate, addInvoiceMonths } from "@/lib/credit-card-cycle";
-import { reconcileProvisionedInstallments, findOrCreateProvisionedHeader } from "@/lib/services/credit-card-provision";
+import {
+    findPossibleDuplicateInstallmentsForUser,
+    importCreditCardInvoiceForUser,
+    type PossibleDuplicateInstallmentCheck,
+    type PossibleDuplicateInstallmentMatch,
+} from "@/lib/services/credit-card-import";
 
 async function getUserId() {
     const session = await getServerSession(authOptions);
@@ -17,222 +19,11 @@ async function getUserId() {
     return session.user.id;
 }
 
+// Regra em services/credit-card-import.ts (importCreditCardInvoiceForUser).
 export async function importCreditCardInvoice(data: CreditCardInvoiceInput) {
     try {
         const userId = await getUserId();
-        const validatedData = creditCardInvoiceSchema.parse(data);
-
-        // Itens negativos (estorno/reembolso) reduzem o total da fatura
-        const totalValor = validatedData.items.reduce((sum, item) => sum + item.valor, 0);
-        if (totalValor <= 0) {
-            throw new Error("O valor total da fatura deve ser maior que zero. Confira se os estornos não superam as despesas.");
-        }
-
-        // Fora da transação: são idempotentes (find-or-create) e não dependem de nada
-        // criado dentro dela — cada query removida daqui é uma query a menos segurando
-        // a transação interativa aberta. Ver nota de timeout/round-trips em CONTEXT.md 3.4.
-        const invoiceCategory = await getOrCreateInvoiceCategory(db, userId);
-        let creditCard = null;
-        let provisionedPaymentMethod = null;
-        if (validatedData.credit_card_id) {
-            creditCard = await db.creditCard.findFirst({ where: { id: validatedData.credit_card_id, userId } });
-            if (creditCard) {
-                provisionedPaymentMethod = await getOrCreateProvisionedPaymentMethod(db, userId);
-            }
-        }
-
-        const result = await db.$transaction(async (tx) => {
-            // Create the invoice header transaction
-            const transaction = await tx.transaction.create({
-                data: {
-                    descricao: validatedData.descricao,
-                    valor: totalValor,
-                    data_vencimento: validatedData.data_vencimento,
-                    status: "PENDENTE",
-                    tipo: "SAIDA",
-                    is_invoice_header: true,
-                    userId,
-                    categoria_id: invoiceCategory.id,
-                    tipo_pagamento_id: validatedData.tipo_pagamento_id,
-                    institution_id: validatedData.institution_id,
-                    credit_card_id: creditCard?.id ?? null,
-                },
-            });
-
-            // Uma transação interativa do Prisma roda numa única conexão — Promise.all no
-            // lado do JS só faz pipelining (evita esperar resposta antes de disparar a
-            // próxima query), NÃO executa em paralelo de verdade no banco. Com faturas de
-            // muitos itens, N creates individuais ainda somam N round-trips reais e estouram
-            // o timeout. Por isso: createMany (1 query) pros itens comuns, e create()
-            // individual só pros (normalmente poucos ou nenhum) itens marcados como
-            // parcelados, que precisam do id gerado pra serem carimbados logo abaixo.
-            const flaggedIndexes: number[] = [];
-            const bulkItems: typeof validatedData.items = [];
-            validatedData.items.forEach((item, idx) => {
-                if (item.isInstallment && item.installmentsCount) flaggedIndexes.push(idx);
-                else bulkItems.push(item);
-            });
-
-            if (bulkItems.length > 0) {
-                await tx.creditCardInvoiceItem.createMany({
-                    data: bulkItems.map(item => ({
-                        transactionId: transaction.id,
-                        descricao: item.descricao,
-                        valor: item.valor,
-                        categoria_id: item.categoria_id,
-                        data_compra: item.data_compra,
-                    })),
-                });
-            }
-            const createdItems = new Map<number, { id: string }>();
-            if (flaggedIndexes.length > 0) {
-                const created = await Promise.all(
-                    flaggedIndexes.map(idx => {
-                        const item = validatedData.items[idx];
-                        return tx.creditCardInvoiceItem.create({
-                            data: {
-                                transactionId: transaction.id,
-                                descricao: item.descricao,
-                                valor: item.valor,
-                                categoria_id: item.categoria_id,
-                                data_compra: item.data_compra,
-                            },
-                        });
-                    })
-                );
-                flaggedIndexes.forEach((idx, i) => createdItems.set(idx, created[i]));
-            }
-            const itemsCount = validatedData.items.length;
-
-            // Se a fatura importada está vinculada a um cartão, concilia parcelas
-            // já provisionadas pra esse cartão/mês (migra pra essa fatura real)
-            if (creditCard) {
-                const { month, year } = getReferenceMonthFromDueDate(
-                    validatedData.data_vencimento,
-                    creditCard.closingDay,
-                    creditCard.dueDay
-                );
-                await tx.transaction.update({
-                    where: { id: transaction.id },
-                    data: { invoice_month: month, invoice_year: year },
-                });
-                await reconcileProvisionedInstallments(tx, {
-                    userId,
-                    creditCardId: creditCard.id,
-                    invoiceMonth: month,
-                    invoiceYear: year,
-                    newHeaderId: transaction.id,
-                });
-
-                // Itens marcados como "compra parcelada" na revisão: o item importado
-                // JÁ é uma parcela real, então só projetamos as parcelas restantes nos
-                // meses seguintes, com o mesmo valor (extrato de banco já mostra o valor
-                // fixo da parcela, não um total a dividir).
-                // Reaproveita invoiceCategory/provisionedPaymentMethod já resolvidos fora
-                // da transação — evita duas queries redundantes por item marcado.
-
-                // Todo item marcado precisa ser carimbado (installment_group_id/number/total),
-                // mesmo que seja a última parcela e não gere nenhuma parcela futura.
-                const stamps: { idx: number; groupId: string; number: number; total: number }[] = [];
-                // Plano das parcelas futuras a gerar (pode vir de vários itens marcados no
-                // mesmo import) — só existe pra quem não é a última parcela.
-                type FutureInstallmentPlan = {
-                    item: (typeof validatedData.items)[number];
-                    num: number; total: number; groupId: string; month: number; year: number;
-                };
-                const plan: FutureInstallmentPlan[] = [];
-                for (let idx = 0; idx < validatedData.items.length; idx++) {
-                    const item = validatedData.items[idx];
-                    if (!item.isInstallment || !item.installmentsCount) continue;
-                    const startNum = item.installmentNumber ?? 1;
-                    const total = item.installmentsCount;
-                    const groupId = crypto.randomUUID();
-                    stamps.push({ idx, groupId, number: startNum, total });
-                    for (let num = startNum + 1; num <= total; num++) {
-                        const { month: fm, year: fy } = addInvoiceMonths(month, year, num - startNum);
-                        plan.push({ item, num, total, groupId, month: fm, year: fy });
-                    }
-                }
-
-                if (stamps.length > 0) {
-                    // Carimba os itens reais importados marcados como parcelados — independente
-                    // entre si, seguro em paralelo.
-                    await Promise.all(stamps.map(s =>
-                        tx.creditCardInvoiceItem.update({
-                            where: { id: createdItems.get(s.idx)!.id },
-                            data: { installment_group_id: s.groupId, installment_number: s.number, installment_total: s.total },
-                        })
-                    ));
-                }
-
-                if (plan.length > 0) {
-                    // Resolve os cabeçalhos de fatura projetada ÚNICOS necessários primeiro,
-                    // sequencialmente (find-or-create não é seguro em paralelo pro mesmo
-                    // cartão+mês — duas parcelas de itens diferentes podem cair no mesmo mês).
-                    // Normalmente são poucos meses distintos, então isso é rápido.
-                    const headerByMonth = new Map<string, Awaited<ReturnType<typeof findOrCreateProvisionedHeader>>>();
-                    for (const p of plan) {
-                        const key = `${p.month}-${p.year}`;
-                        if (headerByMonth.has(key)) continue;
-                        const header = await findOrCreateProvisionedHeader(tx, {
-                            userId, card: creditCard, invoiceMonth: p.month, invoiceYear: p.year,
-                            categoryId: invoiceCategory.id, paymentMethodId: provisionedPaymentMethod!.id,
-                        });
-                        headerByMonth.set(key, header);
-                    }
-
-                    // Com os cabeçalhos já resolvidos, cria os itens + incrementa os valores
-                    // em paralelo (sem risco de duplicidade — increment é atômico no banco).
-                    await Promise.all(plan.map(p => {
-                        const header = headerByMonth.get(`${p.month}-${p.year}`)!;
-                        return Promise.all([
-                            tx.creditCardInvoiceItem.create({
-                                data: {
-                                    transactionId: header.id,
-                                    // Remove um padrão de parcela pré-existente no texto do extrato
-                                    // (ex. "Parcela 1/10") antes de anexar o número real da parcela
-                                    // projetada — senão o registro gerado fica com dois números
-                                    // contraditórios na mesma descrição. Não afeta o item realmente
-                                    // importado (item.descricao, acima, permanece intocado).
-                                    descricao: `${stripInstallmentPattern(p.item.descricao)} (${String(p.num).padStart(2, "0")}/${String(p.total).padStart(2, "0")})`,
-                                    valor: p.item.valor,
-                                    data_compra: p.item.data_compra,
-                                    categoria_id: p.item.categoria_id,
-                                    is_provisioned: true,
-                                    installment_group_id: p.groupId,
-                                    installment_number: p.num,
-                                    installment_total: p.total,
-                                },
-                            }),
-                            tx.transaction.update({ where: { id: header.id }, data: { valor: { increment: p.item.valor } } }),
-                        ]);
-                    }));
-                }
-            }
-
-            return { transaction, itemsCount };
-        }, { timeout: 20000 }); // margem de segurança: geração de parcelas futuras (quando há
-        // itens marcados) ainda faz algumas queries sequenciais nessa transação.
-
-        // Aprendizado de categoria por item: fora da transação de propósito — não precisa
-        // ser atômico com a criação da fatura (pior caso de falha aqui: uma sugestão futura
-        // não é aprendida, não uma inconsistência de dados) e tirar isso da transação reduz
-        // bastante o número de queries que seguram a conexão interativa aberta.
-        try {
-            await Promise.all(
-                validatedData.items.map(item => {
-                    const signature = getMerchantSignature(item.descricao);
-                    if (!signature) return null;
-                    return db.mappingSuggestion.upsert({
-                        where: { search_term_userId: { search_term: signature, userId } },
-                        update: { categoria_id: item.categoria_id },
-                        create: { search_term: signature, categoria_id: item.categoria_id, userId },
-                    });
-                })
-            );
-        } catch (error: unknown) {
-            console.error("Error learning mapping suggestions (import already succeeded):", error);
-        }
+        const result = await importCreditCardInvoiceForUser(userId, data);
 
         revalidatePath("/dashboard");
         revalidatePath("/reports");
@@ -253,57 +44,13 @@ export async function importCreditCardInvoice(data: CreditCardInvoiceInput) {
     }
 }
 
-export interface PossibleDuplicateInstallmentCheck {
-    idx: number;
-    descricao: string;
-    installmentNumber: number;
-    installmentsCount: number;
-}
-
-export interface PossibleDuplicateInstallmentMatch {
-    idx: number;
-    matchDescricao: string;
-    matchDate: Date;
-}
-
-// Verifica se um item marcado como "parcela nº > 1" (ex: usuário começou a
-// marcar direto na parcela 3/6) pode já ter sido provisionado numa importação
-// anterior — sinal de reimportação acidental do mesmo parcelamento, que hoje
-// geraria uma segunda cadeia (installment_group_id novo) duplicada. Não é uma
-// trava: é um aviso de UX, então só faz a checagem (leitura), quem decide o
-// que fazer com o resultado é o chamador. Reaproveita getMerchantSignature()
-// (mesmo helper do aprendizado de categoria) em vez de comparar texto exato.
+// Regra em services/credit-card-import.ts (findPossibleDuplicateInstallmentsForUser).
 export async function findPossibleDuplicateInstallments(
     creditCardId: string,
     items: PossibleDuplicateInstallmentCheck[]
 ): Promise<PossibleDuplicateInstallmentMatch[]> {
     const userId = await getUserId();
-    const candidates = items.filter(i => i.installmentNumber > 1);
-    if (candidates.length === 0) return [];
-
-    const totals = [...new Set(candidates.map(i => i.installmentsCount))];
-    const existingItems = await db.creditCardInvoiceItem.findMany({
-        where: {
-            transaction: { userId, credit_card_id: creditCardId },
-            installment_total: { in: totals },
-            installment_number: { not: null },
-        },
-        select: { descricao: true, data_compra: true, installment_number: true, installment_total: true },
-    });
-
-    const matches: PossibleDuplicateInstallmentMatch[] = [];
-    for (const candidate of candidates) {
-        const signature = getMerchantSignature(candidate.descricao);
-        const match = existingItems.find(e =>
-            e.installment_total === candidate.installmentsCount
-            && e.installment_number! < candidate.installmentNumber
-            && getMerchantSignature(e.descricao) === signature
-        );
-        if (match) {
-            matches.push({ idx: candidate.idx, matchDescricao: match.descricao, matchDate: match.data_compra });
-        }
-    }
-    return matches;
+    return findPossibleDuplicateInstallmentsForUser(userId, creditCardId, items);
 }
 
 export async function getInvoiceItems(transactionId: string) {

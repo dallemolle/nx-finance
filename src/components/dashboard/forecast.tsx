@@ -27,7 +27,7 @@ export function Forecast({ forecast, daysPassed, totalDays }: ForecastProps) {
                     <div className="flex items-start gap-2">
                         <AlertTriangle className="w-4 h-4 text-indigo-500 mt-0.5" />
                         <p className="text-xs text-slate-600 dark:text-slate-400 leading-tight">
-                            Com base nos {daysPassed} dias decorridos, você deve fechar o mês com este valor em saídas.
+                            Ritmo de gastos dos {daysPassed} dias decorridos, somado às despesas já agendadas até o fim do mês.
                         </p>
                     </div>
                 </div>

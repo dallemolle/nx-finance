@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { startOfMonth, endOfMonth, isBefore, subMonths, getDaysInMonth, format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { getCategoryGroupName } from "./dashboard-utils";
+import { incomeCommitmentPercent, projectMonthlyOutflow } from "./dashboard-metrics";
 import type { Prisma, TransactionType } from "@prisma/client";
 
 interface TotalsEntry {
@@ -102,12 +103,16 @@ export async function getDashboardData(userId: string, month: number, year: numb
     const today = new Date();
     const isCurrentMonth = today.getMonth() === targetDate.getMonth() && today.getFullYear() === targetDate.getFullYear();
     const daysPassed = isCurrentMonth ? today.getDate() : getDaysInMonth(targetDate);
-    const dailyAverage = currentSummary.totalSaidas / daysPassed;
-    const forecast = dailyAverage * getDaysInMonth(targetDate);
+    const forecast = projectMonthlyOutflow({
+        saidas: transactions
+            .filter(t => t.tipo === "SAIDA")
+            .map(t => ({ valor: Number(t.valor), data: t.data_vencimento })),
+        today,
+        month,
+        year,
+    });
 
-    const healthScore = currentSummary.totalEntradas > 0
-        ? (currentSummary.totalSaidas / currentSummary.totalEntradas) * 100
-        : currentSummary.totalSaidas > 0 ? 100 : 0;
+    const healthScore = incomeCommitmentPercent(currentSummary.totalSaidas, currentSummary.totalEntradas);
 
     // Agrupa invoiceItems por transactionId
     const itemsByHeader = new Map<string, (Omit<typeof invoiceItems[number], "valor"> & { valor: number })[]>();

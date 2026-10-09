@@ -14,21 +14,28 @@ Melhorias levantadas na revisão de usabilidade, testes e segurança de 2026-10-
 
 Combinada em 2026-10-09. Cada etapa vai no seu próprio branch `feature/...`.
 
-1. **Importação de fatura:** BL-001, BL-002, BL-003, BL-005, BL-004, BL-006 e a parte de BL-012 que toca nesse diálogo. Em seguida, BL-023.
-2. **Dashboard e faturas:** BL-007, BL-009, BL-011, BL-008, BL-010 e o restante de BL-012.
-3. **Código:** BL-013 junto com BL-014, depois BL-015 e BL-016.
-4. **Segurança da conta:** BL-021, depois BL-022.
-5. **Depois, só com motivo concreto:** BL-017 e BL-018.
-6. **Com o usuário:** BL-019 (de preferência antes do primeiro PR) e BL-020.
+1. **Importação de fatura:** BL-001, BL-002, BL-003, BL-005, BL-004, BL-006 e a parte de BL-012 que toca nesse diálogo. Em seguida, BL-023. ✅ Concluída.
+2. **Datas:** BL-025. Entrou antes da etapa de dashboard porque afeta o que todas as telas mostram.
+3. **Dashboard e faturas:** BL-007, BL-009, BL-011, BL-008, BL-010 e o restante de BL-012.
+4. **Código:** BL-013 junto com BL-014, depois BL-015 e BL-016.
+5. **Segurança da conta:** BL-021, depois BL-022.
+6. **Depois, só com motivo concreto:** BL-017 e BL-018.
+7. **Com o usuário:** BL-019 (de preferência antes do primeiro PR) e BL-020.
 
 ## Pendentes
 
 ### Importação de fatura
 
-O fluxo mais usado no dia a dia. Arquivo principal: `src/components/dashboard/credit-card-invoice-dialog.tsx`. Os itens BL-001 a BL-006 e o BL-024 foram concluídos (ver [Concluídos](#concluídos)).
+O fluxo mais usado no dia a dia. Arquivo principal: `src/components/dashboard/credit-card-invoice-dialog.tsx`. Os itens BL-001 a BL-006, BL-023 e BL-024 foram concluídos (ver [Concluídos](#concluídos)).
 
-- [ ] **BL-023: teste de ponta a ponta da importação de fatura.** **Média.**
-  Teste com Playwright (`@playwright/test`) que passa pela tela: sobe um CSV, escolhe o cartão, ativa uma parcela, categoriza e importa, conferindo o resultado no dashboard e em `/faturas`. Protege o fluxo mais usado contra regressões de tela, que os testes de integração não pegam. Agora que BL-001 a BL-006 estão prontos, é o próximo item da etapa 1.
+- [ ] **BL-025: datas aparecem um dia antes no fuso de Brasília.** **Alta.**
+  Encontrado pelo teste de ponta a ponta (BL-023). As datas sem hora que vêm como texto (`"2026-10-06"`) passam por `z.coerce.date` e são gravadas à meia-noite UTC. As telas formatam no fuso do navegador (`format(new Date(...))`), então em Brasília aparece o dia anterior: a compra de 06/10 vira "05 de out" e o vencimento 08/11 vira 07/11. Os 378 itens de fatura já importados no banco de dev estão nessa situação, e a produção provavelmente também.
+  Pontos a resolver:
+  - escolher uma convenção única para datas sem hora (o formulário de nova transação grava meia-noite local, que é 03:00 UTC, e a importação grava meia-noite UTC);
+  - formatar essas datas de forma consistente (`credit-card-invoice-dialog`, `recent-transactions`, `category-chart`, `invoice-analysis-content` e outros);
+  - verificar o agrupamento por mês no servidor: em produção (UTC) e localmente (Brasília), uma compra no dia 1º pode cair em meses diferentes;
+  - decidir se os dados existentes precisam de correção.
+  Hoje o teste e2e confere a data gravada pelo dia do calendário em UTC (a convenção atual).
 
 ### Dashboard e faturas
 
@@ -98,4 +105,5 @@ O fluxo mais usado no dia a dia. Arquivo principal: `src/components/dashboard/cr
 | BL-004 | Importação: arrastar e soltar o CSV | 2026-10-09 · `2343bdd` |
 | BL-005 | Importação: valores em formato de moeda e estornos destacados | 2026-10-09 · `2343bdd` |
 | BL-006 | Importação: atalho de 1 clique também para parcela N/M com N > 1 (exceto a última) | 2026-10-09 · `2343bdd` |
+| BL-023 | Teste de ponta a ponta da importação (`npm run test:e2e`, Playwright, banco `<nome>_e2e`): CSV, cartão, revisão, parcela, categorias, importação e `/faturas`; roda no CI antes do `db push` | 2026-10-09 · `04ca85c` |
 | BL-024 | Leitura do CSV: `02/10/2026` era lido como 10 de fevereiro e `R$ 1.234,56` como 1,234; datas com barra agora são dia/mês e o separador de milhar é tratado | 2026-10-09 · `2343bdd` |

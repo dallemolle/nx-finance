@@ -6,7 +6,7 @@ import { creditCardInvoiceSchema, type CreditCardInvoiceInput } from "@/lib/vali
 import { getMerchantSignature, stripInstallmentPattern } from "@/lib/dashboard-utils";
 import { getOrCreateInvoiceCategory, getOrCreateProvisionedPaymentMethod } from "@/lib/credit-card-shared";
 import { getReferenceMonthFromDueDate, addInvoiceMonths } from "@/lib/credit-card-cycle";
-import { reconcileProvisionedInstallments, findOrCreateProvisionedHeader } from "@/lib/services/credit-card-provision";
+import { replaceProvisionedInvoice, findOrCreateProvisionedHeader } from "@/lib/services/credit-card-provision";
 
 export async function importCreditCardInvoiceForUser(userId: string, data: CreditCardInvoiceInput) {
     const validatedData = creditCardInvoiceSchema.parse(data);
@@ -93,8 +93,8 @@ export async function importCreditCardInvoiceForUser(userId: string, data: Credi
         }
         const itemsCount = validatedData.items.length;
 
-        // Se a fatura importada está vinculada a um cartão, concilia parcelas
-        // já provisionadas pra esse cartão/mês (migra pra essa fatura real)
+        // Se a fatura importada está vinculada a um cartão, ela substitui a
+        // fatura prevista desse cartão/mês (ver replaceProvisionedInvoice).
         if (creditCard) {
             const { month, year } = getReferenceMonthFromDueDate(
                 validatedData.data_vencimento,
@@ -105,12 +105,11 @@ export async function importCreditCardInvoiceForUser(userId: string, data: Credi
                 where: { id: transaction.id },
                 data: { invoice_month: month, invoice_year: year },
             });
-            await reconcileProvisionedInstallments(tx, {
+            await replaceProvisionedInvoice(tx, {
                 userId,
                 creditCardId: creditCard.id,
                 invoiceMonth: month,
                 invoiceYear: year,
-                newHeaderId: transaction.id,
             });
 
             // Itens marcados como "compra parcelada" na revisão: o item importado
@@ -277,4 +276,21 @@ export async function findPossibleDuplicateInstallmentsForUser(
         }
     }
     return matches;
+}
+
+// Apaga uma fatura importada (real) e os itens dela — pra refazer uma
+// importação errada. Só aceita cabeçalho de fatura confirmado do próprio
+// usuário: faturas previstas e lançamentos comuns ficam de fora (as previstas
+// têm exclusão própria, deleteProvisionedInvoiceItemsForUser). As faturas
+// previstas geradas a partir desta importação não são tocadas.
+export async function deleteImportedInvoiceForUser(userId: string, transactionId: string): Promise<{ deletedItems: number }> {
+    const invoice = await db.transaction.findFirst({
+        where: { id: transactionId, userId, is_invoice_header: true, is_provisioned: false },
+        select: { id: true, _count: { select: { invoiceItems: true } } },
+    });
+    if (!invoice) throw new Error("Fatura importada não encontrada.");
+
+    // Itens saem junto (onDelete: Cascade em CreditCardInvoiceItem).
+    await db.transaction.delete({ where: { id: invoice.id } });
+    return { deletedItems: invoice._count.invoiceItems };
 }

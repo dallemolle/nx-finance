@@ -9,6 +9,7 @@ import { EditTransactionDialog } from "./edit-transaction-dialog";
 import { QuickPayButton } from "./quick-pay-button";
 import { ConfirmEstimatedExpenseButton } from "./confirm-estimated-expense-button";
 import { CancelProvisionedButton } from "./cancel-provisioned-button";
+import { DeleteImportedInvoiceButton } from "./delete-imported-invoice-button";
 import { ProvisionedBadge } from "./provisioned-badge";
 import { ChevronRight, ChevronDown, CreditCard } from "lucide-react";
 import { maskCurrency } from "@/lib/utils";
@@ -113,6 +114,14 @@ export function RecentTransactions({ transactions, userId }: RecentTransactionsP
                                     <ConfirmEstimatedExpenseButton transaction={t} />
                                     <CancelProvisionedButton kind="transaction" id={t.id} />
                                 </>
+                            )}
+                            {t.is_invoice_header && !t.is_provisioned && (
+                                <DeleteImportedInvoiceButton
+                                    id={t.id}
+                                    descricao={t.descricao}
+                                    valor={Number(t.valor)}
+                                    itemsCount={t.invoiceItems?.length ?? 0}
+                                />
                             )}
                             {t.status !== "PAGO" && <QuickPayButton transactionId={t.id} />}
                             <EditTransactionDialog transaction={t} userId={userId} />

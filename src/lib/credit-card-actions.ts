@@ -8,6 +8,7 @@ import { authOptions } from "@/lib/auth";
 import type { CreditCardInvoiceInput } from "@/lib/validations";
 import { getErrorMessage, getPrismaErrorMessage } from "@/lib/utils";
 import {
+    deleteImportedInvoiceForUser,
     findPossibleDuplicateInstallmentsForUser,
     importCreditCardInvoiceForUser,
     type PossibleDuplicateInstallmentCheck,
@@ -42,6 +43,23 @@ export async function importCreditCardInvoice(data: CreditCardInvoiceInput) {
     } catch (error: unknown) {
         console.error("Error importing credit card invoice:", error);
         throw new Error(getPrismaErrorMessage(error, "Erro ao importar fatura de cartão de crédito"));
+    }
+}
+
+// Apaga uma fatura importada (real) e os itens dela, pra refazer uma importação
+// errada. Regra em services/credit-card-import.ts (deleteImportedInvoiceForUser).
+export async function deleteImportedInvoice(transactionId: string) {
+    try {
+        const userId = await getUserId();
+        const result = await deleteImportedInvoiceForUser(userId, transactionId);
+
+        revalidatePath("/");
+        revalidatePath("/faturas");
+        revalidatePath("/reports");
+        return { success: true, deletedItems: result.deletedItems };
+    } catch (error: unknown) {
+        console.error("Error deleting imported invoice:", error);
+        throw new Error(getPrismaErrorMessage(error, "Erro ao excluir a fatura importada"));
     }
 }
 

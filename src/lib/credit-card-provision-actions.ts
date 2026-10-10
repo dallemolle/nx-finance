@@ -24,6 +24,7 @@ import {
 } from "@/lib/credit-card-shared";
 import {
     confirmEstimatedExpenseForUser,
+    deleteProvisionedInvoiceItemsForUser,
     findOrCreateProvisionedHeader,
     getInvoiceTimelineDetailForUser,
     provisionCardInstallmentPurchaseForUser,
@@ -245,39 +246,28 @@ export async function provisionEstimatedExpense(data: EstimatedExpenseInput) {
     }
 }
 
-// Cancela/exclui um item avulso de fatura projetada (parcela futura ou
-// estimativa no cartão). Recalcula o valor do header ou o remove, se ficar
-// vazio — mesma limpeza usada em reconcileProvisionedInstallments.
-export async function deleteProvisionedInvoiceItem(itemId: string) {
+// Exclui um ou mais itens de faturas projetadas (parcelas futuras ou
+// estimativas no cartão). Regra em services/credit-card-provision.ts
+// (deleteProvisionedInvoiceItemsForUser).
+export async function deleteProvisionedInvoiceItems(itemIds: string[]) {
     try {
         const userId = await getUserId();
+        const result = await deleteProvisionedInvoiceItemsForUser(userId, itemIds);
 
-        const item = await db.creditCardInvoiceItem.findFirst({
-            where: { id: itemId, is_provisioned: true, transaction: { userId } },
-        });
-        if (!item) throw new Error("Item previsto não encontrado.");
-
-        const headerId = item.transactionId;
-        await db.creditCardInvoiceItem.delete({ where: { id: itemId } });
-
-        const remaining = await db.creditCardInvoiceItem.count({ where: { transactionId: headerId } });
-        if (remaining === 0) {
-            await db.transaction.delete({ where: { id: headerId } });
-        } else {
-            const sum = await db.creditCardInvoiceItem.aggregate({
-                where: { transactionId: headerId },
-                _sum: { valor: true },
-            });
-            await db.transaction.update({ where: { id: headerId }, data: { valor: sum._sum.valor ?? 0 } });
-        }
-
-        revalidatePath("/dashboard");
+        revalidatePath("/");
+        revalidatePath("/faturas");
         revalidatePath("/reports");
-        return { success: true };
+        return { success: true, deletedCount: result.deletedCount };
     } catch (error: unknown) {
-        console.error("Error deleting provisioned invoice item:", error);
-        throw new Error(getPrismaErrorMessage(error, "Erro ao excluir item previsto"));
+        console.error("Error deleting provisioned invoice items:", error);
+        throw new Error(getPrismaErrorMessage(error, "Erro ao excluir itens previstos"));
     }
+}
+
+export async function deleteProvisionedInvoiceItem(itemId: string) {
+    const result = await deleteProvisionedInvoiceItems([itemId]);
+    if (result.deletedCount === 0) throw new Error("Item previsto não encontrado.");
+    return { success: true };
 }
 
 // Regra em services/credit-card-provision.ts (confirmEstimatedExpenseForUser).

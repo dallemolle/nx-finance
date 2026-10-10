@@ -4,8 +4,8 @@ import {
     applyCategoryToUncategorized,
     buildInvoiceDefaults,
     installmentShortcut,
+    currentMonthDueDate,
     missingStepOneFields,
-    nextDueDate,
     parseInvoiceAmount,
     parseInvoiceDate,
 } from "./invoice-import";
@@ -45,25 +45,26 @@ describe("parseInvoiceAmount (BL-024)", () => {
     });
 });
 
-describe("nextDueDate (BL-001)", () => {
-    test("vencimento ainda neste mês", () => {
-        expect(nextDueDate(10, today)).toBe("2026-10-10");
+describe("currentMonthDueDate (BL-027)", () => {
+    test("vencimento ainda por vir neste mês", () => {
+        expect(currentMonthDueDate(10, today)).toBe("2026-10-10");
     });
 
-    test("vencimento hoje conta como este mês", () => {
-        expect(nextDueDate(9, today)).toBe("2026-10-09");
+    test("vencimento hoje", () => {
+        expect(currentMonthDueDate(9, today)).toBe("2026-10-09");
     });
 
-    test("vencimento já passou: próximo mês", () => {
-        expect(nextDueDate(5, today)).toBe("2026-11-05");
+    test("vencimento que já passou continua no mês corrente: o lançamento da fatura pode atrasar", () => {
+        // caso real: fatura do Nubank que venceu em 08/10, importada em 09/10
+        expect(currentMonthDueDate(8, today)).toBe("2026-10-08");
     });
 
     test("dia inexistente no mês cai no último dia", () => {
-        expect(nextDueDate(31, new Date(2027, 1, 1))).toBe("2027-02-28");
+        expect(currentMonthDueDate(31, new Date(2027, 1, 1))).toBe("2027-02-28");
     });
 
-    test("vira o ano", () => {
-        expect(nextDueDate(5, new Date(2026, 11, 20))).toBe("2027-01-05");
+    test("dezembro não vira o ano", () => {
+        expect(currentMonthDueDate(5, new Date(2026, 11, 20))).toBe("2026-12-05");
     });
 });
 
@@ -77,9 +78,9 @@ describe("buildInvoiceDefaults (BL-001)", () => {
     test("preenche instituição, vencimento, meio de pagamento e descrição a partir do cartão", () => {
         expect(buildInvoiceDefaults({ card, paymentMethods, today })).toEqual({
             institutionId: "inst-nu",
-            dueDate: "2026-11-05",
+            dueDate: "2026-10-05",
             paymentMethodId: "pm-cc",
-            description: "Fatura Nubank Nov/2026",
+            description: "Fatura Nubank Out/2026",
         });
     });
 

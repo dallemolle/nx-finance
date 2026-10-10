@@ -60,16 +60,13 @@ export function parseInvoiceAmount(raw: string): number {
     return negative ? -value : value;
 }
 
-// Próximo vencimento a partir de hoje (inclusive), com o dia limitado ao
-// último dia do mês (vencimento 31 em fevereiro -> 28/29).
-export function nextDueDate(dueDay: number, today: Date): string {
-    const inMonth = (year: number, month: number) => {
-        const lastDay = new Date(year, month + 1, 0).getDate();
-        return new Date(year, month, Math.min(dueDay, lastDay));
-    };
-    const startOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-    const thisMonth = inMonth(today.getFullYear(), today.getMonth());
-    return toYmd(thisMonth >= startOfToday ? thisMonth : inMonth(today.getFullYear(), today.getMonth() + 1));
+// Vencimento do cartão no mês corrente, mesmo que já tenha passado: a fatura
+// costuma ser lançada depois de fechar, às vezes depois de vencer. Pular pro
+// mês seguinte fazia a importação ser tratada como a fatura errada (BL-027).
+// O dia é limitado ao último dia do mês (vencimento 31 em fevereiro -> 28/29).
+export function currentMonthDueDate(dueDay: number, today: Date): string {
+    const lastDay = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
+    return toYmd(new Date(today.getFullYear(), today.getMonth(), Math.min(dueDay, lastDay)));
 }
 
 const MONTHS = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
@@ -90,7 +87,7 @@ export function buildInvoiceDefaults({ card, paymentMethods, today }: {
     paymentMethods: { id: string; nome: string }[];
     today: Date;
 }): InvoiceDefaults {
-    const dueDate = nextDueDate(card.dueDay, today);
+    const dueDate = currentMonthDueDate(card.dueDay, today);
     const [year, month] = dueDate.split("-").map(Number);
     const creditCardMethod = paymentMethods.find(pm => normalize(pm.nome).includes("credito"));
     return {

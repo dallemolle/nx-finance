@@ -21,7 +21,7 @@ Combinada em 2026-10-09. Cada etapa vai no seu próprio branch `feature/...`.
 4. **Código:** BL-013 junto com BL-014, depois BL-015 e BL-016.
 5. **Segurança da conta:** BL-021, depois BL-022.
 6. **Depois, só com motivo concreto:** BL-017 e BL-018.
-7. **Com o usuário:** BL-020. (BL-019 ✅ concluído.)
+7. **Com o usuário:** BL-020 e BL-032 (em validação até novembro de 2026). (BL-019 ✅ concluído.)
 8. **Funcionalidades novas, sem pressa:** BL-030 e BL-031.
 
 ## Pendentes
@@ -88,6 +88,12 @@ Ideias que vieram do branch abandonado `feature/2026-07-18_prev-desc-new_table` 
 
 ### Ações do usuário
 
+- [ ] **BL-032: validar em produção a correção das parcelas (BL-026 a BL-029).** **Média.** 👤 **Ação do usuário.** ⏳ **Em validação, retomar em novembro de 2026.**
+  Em 2026-10-10 a fatura errada foi apagada, as previstas do Nubank excluídas e o CSV de setembro reimportado. A primeira conferência parece correta. A confirmação definitiva fica para a importação da fatura de outubro (vencimento em novembro). Conferir:
+  - o total da fatura bate com o boleto, e cada parcela aparece uma vez só (sem "Parcela 3/5" e "(03/05)" juntas);
+  - a fatura prevista de novembro foi substituída pela importada, sem sumir nem duplicar;
+  - as parcelas dos meses seguintes continuam em `/faturas` → Nubank → Ver meses.
+  Se aparecer algo errado, abrir um item novo com o caso real.
 - [ ] **BL-020: senha do usuário dev local.** **Baixa.** 👤 **Ação do usuário.**
   A senha local foi redefinida para `NxDev@2026` durante a revisão. Trocar se quiser. Afeta só o banco local.
 

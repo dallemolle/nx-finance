@@ -14,28 +14,23 @@ jobs:
     name: Lint, tipos e testes
     runs-on: ubuntu-latest
 
-    # Postgres descartável pros testes de integração (rodam em <banco>_test,
-    # criado pelo próprio setup do Vitest via prisma db push).
-    services:
-      postgres:
-        image: public.ecr.aws/docker/library/postgres:16  # espelho oficial; o Docker Hub limita pulls anônimos dos runners
-        env:
-          POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: nx_finance
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U postgres"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 10
-
     env:
       DATABASE_URL: postgresql://postgres:postgres@localhost:5432/nx_finance?schema=public
       VITE_CONFIG_NATIVE_IGNORE_WARNING: "true"
 
     steps:
+      # Postgres descartável pros testes de integração (rodam em <banco>_test,
+      # criado pelo próprio setup do Vitest via prisma db push). Usa o Postgres
+      # que já vem instalado no runner: imagem de container dependia de registro
+      # externo, e tanto o Docker Hub quanto o ECR Public limitam downloads
+      # anônimos dos runners (toomanyrequests).
+      - name: Inicia o Postgres do runner
+        run: |
+          sudo systemctl start postgresql.service
+          pg_isready -h localhost -t 30
+          sudo -u postgres psql -c "ALTER USER postgres PASSWORD 'postgres';"
+          sudo -u postgres createdb nx_finance
+
       - uses: actions/checkout@v4
 
       - uses: actions/setup-node@v4
@@ -58,27 +53,19 @@ jobs:
     name: Testes de ponta a ponta
     runs-on: ubuntu-latest
 
-    # Mesmo Postgres descartável; o Playwright usa o banco <banco>_e2e.
-    services:
-      postgres:
-        image: public.ecr.aws/docker/library/postgres:16  # espelho oficial; o Docker Hub limita pulls anônimos dos runners
-        env:
-          POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: nx_finance
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U postgres"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 10
-
     env:
       DATABASE_URL: postgresql://postgres:postgres@localhost:5432/nx_finance?schema=public
       NEXTAUTH_SECRET: ci-e2e-secret
 
     steps:
+      # Mesmo Postgres do runner (ver job anterior); o Playwright usa o banco <banco>_e2e.
+      - name: Inicia o Postgres do runner
+        run: |
+          sudo systemctl start postgresql.service
+          pg_isready -h localhost -t 30
+          sudo -u postgres psql -c "ALTER USER postgres PASSWORD 'postgres';"
+          sudo -u postgres createdb nx_finance
+
       - uses: actions/checkout@v4
 
       - uses: actions/setup-node@v4

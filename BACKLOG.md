@@ -115,6 +115,7 @@ Ideias que vieram do branch abandonado `feature/2026-07-18_prev-desc-new_table` 
 | BL-C12 | `AGENTS.md` (gerado pelo `next dev`) versionado | 2026-10-09 · `dd60ace` |
 | BL-C13 | CI (lint, tipos e testes) antes do `db push`; diff de schema nos PRs | 2026-10-09 · `ce27820` |
 | BL-C14 | Branches abandonados de julho apagados (local e GitHub): `2026-07-15_lancto_previsao_despesa` (`9a83336`), `2026-07-17_prev_desp` (`3185732`) e `2026-07-18_prev-desc-new_table` (`7d64086`); ideias aproveitáveis viraram BL-030 e BL-031 | 2026-10-10 |
+| BL-C15 | CI usa o Postgres que já vem instalado no runner em vez de imagem de container (Docker Hub e ECR Public deram `toomanyrequests` em downloads anônimos) | 2026-10-11 · `5bf98a3` |
 | BL-001 | Importação: escolher o cartão (agora o primeiro campo) preenche instituição, vencimento, meio de pagamento e descrição | 2026-10-09 · `2343bdd` |
 | BL-002 | Importação: mostra o que falta para avançar ou importar; itens sem categoria destacados, "aplicar a todos sem categoria" e propagação da categoria para o mesmo estabelecimento | 2026-10-09 · `2343bdd` |
 | BL-003 | Importação: botão Voltar na revisão, preservando o que já foi editado | 2026-10-09 · `2343bdd` |

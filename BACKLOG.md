@@ -21,7 +21,8 @@ Combinada em 2026-10-09. Cada etapa vai no seu próprio branch `feature/...`.
 4. **Código:** BL-013 junto com BL-014, depois BL-015 e BL-016.
 5. **Segurança da conta:** BL-021, depois BL-022.
 6. **Depois, só com motivo concreto:** BL-017 e BL-018.
-7. **Com o usuário:** BL-019 (de preferência antes do primeiro PR) e BL-020.
+7. **Com o usuário:** BL-020 e BL-032 (em validação até novembro de 2026). (BL-019 ✅ concluído.)
+8. **Funcionalidades novas, sem pressa:** BL-030 e BL-031.
 
 ## Pendentes
 
@@ -76,10 +77,23 @@ O fluxo mais usado no dia a dia. Arquivo principal: `src/components/dashboard/cr
 - [ ] **BL-022: pedir a senha para desativar o 2FA.** **Baixa.**
   Hoje basta o código TOTP atual. Exigir também a senha, como confirmação extra. Arquivo: `src/lib/two-factor-actions.ts`.
 
+### Funcionalidades novas
+
+Ideias que vieram do branch abandonado `feature/2026-07-18_prev-desc-new_table` (último commit `7d64086`, apagado em 2026-10-10). O código dele não serve mais: é anterior ao schema atual e à refatoração em `src/lib/services/`. Se for implementar, fazer do zero, seguindo o padrão atual e com testes.
+
+- [ ] **BL-030: despesa prevista recorrente.** **Baixa.**
+  Hoje a despesa prevista só divide um valor em parcelas. Permitir repetir o mesmo valor por N meses (aluguel, escola, assinatura), criando um lançamento previsto por mês, que depois é confirmado como já acontece com `confirmEstimatedExpenseForUser`.
+- [ ] **BL-031: conciliar previstas na importação do extrato.** **Baixa.**
+  Ao importar o CSV do banco, sugerir qual lançamento previsto cada linha quita (valor parecido, data próxima, descrição semelhante) e confirmar os pares em lote, em vez de confirmar cada prevista à mão.
+
 ### Ações do usuário
 
-- [ ] **BL-019: proteção de branch no GitHub.** **Alta.** 👤 **Ação do usuário.**
-  Criar o ruleset para `staging` e `main` exigindo PR e a verificação "Lint, tipos e testes", com 0 aprovações.
+- [ ] **BL-032: validar em produção a correção das parcelas (BL-026 a BL-029).** **Média.** 👤 **Ação do usuário.** ⏳ **Em validação, retomar em novembro de 2026.**
+  Em 2026-10-10 a fatura errada foi apagada, as previstas do Nubank excluídas e o CSV de setembro reimportado. A primeira conferência parece correta. A confirmação definitiva fica para a importação da fatura de outubro (vencimento em novembro). Conferir:
+  - o total da fatura bate com o boleto, e cada parcela aparece uma vez só (sem "Parcela 3/5" e "(03/05)" juntas);
+  - a fatura prevista de novembro foi substituída pela importada, sem sumir nem duplicar;
+  - as parcelas dos meses seguintes continuam em `/faturas` → Nubank → Ver meses.
+  Se aparecer algo errado, abrir um item novo com o caso real.
 - [ ] **BL-020: senha do usuário dev local.** **Baixa.** 👤 **Ação do usuário.**
   A senha local foi redefinida para `NxDev@2026` durante a revisão. Trocar se quiser. Afeta só o banco local.
 
@@ -100,12 +114,14 @@ O fluxo mais usado no dia a dia. Arquivo principal: `src/components/dashboard/cr
 | BL-C11 | Lint sem erros (de 8 para 0) | 2026-10-09 · `9d0d56b` |
 | BL-C12 | `AGENTS.md` (gerado pelo `next dev`) versionado | 2026-10-09 · `dd60ace` |
 | BL-C13 | CI (lint, tipos e testes) antes do `db push`; diff de schema nos PRs | 2026-10-09 · `ce27820` |
+| BL-C14 | Branches abandonados de julho apagados (local e GitHub): `2026-07-15_lancto_previsao_despesa` (`9a83336`), `2026-07-17_prev_desp` (`3185732`) e `2026-07-18_prev-desc-new_table` (`7d64086`); ideias aproveitáveis viraram BL-030 e BL-031 | 2026-10-10 |
 | BL-001 | Importação: escolher o cartão (agora o primeiro campo) preenche instituição, vencimento, meio de pagamento e descrição | 2026-10-09 · `2343bdd` |
 | BL-002 | Importação: mostra o que falta para avançar ou importar; itens sem categoria destacados, "aplicar a todos sem categoria" e propagação da categoria para o mesmo estabelecimento | 2026-10-09 · `2343bdd` |
 | BL-003 | Importação: botão Voltar na revisão, preservando o que já foi editado | 2026-10-09 · `2343bdd` |
 | BL-004 | Importação: arrastar e soltar o CSV | 2026-10-09 · `2343bdd` |
 | BL-005 | Importação: valores em formato de moeda e estornos destacados | 2026-10-09 · `2343bdd` |
 | BL-006 | Importação: atalho de 1 clique também para parcela N/M com N > 1 (exceto a última) | 2026-10-09 · `2343bdd` |
+| BL-019 | 👤 Ruleset "Proteger staging e main" ativo: exige PR e os checks "Lint, tipos e testes" e "Testes de ponta a ponta", os dois aceitos só do GitHub Actions; bloqueia push forçado e exclusão | 2026-10-10 |
 | BL-023 | Teste de ponta a ponta da importação (`npm run test:e2e`, Playwright, banco `<nome>_e2e`): CSV, cartão, revisão, parcela, categorias, importação e `/faturas`; roda no CI antes do `db push` | 2026-10-09 · `04ca85c` |
 | BL-024 | Leitura do CSV: `02/10/2026` era lido como 10 de fevereiro e `R$ 1.234,56` como 1,234; datas com barra agora são dia/mês e o separador de milhar é tratado | 2026-10-09 · `2343bdd` |
 | BL-026 | 🐞 Importar a fatura real substitui a fatura prevista do mesmo cartão e ciclo (apagada inteira) em vez de mover as parcelas previstas para ela, o que duplicava a parcela do mês | 2026-10-09 · `efebf70` |

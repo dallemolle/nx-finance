@@ -59,7 +59,7 @@ postinstall → prisma generate
 - `.env.example`: template com variáveis `DATABASE_URL`, `NEXTAUTH_SECRET`, `NEXTAUTH_URL`
 
 **CI/CD:**
-- `.github/workflows/ci.yml`: em PR e push pra staging/main roda lint, `tsc` e `npm test` (com um Postgres de serviço pros testes de integração). No push, o job `db-sync` aplica `prisma db push` no banco da branch (main → produção, staging → staging) **só depois** dessas verificações passarem.
+- `.github/workflows/ci.yml`: em PR e push pra staging/main roda lint, `tsc` e `npm test` (com o Postgres que já vem instalado no runner, ligado no início do job — sem imagem de container, porque Docker Hub e ECR Public limitam downloads anônimos dos runners). No push, o job `db-sync` aplica `prisma db push` no banco da branch (main → produção, staging → staging) **só depois** dessas verificações passarem.
 - `.github/workflows/schema-diff.yml`: em PR que altera `prisma/schema.prisma`, publica no resumo do job o SQL que o `db push` vai aplicar no banco de destino e emite aviso quando há DROP/ALTER que pode perder dados (rename aparece como DROP + ADD).
 - Deploy do app é feito pela Vercel (fora do repo, sem workflow próprio aqui) — variáveis `VERCEL_GIT_COMMIT_SHA`/`VERCEL_GIT_COMMIT_REF`/`VERCEL_ENV` são injetadas automaticamente no build e usadas por `/api/version` e `EnvironmentBanner` pra confirmar qual commit está de fato no ar (ver 4.8), já que `db-sync.yml` só sincroniza schema — não garante que o deploy do app em si já rodou.
 

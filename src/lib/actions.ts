@@ -14,8 +14,7 @@ import {
 } from "@/lib/validations";
 import { authOptions } from "@/lib/auth";
 import { getServerSession } from "next-auth";
-import { addMonths, format } from "date-fns";
-import { ptBR } from "date-fns/locale";
+import { addMonthsDateOnly } from "./date-only";
 import { Decimal } from "decimal.js";
 import { getPrismaErrorMessage } from "@/lib/utils";
 
@@ -39,7 +38,7 @@ export async function createTransaction(data: TransactionInput) {
 
             const transactions = await db.$transaction(
                 Array.from({ length: installmentsCount }).map((_, i) => {
-                    const dueDate = addMonths(new Date(rest.data_vencimento), i);
+                    const dueDate = addMonthsDateOnly(rest.data_vencimento, i);
                     const defaultDescription = `${rest.descricao} (${String(i + 1).padStart(2, '0')}/${String(installmentsCount).padStart(2, '0')})`;
                     const description = (validatedData.installmentDescriptions && validatedData.installmentDescriptions[i])
                         ? validatedData.installmentDescriptions[i]

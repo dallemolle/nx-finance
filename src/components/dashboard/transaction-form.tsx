@@ -20,6 +20,7 @@ import { addMonths, format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Decimal } from "decimal.js";
 import { cn, getErrorMessage } from "@/lib/utils";
+import { dateOnlyToLocal } from "@/lib/date-only";
 import type { TransactionFormValues, TransactionInput } from "@/lib/validations";
 import type { Category, PaymentMethod, FinancialInstitution, TransactionDisplay } from "@/types/models";
 
@@ -60,7 +61,7 @@ export function TransactionForm({ categories: initialCategories, paymentMethods:
         defaultValues: initialData ? {
             descricao: initialData.descricao,
             valor: Number(initialData.valor),
-            data_vencimento: new Date(initialData.data_vencimento),
+            data_vencimento: dateOnlyToLocal(initialData.data_vencimento),
             status: initialData.status,
             tipo: initialData.tipo,
             categoria_id: initialData.categoria_id,

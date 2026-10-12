@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest";
 import { Decimal } from "decimal.js";
-import { format } from "date-fns";
+import { dateOnlyYmd, toDateOnly } from "./date-only";
 import {
     addInvoiceMonths,
     computeInvoiceDueDate,
@@ -9,7 +9,7 @@ import {
     splitInstallments,
 } from "./credit-card-cycle";
 
-const ymd = (d: Date) => format(d, "yyyy-MM-dd");
+const ymd = dateOnlyYmd;
 
 // Cartão fecha dia 25, vence dia 5 (dueDay <= closingDay -> caso comum)
 const closingDay = 25;
@@ -26,6 +26,22 @@ describe("getInvoiceReferenceMonth", () => {
 
     test("compra antes do fechamento cai na fatura do próprio mês", () => {
         expect(getInvoiceReferenceMonth(new Date(2026, 6, 20), closingDay)).toEqual({ month: 7, year: 2026 });
+    });
+});
+
+// BL-025: datas gravadas são meia-noite UTC; em Brasília, os getters locais
+// leriam o dia anterior (05/10 00:00 UTC = 04/10 21:00 em Brasília).
+describe("datas gravadas (meia-noite UTC) no fuso de Brasília", () => {
+    test("compra no dia do fechamento já vai pra fatura seguinte", () => {
+        expect(getInvoiceReferenceMonth(toDateOnly("2026-10-05"), 5)).toEqual({ month: 11, year: 2026 });
+    });
+
+    test("vencimento no dia 1º volta pro ciclo do mês anterior, não dois meses", () => {
+        expect(getReferenceMonthFromDueDate(toDateOnly("2026-11-01"), 31, 1)).toEqual({ month: 10, year: 2026 });
+    });
+
+    test("computeInvoiceDueDate devolve a meia-noite UTC do vencimento", () => {
+        expect(computeInvoiceDueDate(8, 2026, closingDay, dueDay).toISOString()).toBe("2026-09-05T00:00:00.000Z");
     });
 });
 

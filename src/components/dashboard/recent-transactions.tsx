@@ -3,8 +3,7 @@
 import { useState, type ReactNode } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { format } from "date-fns";
-import { ptBR } from "date-fns/locale";
+import { formatDateOnly } from "@/lib/date-only";
 import { EditTransactionDialog } from "./edit-transaction-dialog";
 import { QuickPayButton } from "./quick-pay-button";
 import { ConfirmEstimatedExpenseButton } from "./confirm-estimated-expense-button";
@@ -97,7 +96,7 @@ export function RecentTransactions({ transactions, userId }: RecentTransactionsP
                                 </div>
                             )}
                             <span className="text-[11px] text-muted-foreground font-medium mt-0.5 ml-1">
-                                {format(new Date(t.data_vencimento), "dd 'de' MMMM", { locale: ptBR })}
+                                {formatDateOnly(t.data_vencimento, "dd 'de' MMMM")}
                             </span>
                         </div>
                     </div>
@@ -146,7 +145,7 @@ export function RecentTransactions({ transactions, userId }: RecentTransactionsP
                                         </span>
                                     </div>
                                     <span className="text-[10px] text-muted-foreground font-medium mt-0.5">
-                                        {format(new Date(item.data_vencimento || item.data_compra), "dd 'de' MMMM", { locale: ptBR })}
+                                        {formatDateOnly(item.data_vencimento || item.data_compra, "dd 'de' MMMM")}
                                     </span>
                                 </div>
                             </div>

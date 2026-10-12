@@ -2,8 +2,7 @@
 
 import { db } from "@/lib/db";
 import { getSessionUserId } from "@/lib/session";
-import { format } from "date-fns";
-import { ptBR } from "date-fns/locale";
+import { formatDateOnly, monthRange, todayDateOnly } from "./date-only";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import type { Prisma, TransactionStatus } from "@prisma/client";
@@ -16,15 +15,9 @@ export interface ReportFilters {
 
 export async function getReportData(month: number, year: number, filters?: ReportFilters) {
     const userId = await getSessionUserId();
-    const startDate = new Date(year, month - 1, 1);
-    const endDate = new Date(year, month, 0);
-
     const where: Prisma.TransactionWhereInput = {
         userId,
-        data_vencimento: {
-            gte: startDate,
-            lte: endDate,
-        },
+        data_vencimento: monthRange(year, month),
     };
 
     if (filters?.status && filters.status !== "ALL") where.status = filters.status as TransactionStatus;
@@ -62,19 +55,19 @@ export async function getReportData(month: number, year: number, filters?: Repor
             ...item,
             valor: Number(item.valor),
             formattedAmount: new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(Number(item.valor)),
-            displayDate: format(item.data_compra, "dd/MM/yyyy", { locale: ptBR }),
+            displayDate: formatDateOnly(item.data_compra, "dd/MM/yyyy"),
         });
         itemsByHeader.set(item.transactionId, list);
     }
 
     return transactions.map(t => {
-        const isOverdue = t.status !== "PAGO" && t.data_vencimento < new Date();
+        const isOverdue = t.status !== "PAGO" && t.data_vencimento < todayDateOnly();
         return {
             ...t,
             valor: Number(t.valor),
             status: isOverdue ? "ATRASADO" as const : t.status,
             formattedAmount: new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(Number(t.valor)),
-            displayDate: format(t.data_vencimento, "dd/MM/yyyy", { locale: ptBR }),
+            displayDate: formatDateOnly(t.data_vencimento, "dd/MM/yyyy"),
             invoiceItems: itemsByHeader.get(t.id) || [],
         };
     });

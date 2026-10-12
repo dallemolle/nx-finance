@@ -1,5 +1,6 @@
 import { describe, expect, test } from "vitest";
 import { incomeCommitmentPercent, projectMonthlyOutflow } from "./dashboard-metrics";
+import { toDateOnly } from "./date-only";
 
 // Outubro/2026 tem 31 dias; "hoje" = dia 9.
 const today = new Date(2026, 9, 9, 14, 0);
@@ -24,6 +25,25 @@ describe("projectMonthlyOutflow", () => {
         const forecast = projectMonthlyOutflow({ saidas, today, month: 10, year: 2026 });
 
         expect(forecast).toBeCloseTo((90 / 9) * 31, 2);
+    });
+
+    // BL-025: como vem do banco (meia-noite UTC). 10/10 00:00 UTC = 09/10 21:00 em Brasília.
+    test("despesa gravada para amanhã continua agendada", () => {
+        const saidas = [
+            { valor: 90, data: toDateOnly("2026-10-09") },  // hoje
+            { valor: 50, data: toDateOnly("2026-10-10") },  // amanhã
+        ];
+
+        const forecast = projectMonthlyOutflow({ saidas, today, month: 10, year: 2026 });
+
+        expect(forecast).toBeCloseTo((90 / 9) * 31 + 50, 2);
+    });
+
+    test("às 22h do último dia do mês (já 1º em UTC) ainda é o mês corrente", () => {
+        const lateOnOct31 = new Date("2026-11-01T01:00:00Z");
+        const saidas = [{ valor: 310, data: toDateOnly("2026-10-15") }];
+
+        expect(projectMonthlyOutflow({ saidas, today: lateOnOct31, month: 10, year: 2026 })).toBeCloseTo(310, 2);
     });
 
     test("mês passado: projeção é o total gasto, sem extrapolar", () => {

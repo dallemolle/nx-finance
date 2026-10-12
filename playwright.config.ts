@@ -50,6 +50,9 @@ export default defineConfig({
             DATABASE_URL: process.env.E2E_DATABASE_URL,
             NEXTAUTH_URL: E2E_BASE_URL,
             NEXTAUTH_SECRET: process.env.NEXTAUTH_SECRET ?? "e2e-secret",
+            // Servidor em UTC, como em produção (Vercel); o navegador fica em
+            // Brasília (timezoneId acima) — a combinação real do BL-025.
+            TZ: "UTC",
         },
     },
 });

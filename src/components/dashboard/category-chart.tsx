@@ -6,8 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn, formatCurrency, maskCurrency } from "@/lib/utils";
 import { ScrollText, ArrowDownRight, Tag, Building2, Banknote } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { format } from "date-fns";
-import { ptBR } from "date-fns/locale";
+import { formatDateOnly } from "@/lib/date-only";
 import { getCategoryGroupName, mergeSimilarCategories, capToTopNPlusOthers } from "@/lib/dashboard-utils";
 import { useIsPrivacyMode } from "./privacy-provider";
 import { ProvisionedBadge } from "./provisioned-badge";
@@ -189,7 +188,7 @@ export function CategoryChart({ data, transactions = [] }: CategoryChartProps) {
                                         <div className="flex items-center gap-3 text-xs text-slate-500 mt-1">
                                             <span className="flex items-center gap-1">
                                                 <ScrollText className="w-3 h-3" />
-                                                {format(new Date(t.data_vencimento), "dd 'de' MMM", { locale: ptBR })}
+                                                {formatDateOnly(t.data_vencimento, "dd 'de' MMM")}
                                             </span>
                                             <span className="hidden sm:flex items-center gap-1">
                                                 <Building2 className="w-3 h-3" />

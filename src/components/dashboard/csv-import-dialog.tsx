@@ -15,6 +15,7 @@ import { InstitutionCombobox } from "@/components/dashboard/institution-combobox
 import { processBatchTransactions, getMappingSuggestions, type BatchTransactionInput } from "@/lib/csv-actions";
 import { getMerchantSignature } from "@/lib/dashboard-utils";
 import { cn, getErrorMessage } from "@/lib/utils";
+import { parseInvoiceDate } from "@/lib/invoice-import";
 import { createCategory, createPaymentMethod } from "@/lib/actions";
 import { Combobox } from "@/components/ui/combobox";
 import { toast } from "sonner";
@@ -114,12 +115,8 @@ export function CsvImportDialog({ userId, className }: { userId: string, classNa
                         const rawAmount = row.amount || row.valor || row.Value || row.Amount || "0";
                         const amount = parseFloat(String(rawAmount).replace(/[R$\s]/g, '').replace(',', '.'));
                         const rawDate = row.date || row.data || row.Date || row.Data || "";
-                        const parsed = new Date(rawDate);
-                        const date = !isNaN(parsed.getTime())
-                            ? parsed.toISOString().split('T')[0]
-                            : rawDate.includes('/')
-                                ? rawDate.split('/').reverse().join('-')
-                                : new Date().toISOString().split('T')[0];
+                        // Barra é dia/mês (extrato brasileiro); sem data válida, usa hoje (BL-025).
+                        const date = parseInvoiceDate(String(rawDate), new Date());
 
                         // Find category suggestion based on search_term
                         const signature = getMerchantSignature(title);

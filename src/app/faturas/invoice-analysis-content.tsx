@@ -7,8 +7,7 @@ import { Button } from "@/components/ui/button";
 import { StackedInvoiceBarChart } from "@/components/dashboard/stacked-invoice-bar-chart";
 import { ProvisionedBadge } from "@/components/dashboard/provisioned-badge";
 import { ChevronDown, ChevronRight, Loader2, ScrollText, Trash2 } from "lucide-react";
-import { format } from "date-fns";
-import { ptBR } from "date-fns/locale";
+import { formatDateOnly } from "@/lib/date-only";
 import { toast } from "sonner";
 import { formatCurrency, getErrorMessage } from "@/lib/utils";
 import { deleteProvisionedInvoiceItems, type getInvoiceTimelineDetail } from "@/lib/credit-card-provision-actions";
@@ -243,7 +242,7 @@ export function InvoiceAnalysisContent({ groups }: InvoiceAnalysisContentProps) 
                                                                                 {item.category.nome}
                                                                             </span>
                                                                         )}
-                                                                        <span className="shrink-0">{format(new Date(item.data_compra), "dd 'de' MMM", { locale: ptBR })}</span>
+                                                                        <span className="shrink-0">{formatDateOnly(item.data_compra, "dd 'de' MMM")}</span>
                                                                     </div>
                                                                 </div>
                                                             </div>

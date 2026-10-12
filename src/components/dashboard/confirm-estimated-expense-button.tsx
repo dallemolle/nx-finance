@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label";
 import { DatePicker } from "@/components/ui/date-picker";
 import { confirmEstimatedExpense } from "@/lib/credit-card-provision-actions";
 import { getErrorMessage } from "@/lib/utils";
+import { dateOnlyToLocal } from "@/lib/date-only";
 import { toast } from "sonner";
 import type { TransactionDisplay } from "@/types/models";
 
@@ -20,7 +21,7 @@ interface ConfirmEstimatedExpenseButtonProps {
 export function ConfirmEstimatedExpenseButton({ transaction }: ConfirmEstimatedExpenseButtonProps) {
     const [open, setOpen] = useState(false);
     const [valor, setValor] = useState(String(transaction.valor));
-    const [dataVencimento, setDataVencimento] = useState<Date | undefined>(new Date(transaction.data_vencimento));
+    const [dataVencimento, setDataVencimento] = useState<Date | undefined>(dateOnlyToLocal(transaction.data_vencimento));
     const [isPending, startTransition] = useTransition();
     const router = useRouter();
 
@@ -52,7 +53,7 @@ export function ConfirmEstimatedExpenseButton({ transaction }: ConfirmEstimatedE
                 variant="ghost"
                 size="icon"
                 className="h-7 w-7 md:h-8 md:w-8 text-amber-500 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/50"
-                onClick={() => { setValor(String(transaction.valor)); setDataVencimento(new Date(transaction.data_vencimento)); setOpen(true); }}
+                onClick={() => { setValor(String(transaction.valor)); setDataVencimento(dateOnlyToLocal(transaction.data_vencimento)); setOpen(true); }}
                 title="Efetivar como despesa real"
             >
                 <BadgeCheck className="h-4 w-4" />

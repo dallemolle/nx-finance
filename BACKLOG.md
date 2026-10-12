@@ -90,7 +90,7 @@ Ideias que vieram do branch abandonado `feature/2026-07-18_prev-desc-new_table` 
 | BL-015 | Um só `getSessionUserId` (4 cópias de `getUserId` e a sessão lida à mão em `searchTransactions`); `two-factor-actions` mantém o próprio por precisar do e-mail | 2026-10-12 · `a2f4e02` |
 | BL-016 | Lint de 9 avisos para 0, e `npm run lint` passa a falhar com qualquer aviso (`--max-warnings 0`) | 2026-10-12 · `a2f4e02` |
 | BL-033 | CI com runner fixo em `ubuntu-24.04` (o `ubuntu-latest` vira Ubuntu 26 em 19/10/2026 e o CI depende do Postgres da imagem) | 2026-10-12 · `21d38b2` |
-| BL-034 | Node 24 em `.nvmrc`, lido pelo CI (`node-version-file`) e citado no README. **Conferir na Vercel** (Settings → Build and Deployment → Node.js Version) se a produção também está no 24.x | 2026-10-12 · `21d38b2` |
+| BL-034 | Node 24 em `.nvmrc`, lido pelo CI (`node-version-file`) e citado no README. A Vercel (produção) também está no 24.x, conferido em 2026-10-12: desenvolvimento, CI e produção na mesma versão | 2026-10-12 · `21d38b2` |
 | BL-035 | `actions/checkout`, `setup-node` e `upload-artifact` na v7 (Node 24; a v4 rodava no Node 20, descontinuado) | 2026-10-12 · `21d38b2` |
 | BL-019 | 👤 Ruleset "Proteger staging e main" ativo: exige PR e os checks "Lint, tipos e testes" e "Testes de ponta a ponta", os dois aceitos só do GitHub Actions; bloqueia push forçado e exclusão | 2026-10-10 |
 | BL-007 | Variação "vs mês anterior": cor pelo sentido do que se mede (saída subindo é vermelho), formato pt-BR ("+12,3%") e saldo saindo do negativo como melhora (dividia pelo valor com sinal: -100 → +50 aparecia -150%) | 2026-10-12 · `d4ed11b` |

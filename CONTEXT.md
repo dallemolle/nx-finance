@@ -181,7 +181,7 @@ postinstall → prisma generate
 
 ### `src/lib/services/` — Regras de negócio com `userId` explícito
 
-Arquivos `"use server"` expõem toda função exportada como endpoint chamável pelo navegador, então nada que receba `userId` (ou um `tx` do Prisma) por parâmetro deve ser exportado deles. A regra mora aqui, sem `"use server"`; o Server Action correspondente resolve o `userId` pela sessão (`getUserId()`) e delega, cuidando só de `revalidatePath` e da mensagem de erro.
+Arquivos `"use server"` expõem toda função exportada como endpoint chamável pelo navegador, então nada que receba `userId` (ou um `tx` do Prisma) por parâmetro deve ser exportado deles. A regra mora aqui, sem `"use server"`; o Server Action correspondente resolve o `userId` pela sessão (`getSessionUserId()`, de `src/lib/session.ts` — a única implementação, BL-015) e delega, cuidando só de `revalidatePath` e da mensagem de erro.
 
 | Arquivo | Funções | Usado por |
 |---|---|---|
@@ -213,9 +213,8 @@ Todos os schemas em `src/lib/validations.ts` aplicam transformações **antes** 
 - `data_pagamento` é opcional (`DateTime?`) — preenchida com `new Date()` por `payTransaction()` em `actions.ts` ao liquidar.
 - Status padrão é `PENDENTE`.
 - Ao criar uma transação parcelada (`isInstallment === true`):
-  - O valor total é dividido usando `decimal.js` com `ROUND_DOWN` e precisão de 2 casas decimais.
-  - A última parcela absorve o centavo residual: `lastInstallmentValue = totalValue.minus(installmentValue.times(installmentsCount - 1))`.
-  - Cada parcela recebe data de vencimento incremental: `addMonths(dataVencimento, index)`.
+  - O valor total é dividido por `splitInstallments()` (`credit-card-cycle.ts`): `decimal.js` com `ROUND_DOWN` em 2 casas, e a última parcela absorve o centavo residual. É a **única** implementação da divisão — usada também pela compra parcelada no cartão, pela despesa prevista e pelas prévias dos formulários (BL-013); não recriar a conta em outro lugar.
+  - Cada parcela recebe data de vencimento incremental: `addMonthsDateOnly(dataVencimento, index)` (dia inexistente cai no último dia do mês).
   - Nomes das parcelas seguem o padrão `"Descrição (01/12)"` editável pelo usuário via `installmentDescriptions`.
   - **O parcelamento só está disponível para `tipo === "SAIDA"`** e apenas na criação (não edição — `updateTransaction` descarta `isInstallment`/`installmentsCount`).
 - Status `ATRASADO` é **calculado dinamicamente** no servidor: se `status !== "PAGO" && dataVencimento < now()`, o status exibido é "ATRASADO" (não é persistido, apenas calculado na query em `dashboard.ts` e `reports.ts`).
@@ -268,7 +267,7 @@ O clique num item (fatia do donut ou linha da legenda) abre um diálogo com as t
 
 Todas as mutações seguem o mesmo padrão:
 
-1. Verificar sessão via `getServerSession(authOptions)` (ou `getUserId()` helper local a cada arquivo).
+1. Obter o usuário com `getSessionUserId()` (`src/lib/session.ts`); nunca receber `userId` por parâmetro (ver `server-actions-guard.test.ts`).
 2. Validar entrada com schema Zod (`.parse()`).
 3. Executar operação no Prisma.
 4. Chamar `revalidatePath("/dashboard")` e `revalidatePath("/reports")`.

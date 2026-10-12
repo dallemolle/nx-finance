@@ -3,8 +3,6 @@
 import { db } from "@/lib/db";
 import { getSessionUserId } from "@/lib/session";
 import { revalidatePath } from "next/cache";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
 import type { CreditCardInvoiceInput } from "@/lib/validations";
 import { getErrorMessage, getPrismaErrorMessage } from "@/lib/utils";
 import { monthRange } from "@/lib/date-only";
@@ -16,16 +14,10 @@ import {
     type PossibleDuplicateInstallmentMatch,
 } from "@/lib/services/credit-card-import";
 
-async function getUserId() {
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id) throw new Error("Não autorizado");
-    return session.user.id;
-}
-
 // Regra em services/credit-card-import.ts (importCreditCardInvoiceForUser).
 export async function importCreditCardInvoice(data: CreditCardInvoiceInput) {
     try {
-        const userId = await getUserId();
+        const userId = await getSessionUserId();
         const result = await importCreditCardInvoiceForUser(userId, data);
 
         revalidatePath("/dashboard");
@@ -51,7 +43,7 @@ export async function importCreditCardInvoice(data: CreditCardInvoiceInput) {
 // errada. Regra em services/credit-card-import.ts (deleteImportedInvoiceForUser).
 export async function deleteImportedInvoice(transactionId: string) {
     try {
-        const userId = await getUserId();
+        const userId = await getSessionUserId();
         const result = await deleteImportedInvoiceForUser(userId, transactionId);
 
         revalidatePath("/");
@@ -69,13 +61,13 @@ export async function findPossibleDuplicateInstallments(
     creditCardId: string,
     items: PossibleDuplicateInstallmentCheck[]
 ): Promise<PossibleDuplicateInstallmentMatch[]> {
-    const userId = await getUserId();
+    const userId = await getSessionUserId();
     return findPossibleDuplicateInstallmentsForUser(userId, creditCardId, items);
 }
 
 export async function getInvoiceItems(transactionId: string) {
     try {
-        const userId = await getUserId();
+        const userId = await getSessionUserId();
 
         const items = await db.creditCardInvoiceItem.findMany({
             where: {

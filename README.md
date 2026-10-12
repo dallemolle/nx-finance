@@ -154,7 +154,7 @@ Documentação técnica completa (regras de negócio, convenções, gaps conheci
 
 ### Pré-requisitos
 
-- Node.js ≥ 18
+- Node.js 24 (versão em `.nvmrc`, a mesma usada no CI — `nvm use` ou `fnm use` lê o arquivo)
 - PostgreSQL (local ou via Docker)
 - npm
 
@@ -219,7 +219,7 @@ Sobe o PostgreSQL e a aplicação em containers; o `docker-entrypoint.sh` já ex
 | `npm run dev` | Inicia o servidor de desenvolvimento |
 | `npm run build` | Executa `prisma generate` e gera o build de produção |
 | `npm run start` | Inicia o servidor de produção (requer build prévio) |
-| `npm run lint` | Executa o linter (ESLint config do Next.js) |
+| `npm run lint` | Executa o linter (ESLint config do Next.js); falha com qualquer aviso (`--max-warnings 0`) |
 | `npm test` | Roda os testes (unit + integração no banco `<nome>_test`) |
 | `npm run test:watch` | Testes em modo watch |
 | `npm run test:e2e` | Teste de ponta a ponta (Playwright) no banco `<nome>_e2e`; requer `npx playwright install chromium` na primeira vez |

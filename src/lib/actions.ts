@@ -1,6 +1,7 @@
 "use server";
 
 import { db } from "@/lib/db";
+import { getSessionUserId } from "@/lib/session";
 import { revalidatePath } from "next/cache";
 import {
     categorySchema,
@@ -12,46 +13,30 @@ import {
     type PaymentMethodInput,
     type FinancialInstitutionInput,
 } from "@/lib/validations";
-import { authOptions } from "@/lib/auth";
-import { getServerSession } from "next-auth";
 import { addMonthsDateOnly } from "./date-only";
 import { Decimal } from "decimal.js";
+import { splitInstallments } from "./credit-card-cycle";
 import { getPrismaErrorMessage } from "@/lib/utils";
-
-async function getUserId() {
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id) throw new Error("Não autorizado");
-    return session.user.id;
-}
 
 // Transaction Actions
 export async function createTransaction(data: TransactionInput) {
     try {
-        const userId = await getUserId();
+        const userId = await getSessionUserId();
         const validatedData = transactionSchema.parse(data);
         const { isInstallment, installmentsCount, installmentDescriptions, ...rest } = validatedData;
 
         if (isInstallment && installmentsCount && installmentsCount > 1) {
-            const totalValue = new Decimal(rest.valor);
-            const installmentValue = totalValue.dividedBy(installmentsCount).toDecimalPlaces(2, Decimal.ROUND_DOWN);
-            const lastInstallmentValue = totalValue.minus(installmentValue.times(installmentsCount - 1));
+            const installments = splitInstallments(new Decimal(rest.valor), installmentsCount);
 
             const transactions = await db.$transaction(
-                Array.from({ length: installmentsCount }).map((_, i) => {
-                    const dueDate = addMonthsDateOnly(rest.data_vencimento, i);
+                installments.map((installment, i) => {
                     const defaultDescription = `${rest.descricao} (${String(i + 1).padStart(2, '0')}/${String(installmentsCount).padStart(2, '0')})`;
-                    const description = (validatedData.installmentDescriptions && validatedData.installmentDescriptions[i])
-                        ? validatedData.installmentDescriptions[i]
-                        : defaultDescription;
-
-                    const currentInstallmentValue = i === installmentsCount - 1 ? lastInstallmentValue : installmentValue;
-
                     return db.transaction.create({
                         data: {
                             ...rest,
-                            descricao: description,
-                            valor: currentInstallmentValue.toNumber(),
-                            data_vencimento: dueDate,
+                            descricao: installmentDescriptions?.[i] || defaultDescription,
+                            valor: installment.value.toNumber(),
+                            data_vencimento: addMonthsDateOnly(rest.data_vencimento, i),
                             userId,
                         },
                     });
@@ -93,9 +78,10 @@ export async function createTransaction(data: TransactionInput) {
 
 export async function updateTransaction(id: string, data: TransactionInput) {
     try {
-        const userId = await getUserId();
+        const userId = await getSessionUserId();
         const validatedData = transactionSchema.parse(data);
-        const { isInstallment, installmentsCount, ...rest } = validatedData;
+        // Parcelamento só existe na criação; na edição esses campos do formulário não são gravados.
+        const { isInstallment, installmentsCount, installmentDescriptions, ...rest } = validatedData;
 
         const transaction = await db.transaction.update({
             where: { id, userId },
@@ -119,7 +105,7 @@ export async function updateTransaction(id: string, data: TransactionInput) {
 
 export async function payTransaction(id: string) {
     try {
-        const userId = await getUserId();
+        const userId = await getSessionUserId();
 
         // Previsão não se liquida: ou é efetivada (despesa prevista) ou é
         // substituída pela fatura importada (fatura prevista). Pagá-la deixava
@@ -149,7 +135,7 @@ export async function payTransaction(id: string) {
 
 export async function deleteTransaction(id: string) {
     try {
-        const userId = await getUserId();
+        const userId = await getSessionUserId();
         await db.transaction.delete({
             where: { id, userId },
         });
@@ -166,7 +152,7 @@ export async function deleteTransaction(id: string) {
 // Category Actions
 export async function createCategory(data: CategoryInput) {
     try {
-        const userId = await getUserId();
+        const userId = await getSessionUserId();
         const validatedData = categorySchema.parse(data);
 
         // Check if category already exists for this user and type (case-insensitive)
@@ -202,7 +188,7 @@ export async function createCategory(data: CategoryInput) {
 
 export async function updateCategory(id: string, data: Partial<CategoryInput>) {
     try {
-        const userId = await getUserId();
+        const userId = await getSessionUserId();
         const validatedData = categorySchema.partial().parse(data);
 
         const category = await db.category.update({
@@ -222,7 +208,7 @@ export async function updateCategory(id: string, data: Partial<CategoryInput>) {
 
 export async function deleteCategory(id: string) {
     try {
-        const userId = await getUserId();
+        const userId = await getSessionUserId();
 
         const transactionCount = await db.transaction.count({
             where: { userId, categoria_id: id },
@@ -249,7 +235,7 @@ export async function deleteCategory(id: string) {
 // Payment Method Actions
 export async function createPaymentMethod(data: PaymentMethodInput) {
     try {
-        const userId = await getUserId();
+        const userId = await getSessionUserId();
         const validatedData = paymentMethodSchema.parse(data);
 
         // Check if payment method already exists for this user
@@ -283,7 +269,7 @@ export async function createPaymentMethod(data: PaymentMethodInput) {
 
 export async function updatePaymentMethod(id: string, data: Partial<PaymentMethodInput>) {
     try {
-        const userId = await getUserId();
+        const userId = await getSessionUserId();
         const validatedData = paymentMethodSchema.partial().parse(data);
 
         const paymentMethod = await db.paymentMethod.update({
@@ -303,7 +289,7 @@ export async function updatePaymentMethod(id: string, data: Partial<PaymentMetho
 
 export async function deletePaymentMethod(id: string) {
     try {
-        const userId = await getUserId();
+        const userId = await getSessionUserId();
 
         const transactionCount = await db.transaction.count({
             where: { userId, tipo_pagamento_id: id },
@@ -330,7 +316,7 @@ export async function deletePaymentMethod(id: string) {
 // Financial Institution Actions
 export async function createFinancialInstitution(data: FinancialInstitutionInput) {
     try {
-        const userId = await getUserId();
+        const userId = await getSessionUserId();
         const validatedData = financialInstitutionSchema.parse(data);
 
         // Check if institution already exists for this user
@@ -364,7 +350,7 @@ export async function createFinancialInstitution(data: FinancialInstitutionInput
 
 export async function updateFinancialInstitution(id: string, data: Partial<FinancialInstitutionInput>) {
     try {
-        const userId = await getUserId();
+        const userId = await getSessionUserId();
         const validatedData = financialInstitutionSchema.partial().parse(data);
 
         const financialInstitution = await db.financialInstitution.update({
@@ -384,7 +370,7 @@ export async function updateFinancialInstitution(id: string, data: Partial<Finan
 
 export async function deleteFinancialInstitution(id: string) {
     try {
-        const userId = await getUserId();
+        const userId = await getSessionUserId();
 
         // Validation: verify if the institution has linked transactions
         const transactionCount = await db.transaction.count({

@@ -3,8 +3,6 @@
 import { db } from "@/lib/db";
 import { getSessionUserId } from "@/lib/session";
 import { revalidatePath } from "next/cache";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
 import { Decimal } from "decimal.js";
 import { format } from "date-fns";
 import { addMonthsDateOnly, currentMonthInAppZone, dateOnlyParts, dateOnlyUtc, monthRange } from "./date-only";
@@ -32,12 +30,6 @@ import {
     TIMELINE_MONTHS_DEFAULT,
 } from "@/lib/services/credit-card-provision";
 
-async function getUserId() {
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id) throw new Error("Não autorizado");
-    return session.user.id;
-}
-
 // --- CRUD CreditCard ---
 
 export async function getCreditCards() {
@@ -52,7 +44,7 @@ export async function getCreditCards() {
 
 export async function createCreditCard(data: CreditCardInput) {
     try {
-        const userId = await getUserId();
+        const userId = await getSessionUserId();
         const validatedData = creditCardSchema.parse(data);
         const card = await db.creditCard.create({ data: { ...validatedData, userId } });
         revalidatePath("/dashboard/settings");
@@ -65,7 +57,7 @@ export async function createCreditCard(data: CreditCardInput) {
 
 export async function updateCreditCard(id: string, data: Partial<CreditCardInput>) {
     try {
-        const userId = await getUserId();
+        const userId = await getSessionUserId();
         const validatedData = creditCardSchema.partial().parse(data);
         const card = await db.creditCard.update({
             where: { id, userId },
@@ -81,7 +73,7 @@ export async function updateCreditCard(id: string, data: Partial<CreditCardInput
 
 export async function deleteCreditCard(id: string) {
     try {
-        const userId = await getUserId();
+        const userId = await getSessionUserId();
         const linkedCount = await db.transaction.count({ where: { credit_card_id: id, userId } });
         if (linkedCount > 0) {
             throw new Error("Não é possível excluir um cartão com faturas ou compras vinculadas.");
@@ -100,7 +92,7 @@ export async function deleteCreditCard(id: string) {
 // Regra em services/credit-card-provision.ts (provisionCardInstallmentPurchaseForUser).
 export async function provisionCardInstallmentPurchase(data: CardInstallmentPurchaseInput) {
     try {
-        const userId = await getUserId();
+        const userId = await getSessionUserId();
         await provisionCardInstallmentPurchaseForUser(userId, data);
 
         revalidatePath("/dashboard");
@@ -114,7 +106,7 @@ export async function provisionCardInstallmentPurchase(data: CardInstallmentPurc
 
 export async function provisionEstimatedExpense(data: EstimatedExpenseInput) {
     try {
-        const userId = await getUserId();
+        const userId = await getSessionUserId();
         const validatedData = estimatedExpenseSchema.parse(data);
 
         await db.$transaction(async (tx) => {
@@ -194,20 +186,16 @@ export async function provisionEstimatedExpense(data: EstimatedExpenseInput) {
                 const startDate = dateOnlyUtc(validatedData.invoice_year, validatedData.invoice_month, 1);
 
                 if (isInstallment) {
-                    // Mesma lógica de parcelamento genérico já usada em createTransaction
-                    // (src/lib/actions.ts) — sem installment_group_id, já que Transaction
-                    // não tem essa coluna e o parcelamento genérico de hoje também não usa.
-                    const totalValue = new Decimal(validatedData.valor);
-                    const count = validatedData.installmentsCount!;
-                    const installmentValue = totalValue.dividedBy(count).toDecimalPlaces(2, Decimal.ROUND_DOWN);
-                    const lastInstallmentValue = totalValue.minus(installmentValue.times(count - 1));
+                    // Mesmo parcelamento de createTransaction (src/lib/actions.ts) — sem
+                    // installment_group_id, que só existe em CreditCardInvoiceItem.
+                    const installments = splitInstallments(new Decimal(validatedData.valor), validatedData.installmentsCount!);
+                    const count = installments.length;
 
-                    await Promise.all(Array.from({ length: count }, (_, i) => {
-                        const value = i === count - 1 ? lastInstallmentValue : installmentValue;
+                    await Promise.all(installments.map((installment, i) => {
                         return tx.transaction.create({
                             data: {
                                 descricao: `${validatedData.descricao} (${String(i + 1).padStart(2, "0")}/${String(count).padStart(2, "0")})`,
-                                valor: value.toNumber(),
+                                valor: installment.value.toNumber(),
                                 data_vencimento: addMonthsDateOnly(startDate, i),
                                 status: "PENDENTE",
                                 tipo: "SAIDA",
@@ -252,7 +240,7 @@ export async function provisionEstimatedExpense(data: EstimatedExpenseInput) {
 // (deleteProvisionedInvoiceItemsForUser).
 export async function deleteProvisionedInvoiceItems(itemIds: string[]) {
     try {
-        const userId = await getUserId();
+        const userId = await getSessionUserId();
         const result = await deleteProvisionedInvoiceItemsForUser(userId, itemIds);
 
         revalidatePath("/");
@@ -274,7 +262,7 @@ export async function deleteProvisionedInvoiceItem(itemId: string) {
 // Regra em services/credit-card-provision.ts (confirmEstimatedExpenseForUser).
 export async function confirmEstimatedExpense(id: string, data: ConfirmEstimatedExpenseInput) {
     try {
-        const userId = await getUserId();
+        const userId = await getSessionUserId();
         const updated = await confirmEstimatedExpenseForUser(userId, id, data);
 
         revalidatePath("/dashboard");

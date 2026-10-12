@@ -21,7 +21,7 @@ import { toast } from "sonner";
 import { Decimal } from "decimal.js";
 import { addMonths } from "date-fns";
 import { cn, formatCurrency, getErrorMessage } from "@/lib/utils";
-import { addInvoiceMonths } from "@/lib/credit-card-cycle";
+import { addInvoiceMonths, splitInstallments } from "@/lib/credit-card-cycle";
 import type { Category, PaymentMethod, FinancialInstitution, CreditCardDisplay } from "@/types/models";
 
 const MONTHS = [
@@ -250,12 +250,10 @@ export function EstimatedExpenseDialog({ userId, className }: { userId: string; 
                                             </thead>
                                             <tbody>
                                                 {(() => {
-                                                    const totalValue = new Decimal(valorAtual);
-                                                    const installmentValue = totalValue.dividedBy(installmentsCount).toDecimalPlaces(2, Decimal.ROUND_DOWN);
-                                                    const lastInstallmentValue = totalValue.minus(installmentValue.times(installmentsCount - 1));
+                                                    const installments = splitInstallments(new Decimal(valorAtual), installmentsCount);
 
                                                     return Array.from({ length: installmentsCount }).map((_, i) => {
-                                                        const currentVal = i === installmentsCount - 1 ? lastInstallmentValue : installmentValue;
+                                                        const currentVal = installments[i].value;
                                                         const { month, year } = useCard
                                                             ? addInvoiceMonths(invoiceMonth, invoiceYear, i)
                                                             : (() => {

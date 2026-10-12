@@ -1,8 +1,7 @@
 import { NextAuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
-import { db } from "@/lib/db";
-import bcrypt from "bcryptjs";
-import { verifySecondFactor } from "@/lib/services/two-factor";
+import { authenticateCredentials } from "@/lib/services/authenticate";
+import { clientIpFromHeaders } from "@/lib/client-ip";
 
 export const authOptions: NextAuthOptions = {
     providers: [
@@ -13,31 +12,9 @@ export const authOptions: NextAuthOptions = {
                 password: { label: "Senha", type: "password" },
                 code: { label: "Código 2FA ou de recuperação", type: "text" },
             },
-            async authorize(credentials) {
-                if (!credentials?.email || !credentials?.password) return null;
-
-                const user = await db.user.findUnique({
-                    where: { email: credentials.email },
-                });
-
-                if (!user || !(await bcrypt.compare(credentials.password, user.password))) {
-                    throw new Error("Credenciais inválidas");
-                }
-
-                if (user.status_2fa) {
-                    if (!credentials.code) {
-                        throw new Error("2FA_REQUIRED");
-                    }
-                    // Código do app ou de recuperação (uso único) — BL-021.
-                    if (!(await verifySecondFactor(user, credentials.code))) {
-                        throw new Error("Código de verificação inválido");
-                    }
-                }
-
-                return {
-                    id: user.id,
-                    email: user.email,
-                };
+            // Senha, 2FA e limite de tentativas em services/authenticate.ts (BL-036).
+            async authorize(credentials, req) {
+                return authenticateCredentials(credentials ?? {}, clientIpFromHeaders(req?.headers));
             },
         }),
     ],

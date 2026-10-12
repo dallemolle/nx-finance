@@ -15,16 +15,18 @@ import {
 import { ptBR } from "date-fns/locale"
 
 interface DatePickerProps {
+    id?: string
     date?: Date
     setDate: (date?: Date) => void
     placeholder?: string
 }
 
-export function DatePicker({ date, setDate, placeholder = "Escolha uma data" }: DatePickerProps) {
+export function DatePicker({ id, date, setDate, placeholder = "Escolha uma data" }: DatePickerProps) {
     return (
         <Popover>
             <PopoverTrigger asChild>
                 <Button
+                    id={id}
                     variant={"outline"}
                     className={cn(
                         "w-full justify-start text-left font-normal bg-background/50 border-muted hover:border-primary/50 transition-colors h-11",

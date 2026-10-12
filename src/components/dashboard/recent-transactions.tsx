@@ -4,6 +4,7 @@ import { useState, type ReactNode } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { formatDateOnly } from "@/lib/date-only";
+import { titleCasePtBr } from "@/lib/dashboard-utils";
 import { EditTransactionDialog } from "./edit-transaction-dialog";
 import { QuickPayButton } from "./quick-pay-button";
 import { ConfirmEstimatedExpenseButton } from "./confirm-estimated-expense-button";
@@ -67,7 +68,7 @@ export function RecentTransactions({ transactions, userId }: RecentTransactionsP
                     <div className="flex items-center gap-3 min-w-0 flex-1">
                         <div className={`w-1 h-10 rounded-full ${tipo === 'ENTRADA' ? 'bg-emerald-500' : 'bg-rose-500'} opacity-20 group-hover:opacity-100 transition-opacity shrink-0`} />
                         <div className="flex flex-col min-w-0">
-                            <span className="font-semibold text-slate-700 dark:text-slate-200 text-sm leading-tight capitalize flex items-center gap-1.5">
+                            <span className="font-semibold text-slate-700 dark:text-slate-200 text-sm leading-tight flex items-center gap-1.5">
                                 {hasInvoiceItems && (
                                     <button
                                         onClick={() => toggleExpand(t.id)}
@@ -83,7 +84,7 @@ export function RecentTransactions({ transactions, userId }: RecentTransactionsP
                                 {t.is_invoice_header && (
                                     <CreditCard className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
                                 )}
-                                <span className="truncate">{t.descricao}</span>
+                                <span className="truncate">{titleCasePtBr(t.descricao)}</span>
                             </span>
                             {t.institution && (
                                 <div className="flex items-center gap-1 mt-0.5 ml-1">
@@ -122,7 +123,7 @@ export function RecentTransactions({ transactions, userId }: RecentTransactionsP
                                     itemsCount={t.invoiceItems?.length ?? 0}
                                 />
                             )}
-                            {t.status !== "PAGO" && <QuickPayButton transactionId={t.id} />}
+                            {t.status !== "PAGO" && !t.is_provisioned && <QuickPayButton transactionId={t.id} />}
                             <EditTransactionDialog transaction={t} userId={userId} />
                         </div>
                     </div>

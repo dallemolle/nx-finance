@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { TransactionForm } from "./transaction-form";
 import { getCategories, getPaymentMethods, getFinancialInstitutions } from "@/lib/reports";
@@ -37,13 +37,14 @@ export function EditTransactionDialog({ transaction, userId }: EditTransactionDi
     return (
         <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
-                <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-primary">
+                <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-primary" aria-label={`Editar ${transaction.descricao}`} title="Editar">
                     <Pencil className="h-4 w-4" />
                 </Button>
             </DialogTrigger>
             <DialogContent className="sm:max-w-[425px]">
                 <DialogHeader>
                     <DialogTitle>Editar Transação</DialogTitle>
+                    <DialogDescription>Altere os dados deste lançamento.</DialogDescription>
                 </DialogHeader>
                 <TransactionForm
                     initialData={transaction}

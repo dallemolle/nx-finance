@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { CardInstallmentPurchaseForm } from "./card-installment-purchase-form";
 import { getCategories } from "@/lib/reports";
@@ -40,6 +40,7 @@ export function CardInstallmentPurchaseDialog({ userId, className }: { userId: s
             <DialogContent className="sm:max-w-[550px]">
                 <DialogHeader>
                     <DialogTitle>Nova Compra Parcelada no Cartão</DialogTitle>
+                    <DialogDescription>Registre uma compra parcelada: cada parcela entra na fatura prevista do mês correspondente.</DialogDescription>
                 </DialogHeader>
                 <CardInstallmentPurchaseForm categories={categories} creditCards={creditCards} onSuccess={handleSuccess} />
             </DialogContent>

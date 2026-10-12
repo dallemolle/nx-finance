@@ -6,7 +6,7 @@ import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { currentMonthInAppZone, dateOnlyParts, daysInMonth, monthRange, todayDateOnly } from "./date-only";
 import { getCategoryGroupName } from "./dashboard-utils";
-import { incomeCommitmentPercent, projectMonthlyOutflow } from "./dashboard-metrics";
+import { incomeCommitmentPercent, percentChange, projectMonthlyOutflow } from "./dashboard-metrics";
 import type { Prisma, TransactionType } from "@prisma/client";
 
 interface TotalsEntry {
@@ -54,10 +54,6 @@ export async function getDashboardData(month: number, year: number) {
     const currentSummary = calculateTotals(transactions);
     const prevSummary = calculateTotals(prevTransactions);
 
-    const calculateDelta = (curr: number, prev: number) => {
-        if (prev === 0) return 0;
-        return ((curr - prev) / prev) * 100;
-    };
 
     const saldoTotal = currentSummary.totalEntradas - currentSummary.totalSaidas;
 
@@ -215,9 +211,9 @@ export async function getDashboardData(month: number, year: number) {
             saldoTotal,
             totalEntradas: currentSummary.totalEntradas,
             totalSaidas: currentSummary.totalSaidas,
-            deltaEntradas: calculateDelta(currentSummary.totalEntradas, prevSummary.totalEntradas),
-            deltaSaidas: calculateDelta(currentSummary.totalSaidas, prevSummary.totalSaidas),
-            deltaSaldo: calculateDelta(saldoTotal, prevSummary.totalEntradas - prevSummary.totalSaidas),
+            deltaEntradas: percentChange(currentSummary.totalEntradas, prevSummary.totalEntradas),
+            deltaSaidas: percentChange(currentSummary.totalSaidas, prevSummary.totalSaidas),
+            deltaSaldo: percentChange(saldoTotal, prevSummary.totalEntradas - prevSummary.totalSaidas),
         },
         categoryData,
         monthlyTransactions: [...monthlyTransactions, ...invoiceItemsAsTransactions, ...provisionedRows, ...provisionedItemsAsTransactions],

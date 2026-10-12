@@ -8,6 +8,7 @@ import { ProvisionedBadge } from "@/components/dashboard/provisioned-badge";
 import { ReportFilters } from "./report-filters";
 import { ChevronRight, ChevronDown, ChevronLeft, CreditCard } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { titleCasePtBr } from "@/lib/dashboard-utils";
 import type { TransactionDisplay, InvoiceItemDisplay, Category, PaymentMethod, FinancialInstitution } from "@/types/models";
 
 const PAGE_SIZE = 50;
@@ -158,7 +159,7 @@ export function ReportContent({ transactions, categories, institutions, paymentM
                             // Main row
                             rows.push(
                                 <TableRow key={t.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/50 transition-colors">
-                                    <TableCell className="font-medium capitalize">
+                                    <TableCell className="font-medium">
                                         <div className="flex items-center gap-2">
                                             {hasInvoiceItems && (
                                                 <button
@@ -175,7 +176,7 @@ export function ReportContent({ transactions, categories, institutions, paymentM
                                             {t.is_invoice_header && (
                                                 <CreditCard className="w-4 h-4 text-indigo-500 shrink-0" />
                                             )}
-                                            {t.descricao}
+                                            {titleCasePtBr(t.descricao)}
                                         </div>
                                     </TableCell>
                                     <TableCell>

@@ -7,7 +7,7 @@ import { cn, formatCurrency, maskCurrency } from "@/lib/utils";
 import { ScrollText, ArrowDownRight, Tag, Building2, Banknote } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { formatDateOnly } from "@/lib/date-only";
-import { getCategoryGroupName, mergeSimilarCategories, capToTopNPlusOthers } from "@/lib/dashboard-utils";
+import { getCategoryGroupName, mergeSimilarCategories, capToTopNPlusOthers, titleCasePtBr } from "@/lib/dashboard-utils";
 import { useIsPrivacyMode } from "./privacy-provider";
 import { ProvisionedBadge } from "./provisioned-badge";
 import type { TransactionDisplay } from "@/types/models";
@@ -109,10 +109,10 @@ export function CategoryChart({ data, transactions = [] }: CategoryChartProps) {
                                                 style={{ backgroundColor: item.fill, opacity: activeName === null || activeName === item.name ? 1 : 0.4 }}
                                             />
                                             <span title={item.name} className={cn(
-                                                "text-sm tracking-tight capitalize truncate",
+                                                "text-sm tracking-tight truncate",
                                                 activeName === item.name ? "font-bold text-slate-900 dark:text-slate-100" : "font-normal text-slate-700 dark:text-slate-300"
                                             )}>
-                                                {item.name}
+                                                {titleCasePtBr(item.name)}
                                             </span>
                                         </div>
                                         <div className="flex items-center gap-2 text-right shrink-0 pl-2">
@@ -240,7 +240,7 @@ export function CategoryChart({ data, transactions = [] }: CategoryChartProps) {
                                                         <div className="flex items-center justify-between px-1 mb-2">
                                                             <div className="flex items-center gap-2">
                                                                 <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: group.fill }} />
-                                                                <span className="text-sm font-bold text-slate-700 dark:text-slate-300 capitalize">{name}</span>
+                                                                <span className="text-sm font-bold text-slate-700 dark:text-slate-300">{titleCasePtBr(name)}</span>
                                                                 <span className="text-xs text-muted-foreground">({group.items.length})</span>
                                                             </div>
                                                             <span className="text-sm font-bold text-rose-600 dark:text-rose-400">{formatCurrency(group.total)}</span>

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { TransactionForm } from "./transaction-form";
 import { getCategories, getPaymentMethods, getFinancialInstitutions } from "@/lib/reports";
@@ -41,6 +41,7 @@ export function NewTransactionDialog({ userId, className }: { userId: string, cl
             <DialogContent className="sm:max-w-[650px]">
                 <DialogHeader>
                     <DialogTitle>Adicionar Transação</DialogTitle>
+                    <DialogDescription>Registre uma receita ou despesa. Despesas podem ser divididas em parcelas mensais.</DialogDescription>
                 </DialogHeader>
                 <TransactionForm
                     categories={categories}

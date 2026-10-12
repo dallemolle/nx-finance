@@ -113,6 +113,8 @@ export async function provisionEstimatedExpense(data: EstimatedExpenseInput) {
             const category = await getOrCreateInvoiceCategory(tx, userId);
 
             const isInstallment = validatedData.isInstallment && !!validatedData.installmentsCount && validatedData.installmentsCount > 1;
+            // Sem parcelar: o valor cheio em 1 mês, ou em N meses se recorrente (BL-030).
+            const repeatMonths = validatedData.isRecurring ? validatedData.recurringMonths! : 1;
 
             if (validatedData.credit_card_id) {
                 const card = await tx.creditCard.findFirst({ where: { id: validatedData.credit_card_id, userId } });
@@ -150,30 +152,27 @@ export async function provisionEstimatedExpense(data: EstimatedExpenseInput) {
                         await tx.transaction.update({ where: { id: header.id }, data: { valor: { increment: value.toNumber() } } });
                     }));
                 } else {
-                    const header = await findOrCreateProvisionedHeader(tx, {
-                        userId,
-                        card,
-                        invoiceMonth: validatedData.invoice_month,
-                        invoiceYear: validatedData.invoice_year,
-                        categoryId: category.id,
-                        paymentMethodId: paymentMethod.id,
-                    });
-
-                    await tx.creditCardInvoiceItem.create({
-                        data: {
-                            transactionId: header.id,
-                            descricao: validatedData.descricao,
-                            valor: validatedData.valor,
-                            data_compra: dateOnlyUtc(validatedData.invoice_year, validatedData.invoice_month, 1),
-                            categoria_id: validatedData.categoria_id,
-                            is_provisioned: true,
-                            installment_group_id: null,
-                        },
-                    });
-                    await tx.transaction.update({
-                        where: { id: header.id },
-                        data: { valor: { increment: validatedData.valor } },
-                    });
+                    // Uma vez ou recorrente: um item de valor cheio na fatura prevista de
+                    // cada mês, sem numeração (não é parcela). Meses distintos -> seguro paralelizar.
+                    await Promise.all(Array.from({ length: repeatMonths }, async (_, i) => {
+                        const { month, year } = addInvoiceMonths(validatedData.invoice_month, validatedData.invoice_year, i);
+                        const header = await findOrCreateProvisionedHeader(tx, {
+                            userId, card, invoiceMonth: month, invoiceYear: year,
+                            categoryId: category.id, paymentMethodId: paymentMethod.id,
+                        });
+                        await tx.creditCardInvoiceItem.create({
+                            data: {
+                                transactionId: header.id,
+                                descricao: validatedData.descricao,
+                                valor: validatedData.valor,
+                                data_compra: dateOnlyUtc(year, month, 1),
+                                categoria_id: validatedData.categoria_id,
+                                is_provisioned: true,
+                                installment_group_id: null,
+                            },
+                        });
+                        await tx.transaction.update({ where: { id: header.id }, data: { valor: { increment: validatedData.valor } } });
+                    }));
                 }
             } else {
                 if (!validatedData.tipo_pagamento_id || !validatedData.institution_id) {
@@ -208,19 +207,20 @@ export async function provisionEstimatedExpense(data: EstimatedExpenseInput) {
                         });
                     }));
                 } else {
-                    await tx.transaction.create({
-                        data: {
+                    // Uma vez ou recorrente: o valor cheio no dia 1º de cada mês.
+                    await tx.transaction.createMany({
+                        data: Array.from({ length: repeatMonths }, (_, i) => ({
                             descricao: validatedData.descricao,
                             valor: validatedData.valor,
-                            data_vencimento: startDate,
-                            status: "PENDENTE",
-                            tipo: "SAIDA",
+                            data_vencimento: addMonthsDateOnly(startDate, i),
+                            status: "PENDENTE" as const,
+                            tipo: "SAIDA" as const,
                             is_provisioned: true,
                             userId,
                             categoria_id: validatedData.categoria_id,
-                            tipo_pagamento_id: validatedData.tipo_pagamento_id,
-                            institution_id: validatedData.institution_id,
-                        },
+                            tipo_pagamento_id: tipoPagamentoId,
+                            institution_id: institutionId,
+                        })),
                     });
                 }
             }

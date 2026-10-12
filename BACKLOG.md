@@ -22,21 +22,22 @@ Combinada em 2026-10-09. Cada etapa vai no seu próprio branch `feature/...`.
 5. **Segurança da conta:** BL-021, depois BL-022, no branch `feature/2026-10-12_seguranca_conta`. ✅ Concluída. Achado: BL-036 (limite de tentativas no login), feito em seguida no branch `feature/2026-10-12_limite_tentativas_login`. ✅
 6. **Depois, só com motivo concreto:** BL-017. (BL-018 ✅ feito em 2026-10-12, no branch `feature/2026-10-12_deploy_apos_ci`.)
 7. **Com o usuário:** BL-020 e BL-032 (em validação até novembro de 2026). (BL-019 ✅ concluído.)
-8. **Funcionalidades novas, sem pressa:** BL-030 e BL-031.
+8. **Funcionalidades novas, sem pressa:** BL-030 (✅ 2026-10-12) e BL-031.
 
 ## Pendentes
 
 ### Técnico
 
-- [ ] **BL-017: vulnerabilidades que exigem versão principal nova.** **Baixa.**
-  O `npm audit` aponta 13 vulnerabilidades, todas em ferramentas de desenvolvimento e build: Tailwind 3 (resolvida no 4), a CLI do Prisma (via `effect`, resolvida no 8) e o `eslint-config-next`. Cada uma é uma migração; tratar como projeto próprio.
-
+- [ ] **BL-017: vulnerabilidades que exigem versão principal nova.** **Baixa.** 🔁 **Revisar em 2027-01-12.**
+  Triagem de 2026-10-12: `npm audit --omit=dev` dá **0 vulnerabilidades** — tudo o que resta (12 no `npm audit` completo, 10 altas e 2 moderadas) está em ferramentas de desenvolvimento e build, que não vão pro app publicado nem recebem entrada de usuários.
+  - **CLI do Prisma** (`deepmerge-ts` < 8, via `@prisma/config`): só se resolve no Prisma 8, que ainda é `8.0.0-rc` (sem versão estável). O `effect` do mesmo grupo foi corrigido subindo o Prisma pra 6.19.3. Revisar quando o Prisma 8 sair estável.
+  - **Tailwind 3** (`braces`, `micromatch`, `chokidar`, `postcss-selector-parser`, `postcss-nested`): DoS só com padrões/seletores maliciosos no próprio código do projeto, durante o build. Resolve no Tailwind 4, que é uma migração (config em CSS, mudanças de classes); fazer como projeto próprio, com prints antes/depois das telas.
+  - **`eslint-config-next`** (`fast-glob` via `@next/eslint-plugin-next`): só no lint. A sugestão do `npm audit` é um rebaixamento pra 14.2, que não faz sentido; acompanhar as versões novas do `eslint-config-next`.
+  Nunca usar `npm audit fix --force` (instalaria versões principais sem revisão).
 ### Funcionalidades novas
 
 Ideias que vieram do branch abandonado `feature/2026-07-18_prev-desc-new_table` (último commit `7d64086`, apagado em 2026-10-10). O código dele não serve mais: é anterior ao schema atual e à refatoração em `src/lib/services/`. Se for implementar, fazer do zero, seguindo o padrão atual e com testes.
 
-- [ ] **BL-030: despesa prevista recorrente.** **Baixa.**
-  Hoje a despesa prevista só divide um valor em parcelas. Permitir repetir o mesmo valor por N meses (aluguel, escola, assinatura), criando um lançamento previsto por mês, que depois é confirmado como já acontece com `confirmEstimatedExpenseForUser`.
 - [ ] **BL-031: conciliar previstas na importação do extrato.** **Baixa.**
   Ao importar o CSV do banco, sugerir qual lançamento previsto cada linha quita (valor parecido, data próxima, descrição semelhante) e confirmar os pares em lote, em vez de confirmar cada prevista à mão.
 
@@ -101,3 +102,4 @@ Ideias que vieram do branch abandonado `feature/2026-07-18_prev-desc-new_table` 
 | BL-029 | Excluir uma fatura importada (e os itens dela) pela lixeira em "Lançamentos do Mês", para refazer uma importação errada; não afeta as previstas | 2026-10-09 · `7094a43` |
 | BL-036 | Limite de tentativas de login: 10 erros por e-mail ou 30 por IP em 15 minutos bloqueiam (senha errada, e-mail inexistente e código 2FA errado contam), contados no banco (tabela `LoginFailure`), checado antes de comparar a senha | 2026-10-12 · `de2ab90` |
 | BL-018 | Deploy só depois do CI e do `db push`: auto-deploy da Vercel desligado para `main`/`staging` (`vercel.json`) e job "Publica na Vercel" chamando o deploy hook do branch. 👤 Requer criar os hooks na Vercel e os secrets `VERCEL_DEPLOY_HOOK_MAIN`/`_STAGING` no GitHub (README → Deploy). Remoções no schema ainda pedem dois deploys | 2026-10-12 |
+| BL-030 | Despesa prevista recorrente: opção **Recorrente** no diálogo (Uma vez · Parcelada · Recorrente), valor cheio por 2 a 36 meses, no cartão ou genérica, com prévia e total do período; sem mudança no banco. Cancelamento da genérica fica mês a mês (decisão do usuário) | 2026-10-12 · `1408e66` |

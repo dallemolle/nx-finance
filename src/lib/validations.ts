@@ -127,12 +127,22 @@ export const estimatedExpenseSchema = z.object({
     institution_id: z.string().optional().nullable(),
     isInstallment: z.boolean().default(false),
     installmentsCount: z.coerce.number().int().min(2, "Mínimo de 2 parcelas").max(48, "Máximo de 48 parcelas").optional().nullable(),
+    // Recorrente (BL-030): o mesmo valor, cheio, repetido por N meses (assinatura,
+    // mensalidade). Parcelada divide o valor; as duas não se combinam.
+    isRecurring: z.boolean().default(false),
+    recurringMonths: z.coerce.number().int().min(2, "Mínimo de 2 meses").max(36, "Máximo de 36 meses").optional().nullable(),
 }).refine((data) => data.credit_card_id || (data.tipo_pagamento_id && data.institution_id), {
     message: "Informe um cartão ou um meio de pagamento + instituição",
     path: ["credit_card_id"],
 }).refine((data) => !data.isInstallment || !!data.installmentsCount, {
     message: "Quantidade de parcelas é obrigatória para despesas previstas parceladas",
     path: ["installmentsCount"],
+}).refine((data) => !data.isRecurring || !!data.recurringMonths, {
+    message: "Informe por quantos meses a despesa se repete",
+    path: ["recurringMonths"],
+}).refine((data) => !(data.isRecurring && data.isInstallment), {
+    message: "Escolha parcelada ou recorrente, não as duas",
+    path: ["isRecurring"],
 });
 
 export const confirmEstimatedExpenseSchema = z.object({

@@ -101,4 +101,4 @@ Ideias que vieram do branch abandonado `feature/2026-07-18_prev-desc-new_table` 
 | BL-027 | 🐞 Vencimento sugerido na importação fica no mês corrente, mesmo já vencido (antes pulava para o mês seguinte e a importação caía na fatura errada) | 2026-10-09 · `e168d6a` |
 | BL-028 | Excluir lançamentos previstos em lote em `/faturas` (por item, por mês ou todos do cartão) | 2026-10-09 · `faf4bad` |
 | BL-029 | Excluir uma fatura importada (e os itens dela) pela lixeira em "Lançamentos do Mês", para refazer uma importação errada; não afeta as previstas | 2026-10-09 · `7094a43` |
-| BL-036 | Limite de tentativas de login: 10 erros por e-mail ou 30 por IP em 15 minutos bloqueiam (senha errada, e-mail inexistente e código 2FA errado contam), contados no banco (tabela `LoginFailure`), checado antes de comparar a senha | 2026-10-12 |
+| BL-036 | Limite de tentativas de login: 10 erros por e-mail ou 30 por IP em 15 minutos bloqueiam (senha errada, e-mail inexistente e código 2FA errado contam), contados no banco (tabela `LoginFailure`), checado antes de comparar a senha | 2026-10-12 · `de2ab90` |

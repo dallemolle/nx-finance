@@ -5,6 +5,7 @@ import { Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { payTransaction } from "@/lib/actions";
+import { getErrorMessage } from "@/lib/utils";
 
 interface QuickPayButtonProps {
     transactionId: string;
@@ -19,7 +20,7 @@ export function QuickPayButton({ transactionId }: QuickPayButtonProps) {
                 await payTransaction(transactionId);
                 toast.success("Lançamento liquidado!");
             } catch (error) {
-                toast.error("Erro ao liquidar lançamento");
+                toast.error(getErrorMessage(error, "Erro ao liquidar lançamento"));
             }
         });
     };

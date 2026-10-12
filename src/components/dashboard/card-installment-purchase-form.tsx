@@ -15,7 +15,7 @@ import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { Decimal } from "decimal.js";
 import { cn, formatCurrency, getErrorMessage } from "@/lib/utils";
-import { getInvoiceReferenceMonth, addInvoiceMonths } from "@/lib/credit-card-cycle";
+import { getInvoiceReferenceMonth, addInvoiceMonths, splitInstallments } from "@/lib/credit-card-cycle";
 import type { Category, CreditCardDisplay } from "@/types/models";
 
 interface CardInstallmentPurchaseFormProps {
@@ -137,15 +137,13 @@ export function CardInstallmentPurchaseForm({ categories, creditCards, onSuccess
                             </thead>
                             <tbody>
                                 {(() => {
-                                    const totalValue = new Decimal(valor);
-                                    const installmentValue = totalValue.dividedBy(installmentsCount).toDecimalPlaces(2, Decimal.ROUND_DOWN);
-                                    const lastInstallmentValue = totalValue.minus(installmentValue.times(installmentsCount - 1));
+                                    const installments = splitInstallments(new Decimal(valor), installmentsCount);
                                     const reference = getInvoiceReferenceMonth(dataCompra, selectedCard.closingDay);
 
                                     return Array.from({ length: installmentsCount }).map((_, i) => {
                                         const { month, year } = addInvoiceMonths(reference.month, reference.year, i);
-                                        const currentVal = i === installmentsCount - 1 ? lastInstallmentValue : installmentValue;
-                                        const isAdjusted = i === installmentsCount - 1 && !lastInstallmentValue.equals(installmentValue);
+                                        const currentVal = installments[i].value;
+                                        const isAdjusted = i === installmentsCount - 1 && !currentVal.equals(installments[0].value);
 
                                         return (
                                             <tr key={i} className={cn("border-b last:border-0", isAdjusted && "bg-blue-50/50 dark:bg-blue-900/20")}>

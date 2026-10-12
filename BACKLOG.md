@@ -19,7 +19,7 @@ Combinada em 2026-10-09. Cada etapa vai no seu próprio branch `feature/...`.
 2. **Datas:** BL-025. Entrou antes da etapa de dashboard porque afeta o que todas as telas mostram. ✅ Concluída.
 3. **Dashboard e faturas:** BL-007, BL-009, BL-011, BL-008, BL-010 e o restante de BL-012, no branch `feature/2026-10-12_dashboard_e_faturas`. ✅ Concluída.
 4. **Código:** BL-033 primeiro (prazo: 19/10/2026), com BL-034 e BL-035, que mexem no mesmo CI; depois BL-013 junto com BL-014, BL-015 e BL-016, no branch `feature/2026-10-12_etapa_codigo`. ✅ Concluída. BL-014 continua como prática: cobrir com teste cada arquivo que for mexido.
-5. **Segurança da conta:** BL-021, depois BL-022.
+5. **Segurança da conta:** BL-021, depois BL-022, no branch `feature/2026-10-12_seguranca_conta`. ✅ Concluída. Achado: BL-036 (limite de tentativas no login).
 6. **Depois, só com motivo concreto:** BL-017 e BL-018.
 7. **Com o usuário:** BL-020 e BL-032 (em validação até novembro de 2026). (BL-019 ✅ concluído.)
 8. **Funcionalidades novas, sem pressa:** BL-030 e BL-031.
@@ -33,12 +33,10 @@ Combinada em 2026-10-09. Cada etapa vai no seu próprio branch `feature/...`.
 - [ ] **BL-018: deploy da Vercel sem sincronia com o banco.** **Baixa.**
   A Vercel publica o código sem esperar o CI, então o código novo pode entrar no ar antes do `db push`. Enquanto isso não muda, mudanças que removem algo do schema devem ir em dois deploys. Se o schema passar a mudar com frequência, avaliar a migração para `prisma migrate` (histórico e `migrate deploy`).
 
-### Segurança da conta (vindo do AUDIT.md)
+### Segurança da conta
 
-- [ ] **BL-021: códigos de recuperação do 2FA.** **Média.**
-  Hoje, quem perde o celular com o app autenticador perde o acesso à conta. Gerar códigos de uso único na ativação do 2FA, guardados com hash, e aceitá-los no lugar do código TOTP.
-- [ ] **BL-022: pedir a senha para desativar o 2FA.** **Baixa.**
-  Hoje basta o código TOTP atual. Exigir também a senha, como confirmação extra. Arquivo: `src/lib/two-factor-actions.ts`.
+- [ ] **BL-036: limitar tentativas de login.** **Alta.**
+  O login (`authorize()` em `src/lib/auth.ts`) não tem limite de tentativas: dá pra testar senhas sem parar e, sabendo a senha, os 1.000.000 de códigos de 6 dígitos do 2FA (com a tolerância de ±30 s, 3 deles valem a cada momento). Limitar por e-mail e por IP (ex.: 10 tentativas a cada 15 minutos, com bloqueio progressivo). Na Vercel cada requisição pode cair numa instância diferente, então o contador em memória não serve: guardar no banco (tabela de tentativas) ou num Redis. Os códigos de recuperação não precisam disso (50 bits aleatórios).
 
 ### Funcionalidades novas
 
@@ -99,6 +97,8 @@ Ideias que vieram do branch abandonado `feature/2026-07-18_prev-desc-new_table` 
 | BL-010 | Não reproduz: com a página compilada, 1ª barra em ~0,3 s e animação completa em ~0,7 s; os 2–3 s eram a compilação do `next dev` na primeira visita | 2026-10-12 · `e0a2983` |
 | BL-011 | "Imposto De Renda Da" vinha do CSS `capitalize`; `titleCasePtBr()` mantém preposições/artigos em minúscula e siglas como estão (só exibição) | 2026-10-12 · `d4ed11b` |
 | BL-012 | Acessibilidade dos diálogos: descrição em todos, rótulos ligados aos campos, nomes nas linhas da revisão do CSV e no botão de editar; teste e2e de regressão | 2026-10-09 · `2343bdd` (importação de fatura) · 2026-10-12 · `09b28ac` (demais) |
+| BL-021 | Códigos de recuperação do 2FA: 10 códigos de uso único (só o hash no banco, tabela `TwoFactorRecoveryCode`), aceitos no login no lugar do código do app; mostrados uma vez, com copiar/baixar; contagem dos restantes e geração de novos | 2026-10-12 · `910384c` |
+| BL-022 | Desativar o 2FA exige senha + código (do app ou de recuperação). Ativar também passou a exigir a senha (sessão roubada não tranca o dono fora) | 2026-10-12 · `910384c` |
 | BL-023 | Teste de ponta a ponta da importação (`npm run test:e2e`, Playwright, banco `<nome>_e2e`): CSV, cartão, revisão, parcela, categorias, importação e `/faturas`; roda no CI antes do `db push` | 2026-10-09 · `04ca85c` |
 | BL-024 | Leitura do CSV: `02/10/2026` era lido como 10 de fevereiro e `R$ 1.234,56` como 1,234; datas com barra agora são dia/mês e o separador de milhar é tratado | 2026-10-09 · `2343bdd` |
 | BL-025 | 🐞 Datas sem hora no dia certo no fuso de Brasília: convenção "meia-noite UTC do dia" em `src/lib/date-only.ts`, aplicada nos schemas, telas (antes um dia antes), intervalos de mês do servidor (lançamento do dia 1º caía no mês anterior no dev) e notificações (conta que vence hoje aparecia atrasada). Dados existentes já seguem a convenção, sem correção no banco. Testes rodam em Brasília; e2e com servidor em UTC | 2026-10-12 · `94a3b80` |

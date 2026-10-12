@@ -6,7 +6,8 @@ import { revalidatePath } from "next/cache";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { Decimal } from "decimal.js";
-import { format, startOfMonth, endOfMonth, addMonths } from "date-fns";
+import { format } from "date-fns";
+import { addMonthsDateOnly, currentMonthInAppZone, dateOnlyParts, dateOnlyUtc, monthRange } from "./date-only";
 import { ptBR } from "date-fns/locale";
 import {
     creditCardSchema,
@@ -146,7 +147,7 @@ export async function provisionEstimatedExpense(data: EstimatedExpenseInput) {
                                 transactionId: header.id,
                                 descricao: `${validatedData.descricao} (${String(i + 1).padStart(2, "0")}/${String(installments.length).padStart(2, "0")})`,
                                 valor: value.toNumber(),
-                                data_compra: new Date(validatedData.invoice_year, validatedData.invoice_month - 1, 1),
+                                data_compra: dateOnlyUtc(validatedData.invoice_year, validatedData.invoice_month, 1),
                                 categoria_id: validatedData.categoria_id,
                                 is_provisioned: true,
                                 installment_group_id: groupId,
@@ -171,7 +172,7 @@ export async function provisionEstimatedExpense(data: EstimatedExpenseInput) {
                             transactionId: header.id,
                             descricao: validatedData.descricao,
                             valor: validatedData.valor,
-                            data_compra: new Date(validatedData.invoice_year, validatedData.invoice_month - 1, 1),
+                            data_compra: dateOnlyUtc(validatedData.invoice_year, validatedData.invoice_month, 1),
                             categoria_id: validatedData.categoria_id,
                             is_provisioned: true,
                             installment_group_id: null,
@@ -190,7 +191,7 @@ export async function provisionEstimatedExpense(data: EstimatedExpenseInput) {
                 // (TS não propaga o narrowing de `validatedData.campo` pra dentro de funções aninhadas).
                 const tipoPagamentoId = validatedData.tipo_pagamento_id;
                 const institutionId = validatedData.institution_id;
-                const startDate = new Date(validatedData.invoice_year, validatedData.invoice_month - 1, 1);
+                const startDate = dateOnlyUtc(validatedData.invoice_year, validatedData.invoice_month, 1);
 
                 if (isInstallment) {
                     // Mesma lógica de parcelamento genérico já usada em createTransaction
@@ -207,7 +208,7 @@ export async function provisionEstimatedExpense(data: EstimatedExpenseInput) {
                             data: {
                                 descricao: `${validatedData.descricao} (${String(i + 1).padStart(2, "0")}/${String(count).padStart(2, "0")})`,
                                 valor: value.toNumber(),
-                                data_vencimento: addMonths(startDate, i),
+                                data_vencimento: addMonthsDateOnly(startDate, i),
                                 status: "PENDENTE",
                                 tipo: "SAIDA",
                                 is_provisioned: true,
@@ -289,16 +290,16 @@ export async function confirmEstimatedExpense(id: string, data: ConfirmEstimated
 
 export async function getInvoiceTimeline(monthsAhead: number = TIMELINE_MONTHS_DEFAULT) {
     const userId = await getSessionUserId();
-    const now = new Date();
-    const rangeStart = startOfMonth(now);
-    const rangeEnd = endOfMonth(addMonths(now, monthsAhead - 1));
+    const current = currentMonthInAppZone();
+    const months = Array.from({ length: monthsAhead }, (_, i) => addInvoiceMonths(current.month, current.year, i));
+    const last = months[months.length - 1];
 
     const [headers, cards] = await Promise.all([
         db.transaction.findMany({
             where: {
                 userId,
                 is_invoice_header: true,
-                data_vencimento: { gte: rangeStart, lte: rangeEnd },
+                data_vencimento: { gte: monthRange(current.year, current.month).gte, lt: monthRange(last.year, last.month).lt },
                 credit_card_id: { not: null },
             },
             include: { invoiceItems: true },
@@ -308,11 +309,10 @@ export async function getInvoiceTimeline(monthsAhead: number = TIMELINE_MONTHS_D
 
     const cardById = new Map(cards.map(c => [c.id, c]));
 
-    const buckets = Array.from({ length: monthsAhead }, (_, i) => {
-        const bucketDate = addMonths(now, i);
+    const buckets = months.map(({ month, year }) => {
         return {
-            key: `${bucketDate.getFullYear()}-${bucketDate.getMonth() + 1}`,
-            label: format(bucketDate, "MMM/yy", { locale: ptBR }),
+            key: `${year}-${month}`,
+            label: format(new Date(year, month - 1, 1), "MMM/yy", { locale: ptBR }),
             confirmed: 0,
             provisioned: 0,
             byCard: new Map<string, { nome: string; confirmed: number; provisioned: number }>(),
@@ -326,7 +326,8 @@ export async function getInvoiceTimeline(monthsAhead: number = TIMELINE_MONTHS_D
         // por invoice_month/invoice_year — esse é só o ciclo de fechamento
         // (deslocado -1 mês quando dueDay<=closingDay), usado internamente pra
         // dedup/offset de parcelas, não pro mês que aparece pro usuário.
-        const key = `${header.data_vencimento.getFullYear()}-${header.data_vencimento.getMonth() + 1}`;
+        const due = dateOnlyParts(header.data_vencimento);
+        const key = `${due.year}-${due.month}`;
         const bucket = bucketByKey.get(key);
         if (!bucket) continue;
 

@@ -15,6 +15,11 @@ function testDatabaseUrl(): string {
 
 const alias = { "@": path.resolve(__dirname, "src") };
 
+// Os testes rodam no fuso do usuário (Brasília, UTC-3), não no fuso da máquina:
+// datas sem hora só aparecem um dia antes em fuso negativo, e o CI roda em UTC,
+// onde esse erro ficaria escondido (BL-025).
+process.env.TZ = "America/Sao_Paulo";
+
 export default defineConfig({
     resolve: { alias },
     test: {

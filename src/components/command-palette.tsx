@@ -13,6 +13,7 @@ import {
     CommandItem,
 } from "@/components/ui/command";
 import { searchTransactions } from "@/lib/reports";
+import { dateOnlyParts } from "@/lib/date-only";
 
 export const OPEN_COMMAND_PALETTE_EVENT = "open-command-palette";
 
@@ -106,12 +107,12 @@ export function CommandPalette() {
                 {visibleResults.length > 0 && (
                     <CommandGroup heading="Transações">
                         {visibleResults.map((t) => {
-                            const date = new Date(t.data_vencimento);
+                            const date = dateOnlyParts(t.data_vencimento);
                             return (
                                 <CommandItem
                                     key={t.id}
                                     value={`transacao-${t.id}`}
-                                    onSelect={() => navigate(`/reports?month=${date.getMonth() + 1}&year=${date.getFullYear()}`)}
+                                    onSelect={() => navigate(`/reports?month=${date.month}&year=${date.year}`)}
                                 >
                                     {t.tipo === "ENTRADA" ? (
                                         <ArrowUpCircle className="mr-2 h-4 w-4 text-emerald-500 shrink-0" />

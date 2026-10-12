@@ -20,6 +20,7 @@ import { PrivacyProvider, PrivacyToggleButton } from "@/components/dashboard/pri
 import { InvoiceTimelineChart } from "@/components/dashboard/invoice-timeline-chart";
 import { MonthlyCommitmentCard } from "@/components/dashboard/monthly-commitment-card";
 import { getCreditCards, getInvoiceTimeline } from "@/lib/credit-card-provision-actions";
+import { currentMonthInAppZone } from "@/lib/date-only";
 
 interface DashboardPageProps {
     searchParams: Promise<{ month?: string; year?: string }>;
@@ -32,9 +33,9 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     }
 
     const { month: monthParam, year: yearParam } = await searchParams;
-    const now = new Date();
-    const month = monthParam ? parseInt(monthParam) : now.getMonth() + 1;
-    const year = yearParam ? parseInt(yearParam) : now.getFullYear();
+    const now = currentMonthInAppZone();
+    const month = monthParam ? parseInt(monthParam) : now.month;
+    const year = yearParam ? parseInt(yearParam) : now.year;
 
     const data = await getDashboardData(month, year);
     const trend = data.hasAnyTransactions ? await getMonthlyTrend(month, year) : [];

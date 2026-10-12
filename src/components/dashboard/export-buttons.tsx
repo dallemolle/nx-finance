@@ -14,6 +14,7 @@ import {
 import { toast } from "sonner";
 
 import { cn } from "@/lib/utils";
+import { formatDateOnly } from "@/lib/date-only";
 import type { TransactionDisplay } from "@/types/models";
 
 interface ExportButtonsProps {
@@ -53,7 +54,7 @@ export function ExportButtons({ transactions, month, year, className }: ExportBu
             t.category?.nome ?? "",
             t.institution?.nome ?? "",
             t.paymentMethod?.nome ?? "",
-            t.displayDate ?? String(t.data_vencimento),
+            t.displayDate ?? formatDateOnly(t.data_vencimento, "dd/MM/yyyy"),
             t.tipo,
             t.is_provisioned ? "PREVISTO" : t.status,
             String(t.valor).replace(".", ","),
@@ -92,7 +93,7 @@ export function ExportButtons({ transactions, month, year, className }: ExportBu
                     <td>${t.descricao}</td>
                     <td>${t.category?.nome ?? "-"}</td>
                     <td>${t.institution?.nome ?? "-"}</td>
-                    <td>${t.displayDate ?? ""}</td>
+                    <td>${t.displayDate ?? formatDateOnly(t.data_vencimento, "dd/MM/yyyy")}</td>
                     <td>${t.is_provisioned ? '<span style="color:#d97706;font-weight:bold;">Previsto</span>' : t.status}</td>
                     <td style="text-align:right; color:${t.tipo === "ENTRADA" ? "#059669" : "#e11d48"}">
                         ${t.tipo === "ENTRADA" ? "+" : "-"} ${formatCurrency(Math.abs(t.valor))}

@@ -1,5 +1,6 @@
 import { describe, expect, test } from "vitest";
 import { db } from "@/lib/db";
+import { dateOnlyUtc } from "@/lib/date-only";
 import {
     confirmEstimatedExpenseForUser,
     deleteProvisionedInvoiceItemsForUser,
@@ -84,7 +85,7 @@ describe("provisionCardInstallmentPurchaseForUser", () => {
             "Notebook (03/03)",
         ]);
         // vencimento no mês seguinte ao ciclo (dueDay 5 <= closingDay 25)
-        expect(headers[0].data_vencimento).toEqual(new Date(2026, 8, 5));
+        expect(headers[0].data_vencimento).toEqual(dateOnlyUtc(2026, 9, 5));
     });
 
     test("não provisiona em cartão de outro usuário", async () => {

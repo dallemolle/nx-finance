@@ -1,4 +1,6 @@
 import { expect, test } from "@playwright/test";
+import { format } from "date-fns";
+import { ptBR } from "date-fns/locale";
 import { brDate, E2E_USER, e2eDb, login } from "./fixtures";
 
 // Fluxo principal do app pela tela: importar a fatura do cartão a partir do
@@ -61,6 +63,10 @@ test("importa a fatura do cartão a partir do CSV, com parcela projetada nas pr�
     await importButton.click();
     await expect(dialog).toBeHidden();
 
+    // Vencimento dia 8 aparece como dia 8 no navegador em Brasília (BL-025;
+    // antes aparecia "07 de ...", porque a data é gravada à meia-noite UTC).
+    await expect(page.getByText(/^08 de \p{L}+$/u)).toBeVisible();
+
     // O que foi gravado
     const db = e2eDb();
     try {
@@ -76,9 +82,8 @@ test("importa a fatura do cartão a partir do CSV, com parcela projetada nas pr�
             ["UBER *TRIP 1111", "Transporte"],
             ["UBER *TRIP 2222", "Transporte"],
         ]);
-        // Data do CSV em dd/mm/aaaa gravada como o mesmo dia do calendário (BL-024).
-        // Convenção atual: data sem hora fica à meia-noite UTC — ver BL-025, que
-        // trata a exibição no fuso de Brasília mostrar o dia anterior.
+        // Data do CSV em dd/mm/aaaa gravada como o mesmo dia do calendário (BL-024),
+        // à meia-noite UTC (convenção de src/lib/date-only.ts, BL-025).
         const mercado = header.invoiceItems.find(i => i.descricao === "Mercado Dia")!;
         const [d, m, y] = brDate(3).split("/").map(Number);
         expect([mercado.data_compra.getUTCFullYear(), mercado.data_compra.getUTCMonth() + 1, mercado.data_compra.getUTCDate()]).toEqual([y, m, d]);
@@ -102,4 +107,9 @@ test("importa a fatura do cartão a partir do CSV, com parcela projetada nas pr�
     await page.getByRole("button", { name: "Expandir todos os meses" }).click();
     await expect(page.getByText("Loja Movel (02/03)")).toBeVisible();
     await expect(page.getByText("Loja Movel (03/03)")).toBeVisible();
+
+    // A compra aparece no mesmo dia do CSV, não no dia anterior (BL-025)
+    const [d, m, y] = brDate(3).split("/").map(Number);
+    const mercadoRow = page.locator("div.flex.flex-col.min-w-0").filter({ hasText: "Mercado Dia" });
+    await expect(mercadoRow).toContainText(format(new Date(y, m - 1, d), "dd 'de' MMM", { locale: ptBR }));
 });

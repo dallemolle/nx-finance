@@ -28,6 +28,7 @@ import {
     parseInvoiceDate,
 } from "@/lib/invoice-import";
 import { cn, getErrorMessage } from "@/lib/utils";
+import { formatDateOnly } from "@/lib/date-only";
 import { createCategory, createPaymentMethod } from "@/lib/actions";
 import { Combobox } from "@/components/ui/combobox";
 import { toast } from "sonner";
@@ -254,7 +255,7 @@ export function CreditCardInvoiceDialog({ userId, className }: { userId: string;
             if (matches.length === 0) return true;
             const match = matches[0];
             return confirm(
-                `A despesa "${row.title}" (parcela ${installmentNumber}/${installmentsCount}) pode já ter sido lançada antes (encontramos "${match.matchDescricao}" em ${new Date(match.matchDate).toLocaleDateString("pt-BR")}). Deseja mesmo assim gerar esta parcela e projetar as parcelas futuras?`
+                `A despesa "${row.title}" (parcela ${installmentNumber}/${installmentsCount}) pode já ter sido lançada antes (encontramos "${match.matchDescricao}" em ${formatDateOnly(match.matchDate, "dd/MM/yyyy")}). Deseja mesmo assim gerar esta parcela e projetar as parcelas futuras?`
             );
         } catch (e: unknown) {
             console.error("Error checking possible duplicate installments:", e);

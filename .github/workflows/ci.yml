@@ -115,3 +115,25 @@ jobs:
       - run: npx prisma db push --skip-generate
         env:
           DATABASE_URL: ${{ github.ref_name == 'main' && secrets.DATABASE_URL_PRODUCTION || secrets.DATABASE_URL_STAGING }}
+
+  # Publica só depois do banco atualizado (BL-018). O deploy automático da
+  # Vercel está desligado pra main e staging (vercel.json); aqui o CI chama o
+  # deploy hook do branch, que publica o último commit dele. Antes, a Vercel
+  # publicava junto com o push e o código novo podia rodar uns minutos contra
+  # o schema antigo (ex.: login consultando uma tabela que ainda não existia).
+  deploy:
+    name: Publica na Vercel (${{ github.ref_name }})
+    needs: [db-sync]
+    if: github.event_name == 'push'
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Dispara o deploy hook da Vercel
+        env:
+          DEPLOY_HOOK: ${{ github.ref_name == 'main' && secrets.VERCEL_DEPLOY_HOOK_MAIN || secrets.VERCEL_DEPLOY_HOOK_STAGING }}
+        run: |
+          if [ -z "$DEPLOY_HOOK" ]; then
+            echo "::error::Deploy hook não configurado: crie o secret VERCEL_DEPLOY_HOOK_MAIN ou VERCEL_DEPLOY_HOOK_STAGING (ver README)."
+            exit 1
+          fi
+          curl --fail --silent --show-error -X POST "$DEPLOY_HOOK"

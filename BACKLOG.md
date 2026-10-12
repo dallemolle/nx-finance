@@ -28,9 +28,12 @@ Combinada em 2026-10-09. Cada etapa vai no seu próprio branch `feature/...`.
 
 ### Técnico
 
-- [ ] **BL-017: vulnerabilidades que exigem versão principal nova.** **Baixa.**
-  O `npm audit` aponta 13 vulnerabilidades, todas em ferramentas de desenvolvimento e build: Tailwind 3 (resolvida no 4), a CLI do Prisma (via `effect`, resolvida no 8) e o `eslint-config-next`. Cada uma é uma migração; tratar como projeto próprio.
-
+- [ ] **BL-017: vulnerabilidades que exigem versão principal nova.** **Baixa.** 🔁 **Revisar em 2027-01-12.**
+  Triagem de 2026-10-12: `npm audit --omit=dev` dá **0 vulnerabilidades** — tudo o que resta (12 no `npm audit` completo, 10 altas e 2 moderadas) está em ferramentas de desenvolvimento e build, que não vão pro app publicado nem recebem entrada de usuários.
+  - **CLI do Prisma** (`deepmerge-ts` < 8, via `@prisma/config`): só se resolve no Prisma 8, que ainda é `8.0.0-rc` (sem versão estável). O `effect` do mesmo grupo foi corrigido subindo o Prisma pra 6.19.3. Revisar quando o Prisma 8 sair estável.
+  - **Tailwind 3** (`braces`, `micromatch`, `chokidar`, `postcss-selector-parser`, `postcss-nested`): DoS só com padrões/seletores maliciosos no próprio código do projeto, durante o build. Resolve no Tailwind 4, que é uma migração (config em CSS, mudanças de classes); fazer como projeto próprio, com prints antes/depois das telas.
+  - **`eslint-config-next`** (`fast-glob` via `@next/eslint-plugin-next`): só no lint. A sugestão do `npm audit` é um rebaixamento pra 14.2, que não faz sentido; acompanhar as versões novas do `eslint-config-next`.
+  Nunca usar `npm audit fix --force` (instalaria versões principais sem revisão).
 ### Funcionalidades novas
 
 Ideias que vieram do branch abandonado `feature/2026-07-18_prev-desc-new_table` (último commit `7d64086`, apagado em 2026-10-10). O código dele não serve mais: é anterior ao schema atual e à refatoração em `src/lib/services/`. Se for implementar, fazer do zero, seguindo o padrão atual e com testes.

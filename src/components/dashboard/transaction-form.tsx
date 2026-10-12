@@ -182,9 +182,9 @@ export function TransactionForm({ categories: initialCategories, paymentMethods:
 
             <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                    <Label>Tipo</Label>
+                    <Label htmlFor="tx-tipo">Tipo</Label>
                     <Select onValueChange={(v) => setValue("tipo", v as TransactionFormValues["tipo"])} value={tipo}>
-                        <SelectTrigger className="cursor-pointer">
+                        <SelectTrigger id="tx-tipo" className="cursor-pointer">
                             <SelectValue placeholder="Selecione o tipo" />
                         </SelectTrigger>
                         <SelectContent className="pointer-events-auto">
@@ -195,9 +195,9 @@ export function TransactionForm({ categories: initialCategories, paymentMethods:
                 </div>
 
                 <div className="space-y-2">
-                    <Label>Status</Label>
+                    <Label htmlFor="tx-status">Status</Label>
                     <Select onValueChange={(v) => setValue("status", v as TransactionFormValues["status"])} value={watch("status")}>
-                        <SelectTrigger className="cursor-pointer">
+                        <SelectTrigger id="tx-status" className="cursor-pointer">
                             <SelectValue placeholder="Selecione o status" />
                         </SelectTrigger>
                         <SelectContent className="pointer-events-auto">
@@ -223,8 +223,8 @@ export function TransactionForm({ categories: initialCategories, paymentMethods:
                 </div>
 
                 <div className="space-y-2">
-                    <Label>Data de Vencimento</Label>
-                    <DatePicker
+                    <Label htmlFor="tx-data-vencimento">Data de Vencimento</Label>
+                    <DatePicker id="tx-data-vencimento"
                         date={dataVencimento}
                         setDate={(d) => setValue("data_vencimento", d as Date)}
                     />
@@ -234,8 +234,8 @@ export function TransactionForm({ categories: initialCategories, paymentMethods:
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="space-y-2">
-                    <Label>Instituição Financeira</Label>
-                    <InstitutionCombobox
+                    <Label htmlFor="tx-instituicao">Instituição Financeira</Label>
+                    <InstitutionCombobox id="tx-instituicao"
                         options={institutions}
                         value={institutionId}
                         onValueChange={(v) => setValue("institution_id", v)}
@@ -248,8 +248,8 @@ export function TransactionForm({ categories: initialCategories, paymentMethods:
                 </div>
 
                 <div className="space-y-2">
-                    <Label>Categoria</Label>
-                    <Combobox
+                    <Label htmlFor="tx-categoria">Categoria</Label>
+                    <Combobox id="tx-categoria"
                         options={categories
                             .filter(c => c.tipo === tipo)
                             .map(c => ({ value: c.id, label: c.nome }))
@@ -265,8 +265,8 @@ export function TransactionForm({ categories: initialCategories, paymentMethods:
                 </div>
 
                 <div className="space-y-2">
-                    <Label>Meio de Pagamento</Label>
-                    <Combobox
+                    <Label htmlFor="tx-meio-pagamento">Meio de Pagamento</Label>
+                    <Combobox id="tx-meio-pagamento"
                         options={paymentMethods.map(p => ({ value: p.id, label: p.nome }))}
                         value={paymentMethodId}
                         onValueChange={(v) => setValue("tipo_pagamento_id", v)}
@@ -283,10 +283,10 @@ export function TransactionForm({ categories: initialCategories, paymentMethods:
                 <div className="space-y-4 rounded-lg border p-4 bg-muted/20">
                     <div className="flex items-center justify-between">
                         <div className="space-y-0.5">
-                            <Label>Despesa Parcelada?</Label>
+                            <Label htmlFor="tx-parcelada">Despesa Parcelada?</Label>
                             <p className="text-xs text-muted-foreground">O valor total será dividido entre as parcelas.</p>
                         </div>
-                        <Switch
+                        <Switch id="tx-parcelada"
                             checked={isInstallment}
                             onCheckedChange={(checked) => {
                                 setValue("isInstallment", checked);
@@ -338,6 +338,7 @@ export function TransactionForm({ categories: initialCategories, paymentMethods:
                                                             <td className="p-2 text-center text-muted-foreground">{String(i + 1).padStart(2, '0')}</td>
                                                             <td className="p-1">
                                                                 <Input 
+                                                                    aria-label={`Descrição da parcela ${i + 1}`}
                                                                     value={installmentNames[i] || ""}
                                                                     onChange={(e) => handleInstallmentNameChange(i, e.target.value)}
                                                                     className="h-7 text-xs bg-transparent border-dashed hover:border-solid focus:bg-background transition-colors"

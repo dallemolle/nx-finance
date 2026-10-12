@@ -7,7 +7,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { estimatedExpenseSchema, type EstimatedExpenseInput } from "@/lib/validations";
 import { provisionEstimatedExpense, getCreditCards } from "@/lib/credit-card-provision-actions";
 import { getCategories, getPaymentMethods, getFinancialInstitutions } from "@/lib/reports";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -105,6 +105,7 @@ export function EstimatedExpenseDialog({ userId, className }: { userId: string; 
             <DialogContent className="sm:max-w-[550px]">
                 <DialogHeader>
                     <DialogTitle>Nova Despesa Prevista</DialogTitle>
+                    <DialogDescription>Reserve um gasto que ainda vai acontecer, no cartão ou fora dele, para ele entrar no planejamento dos próximos meses.</DialogDescription>
                 </DialogHeader>
                 <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 py-2">
                     {error && (
@@ -126,8 +127,8 @@ export function EstimatedExpenseDialog({ userId, className }: { userId: string; 
                             {errors.valor && <p className="text-xs text-red-500">{errors.valor.message as string}</p>}
                         </div>
                         <div className="space-y-2">
-                            <Label>Categoria</Label>
-                            <Combobox
+                            <Label htmlFor="ee-categoria">Categoria</Label>
+                            <Combobox id="ee-categoria"
                                 options={categories.filter(c => c.tipo === "SAIDA").map(c => ({ value: c.id, label: c.nome }))}
                                 value={categoriaId}
                                 onValueChange={(v) => setValue("categoria_id", v)}
@@ -141,9 +142,9 @@ export function EstimatedExpenseDialog({ userId, className }: { userId: string; 
 
                     <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">
-                            <Label>Mês</Label>
+                            <Label htmlFor="ee-mes">Mês</Label>
                             <Select value={String(invoiceMonth)} onValueChange={(v) => setValue("invoice_month", Number(v))}>
-                                <SelectTrigger><SelectValue /></SelectTrigger>
+                                <SelectTrigger id="ee-mes"><SelectValue /></SelectTrigger>
                                 <SelectContent>
                                     {MONTHS.map((m, i) => (
                                         <SelectItem key={i + 1} value={String(i + 1)}>{m}</SelectItem>
@@ -152,9 +153,9 @@ export function EstimatedExpenseDialog({ userId, className }: { userId: string; 
                             </Select>
                         </div>
                         <div className="space-y-2">
-                            <Label>Ano</Label>
+                            <Label htmlFor="ee-ano">Ano</Label>
                             <Select value={String(invoiceYear)} onValueChange={(v) => setValue("invoice_year", Number(v))}>
-                                <SelectTrigger><SelectValue /></SelectTrigger>
+                                <SelectTrigger id="ee-ano"><SelectValue /></SelectTrigger>
                                 <SelectContent>
                                     {years.map(y => (
                                         <SelectItem key={y} value={String(y)}>{y}</SelectItem>
@@ -171,8 +172,8 @@ export function EstimatedExpenseDialog({ userId, className }: { userId: string; 
 
                     {useCard ? (
                         <div className="space-y-2">
-                            <Label>Cartão</Label>
-                            <Combobox
+                            <Label htmlFor="ee-cartao">Cartão</Label>
+                            <Combobox id="ee-cartao"
                                 options={creditCards.map(c => ({ value: c.id, label: c.nome }))}
                                 value={creditCardId ?? ""}
                                 onValueChange={(v) => setValue("credit_card_id", v)}
@@ -185,8 +186,8 @@ export function EstimatedExpenseDialog({ userId, className }: { userId: string; 
                     ) : (
                         <div className="grid grid-cols-2 gap-4">
                             <div className="space-y-2">
-                                <Label>Instituição</Label>
-                                <InstitutionCombobox
+                                <Label htmlFor="ee-instituicao">Instituição</Label>
+                                <InstitutionCombobox id="ee-instituicao"
                                     options={institutions}
                                     value={institutionId}
                                     onValueChange={(v) => setValue("institution_id", v)}
@@ -194,8 +195,8 @@ export function EstimatedExpenseDialog({ userId, className }: { userId: string; 
                                 />
                             </div>
                             <div className="space-y-2">
-                                <Label>Meio de Pagamento</Label>
-                                <Combobox
+                                <Label htmlFor="ee-meio-pagamento">Meio de Pagamento</Label>
+                                <Combobox id="ee-meio-pagamento"
                                     options={paymentMethods.map(p => ({ value: p.id, label: p.nome }))}
                                     value={paymentMethodId ?? ""}
                                     onValueChange={(v) => setValue("tipo_pagamento_id", v)}
@@ -210,10 +211,10 @@ export function EstimatedExpenseDialog({ userId, className }: { userId: string; 
                     <div className="space-y-4 rounded-lg border p-4 bg-muted/20">
                         <div className="flex items-center justify-between">
                             <div className="space-y-0.5">
-                                <Label>Despesa Prevista Parcelada?</Label>
+                                <Label htmlFor="ee-parcelada">Despesa Prevista Parcelada?</Label>
                                 <p className="text-xs text-muted-foreground">O valor será dividido entre os meses seguintes a partir do mês selecionado.</p>
                             </div>
-                            <Switch
+                            <Switch id="ee-parcelada"
                                 checked={isInstallment}
                                 onCheckedChange={(checked) => {
                                     setValue("isInstallment", checked);

@@ -1,5 +1,6 @@
 import { describe, expect, test } from "vitest";
-import { incomeCommitmentPercent, projectMonthlyOutflow } from "./dashboard-metrics";
+import { formatPercentChange, incomeCommitmentPercent, percentChange, projectMonthlyOutflow, variationTone } from "./dashboard-metrics";
+import { toDateOnly } from "./date-only";
 
 // Outubro/2026 tem 31 dias; "hoje" = dia 9.
 const today = new Date(2026, 9, 9, 14, 0);
@@ -26,6 +27,25 @@ describe("projectMonthlyOutflow", () => {
         expect(forecast).toBeCloseTo((90 / 9) * 31, 2);
     });
 
+    // BL-025: como vem do banco (meia-noite UTC). 10/10 00:00 UTC = 09/10 21:00 em Brasília.
+    test("despesa gravada para amanhã continua agendada", () => {
+        const saidas = [
+            { valor: 90, data: toDateOnly("2026-10-09") },  // hoje
+            { valor: 50, data: toDateOnly("2026-10-10") },  // amanhã
+        ];
+
+        const forecast = projectMonthlyOutflow({ saidas, today, month: 10, year: 2026 });
+
+        expect(forecast).toBeCloseTo((90 / 9) * 31 + 50, 2);
+    });
+
+    test("às 22h do último dia do mês (já 1º em UTC) ainda é o mês corrente", () => {
+        const lateOnOct31 = new Date("2026-11-01T01:00:00Z");
+        const saidas = [{ valor: 310, data: toDateOnly("2026-10-15") }];
+
+        expect(projectMonthlyOutflow({ saidas, today: lateOnOct31, month: 10, year: 2026 })).toBeCloseTo(310, 2);
+    });
+
     test("mês passado: projeção é o total gasto, sem extrapolar", () => {
         const saidas = [
             { valor: 100, data: new Date(2026, 8, 5) },
@@ -49,5 +69,52 @@ describe("incomeCommitmentPercent", () => {
 
     test("com receita, é o gasto como % da receita", () => {
         expect(incomeCommitmentPercent(2500, 5000)).toBe(50);
+    });
+});
+
+// BL-007: variação "vs mês anterior" nos cards de resumo.
+describe("percentChange", () => {
+    test("variação relativa ao mês anterior", () => {
+        expect(percentChange(120, 100)).toBeCloseTo(20, 5);
+        expect(percentChange(80, 100)).toBeCloseTo(-20, 5);
+    });
+
+    test("sem valor no mês anterior não há variação a mostrar", () => {
+        expect(percentChange(500, 0)).toBe(0);
+    });
+
+    test("saldo saindo do negativo é melhora (positiva), não -150%", () => {
+        expect(percentChange(50, -100)).toBeCloseTo(150, 5);
+        expect(percentChange(-150, -100)).toBeCloseTo(-50, 5);
+    });
+});
+
+describe("formatPercentChange", () => {
+    test("vírgula decimal e sinal explícito", () => {
+        expect(formatPercentChange(12.34)).toBe("+12,3%");
+        expect(formatPercentChange(-4)).toBe("-4,0%");
+        expect(formatPercentChange(1234.5)).toBe("+1.234,5%");
+    });
+
+    test("zero sem sinal", () => {
+        expect(formatPercentChange(0)).toBe("0,0%");
+        expect(formatPercentChange(-0.01)).toBe("0,0%");
+    });
+});
+
+describe("variationTone", () => {
+    test("entrada ou saldo subindo é bom", () => {
+        expect(variationTone(10, "up")).toBe("good");
+        expect(variationTone(-10, "up")).toBe("bad");
+    });
+
+    test("saída subindo é ruim; caindo é bom", () => {
+        expect(variationTone(10, "down")).toBe("bad");
+        expect(variationTone(-10, "down")).toBe("good");
+    });
+
+    test("sem variação (ou menor que 0,05%) é neutro", () => {
+        expect(variationTone(0, "down")).toBe("neutral");
+        expect(variationTone(0.01, "up")).toBe("neutral");
     });
 });

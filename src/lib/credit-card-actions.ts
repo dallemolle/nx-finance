@@ -7,6 +7,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import type { CreditCardInvoiceInput } from "@/lib/validations";
 import { getErrorMessage, getPrismaErrorMessage } from "@/lib/utils";
+import { monthRange } from "@/lib/date-only";
 import {
     deleteImportedInvoiceForUser,
     findPossibleDuplicateInstallmentsForUser,
@@ -97,14 +98,11 @@ export async function getInvoiceItems(transactionId: string) {
 
 export async function getInvoiceHeaders(month: number, year: number) {
     const userId = await getSessionUserId();
-    const startDate = new Date(year, month - 1, 1);
-    const endDate = new Date(year, month, 0);
-
     const invoices = await db.transaction.findMany({
         where: {
             userId,
             is_invoice_header: true,
-            data_vencimento: { gte: startDate, lte: endDate },
+            data_vencimento: monthRange(year, month),
         },
         include: {
             invoiceItems: {

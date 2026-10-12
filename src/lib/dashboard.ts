@@ -2,10 +2,11 @@
 
 import { db } from "@/lib/db";
 import { getSessionUserId } from "@/lib/session";
-import { startOfMonth, endOfMonth, isBefore, subMonths, getDaysInMonth, format } from "date-fns";
+import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { currentMonthInAppZone, dateOnlyParts, daysInMonth, monthRange, todayDateOnly } from "./date-only";
 import { getCategoryGroupName } from "./dashboard-utils";
-import { incomeCommitmentPercent, projectMonthlyOutflow } from "./dashboard-metrics";
+import { incomeCommitmentPercent, percentChange, projectMonthlyOutflow } from "./dashboard-metrics";
 import type { Prisma, TransactionType } from "@prisma/client";
 
 interface TotalsEntry {
@@ -20,25 +21,20 @@ interface CategorizedEntry {
 
 export async function getDashboardData(month: number, year: number) {
     const userId = await getSessionUserId();
-    const targetDate = new Date(year, month - 1);
-    const startDate = startOfMonth(targetDate);
-    const endDate = endOfMonth(targetDate);
-
-    const prevMonthDate = subMonths(targetDate, 1);
-    const prevStartDate = startOfMonth(prevMonthDate);
-    const prevEndDate = endOfMonth(prevMonthDate);
+    const range = monthRange(year, month);
+    const prevRange = monthRange(month === 1 ? year - 1 : year, month === 1 ? 12 : month - 1);
 
     // Fetch current and previous month transactions
     // is_provisioned:false exclui faturas/despesas projetadas para meses futuros
     // (ver credit-card-provision-actions.ts) — elas não são gasto real ainda.
     const [transactions, prevTransactions, firstTransaction] = await Promise.all([
         db.transaction.findMany({
-            where: { userId, data_vencimento: { gte: startDate, lte: endDate }, is_provisioned: false },
+            where: { userId, data_vencimento: range, is_provisioned: false },
             include: { category: true, institution: true },
             orderBy: { data_vencimento: "desc" },
         }),
         db.transaction.findMany({
-            where: { userId, data_vencimento: { gte: prevStartDate, lte: prevEndDate }, is_provisioned: false },
+            where: { userId, data_vencimento: prevRange, is_provisioned: false },
         }),
         db.transaction.findFirst({ where: { userId }, select: { id: true } }),
     ]);
@@ -58,10 +54,6 @@ export async function getDashboardData(month: number, year: number) {
     const currentSummary = calculateTotals(transactions);
     const prevSummary = calculateTotals(prevTransactions);
 
-    const calculateDelta = (curr: number, prev: number) => {
-        if (prev === 0) return 0;
-        return ((curr - prev) / prev) * 100;
-    };
 
     const saldoTotal = currentSummary.totalEntradas - currentSummary.totalSaidas;
 
@@ -103,8 +95,10 @@ export async function getDashboardData(month: number, year: number) {
 
     // Monthly Forecast & Health
     const today = new Date();
-    const isCurrentMonth = today.getMonth() === targetDate.getMonth() && today.getFullYear() === targetDate.getFullYear();
-    const daysPassed = isCurrentMonth ? today.getDate() : getDaysInMonth(targetDate);
+    const current = currentMonthInAppZone(today);
+    const isCurrentMonth = current.month === month && current.year === year;
+    const totalDays = daysInMonth(year, month);
+    const daysPassed = isCurrentMonth ? dateOnlyParts(todayDateOnly(today)).day : totalDays;
     const forecast = projectMonthlyOutflow({
         saidas: transactions
             .filter(t => t.tipo === "SAIDA")
@@ -125,7 +119,7 @@ export async function getDashboardData(month: number, year: number) {
     }
 
     const monthlyTransactions = transactions.map(t => {
-        const isOverdue = t.status !== "PAGO" && isBefore(t.data_vencimento, new Date());
+        const isOverdue = t.status !== "PAGO" && t.data_vencimento < todayDateOnly();
         return {
             ...t,
             valor: Number(t.valor),
@@ -163,7 +157,7 @@ export async function getDashboardData(month: number, year: number) {
     // exibição nas listas (badge "Previsto") — NÃO entram em categoryData/summary/
     // forecast/healthScore acima, que continuam derivando só do confirmado.
     const provisionedTransactions = await db.transaction.findMany({
-        where: { userId, data_vencimento: { gte: startDate, lte: endDate }, is_provisioned: true },
+        where: { userId, data_vencimento: range, is_provisioned: true },
         include: { category: true, institution: true },
         orderBy: { data_vencimento: "desc" },
     });
@@ -217,9 +211,9 @@ export async function getDashboardData(month: number, year: number) {
             saldoTotal,
             totalEntradas: currentSummary.totalEntradas,
             totalSaidas: currentSummary.totalSaidas,
-            deltaEntradas: calculateDelta(currentSummary.totalEntradas, prevSummary.totalEntradas),
-            deltaSaidas: calculateDelta(currentSummary.totalSaidas, prevSummary.totalSaidas),
-            deltaSaldo: calculateDelta(saldoTotal, prevSummary.totalEntradas - prevSummary.totalSaidas),
+            deltaEntradas: percentChange(currentSummary.totalEntradas, prevSummary.totalEntradas),
+            deltaSaidas: percentChange(currentSummary.totalSaidas, prevSummary.totalSaidas),
+            deltaSaldo: percentChange(saldoTotal, prevSummary.totalEntradas - prevSummary.totalSaidas),
         },
         categoryData,
         monthlyTransactions: [...monthlyTransactions, ...invoiceItemsAsTransactions, ...provisionedRows, ...provisionedItemsAsTransactions],
@@ -227,7 +221,7 @@ export async function getDashboardData(month: number, year: number) {
             forecast,
             healthScore,
             daysPassed,
-            totalDays: getDaysInMonth(targetDate)
+            totalDays
         },
         hasAnyTransactions,
     };
@@ -237,20 +231,21 @@ const TREND_MONTHS_COUNT = 6;
 
 export async function getMonthlyTrend(month: number, year: number) {
     const userId = await getSessionUserId();
-    const targetDate = new Date(year, month - 1);
-    const rangeStart = startOfMonth(subMonths(targetDate, TREND_MONTHS_COUNT - 1));
-    const rangeEnd = endOfMonth(targetDate);
+    // Meses do mais antigo ao mês pedido, sempre pelo dia do calendário (UTC).
+    const months = Array.from({ length: TREND_MONTHS_COUNT }, (_, i) => {
+        const total = year * 12 + (month - 1) - (TREND_MONTHS_COUNT - 1 - i);
+        return { year: Math.floor(total / 12), month: (total % 12) + 1 };
+    });
 
     const transactions = await db.transaction.findMany({
-        where: { userId, data_vencimento: { gte: rangeStart, lte: rangeEnd }, is_provisioned: false },
+        where: { userId, data_vencimento: { gte: monthRange(months[0].year, months[0].month).gte, lt: monthRange(year, month).lt }, is_provisioned: false },
         select: { valor: true, tipo: true, data_vencimento: true },
     });
 
-    const buckets = Array.from({ length: TREND_MONTHS_COUNT }, (_, i) => {
-        const bucketDate = subMonths(targetDate, TREND_MONTHS_COUNT - 1 - i);
+    const buckets = months.map(m => {
         return {
-            key: `${bucketDate.getFullYear()}-${bucketDate.getMonth()}`,
-            label: format(bucketDate, "MMM", { locale: ptBR }),
+            key: `${m.year}-${m.month}`,
+            label: format(new Date(m.year, m.month - 1, 1), "MMM", { locale: ptBR }),
             totalEntradas: 0,
             totalSaidas: 0,
         };
@@ -258,7 +253,8 @@ export async function getMonthlyTrend(month: number, year: number) {
     const bucketByKey = new Map(buckets.map(b => [b.key, b]));
 
     for (const t of transactions) {
-        const key = `${t.data_vencimento.getFullYear()}-${t.data_vencimento.getMonth()}`;
+        const { year: y, month: m } = dateOnlyParts(t.data_vencimento);
+        const key = `${y}-${m}`;
         const bucket = bucketByKey.get(key);
         if (!bucket) continue;
         if (t.tipo === "ENTRADA") bucket.totalEntradas += Number(t.valor);

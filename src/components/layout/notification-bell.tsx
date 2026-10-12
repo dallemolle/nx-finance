@@ -8,8 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { getNotifications, type AppNotification, type NotificationType } from "@/lib/notifications";
 import { formatCurrency } from "@/lib/utils";
-import { format } from "date-fns";
-import { ptBR } from "date-fns/locale";
+import { formatDateOnly } from "@/lib/date-only";
 import { cn } from "@/lib/utils";
 
 const TYPE_STYLES: Record<NotificationType, { icon: typeof Clock; className: string }> = {
@@ -77,7 +76,7 @@ export function NotificationBell() {
                                         <p className="text-xs text-muted-foreground truncate">{n.description}</p>
                                         <div className="flex items-center justify-between mt-1">
                                             <span className="text-[10px] text-muted-foreground uppercase font-semibold tracking-wider">
-                                                {format(new Date(n.date), "dd 'de' MMM", { locale: ptBR })}
+                                                {formatDateOnly(n.date, "dd 'de' MMM")}
                                             </span>
                                             <span className="text-xs font-bold text-slate-700 dark:text-slate-300">{formatCurrency(n.valor)}</span>
                                         </div>

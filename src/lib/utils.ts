@@ -10,6 +10,21 @@ export function formatCurrency(value: number): string {
     return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value);
 }
 
+const compactCurrency = new Intl.NumberFormat("pt-BR", {
+    style: "currency",
+    currency: "BRL",
+    notation: "compact",
+    // Explícito: moeda tem mínimo padrão de 2 casas, e o Node 22 (CI) então
+    // mostrava "R$ 2,0 mil" e "R$ 0,0"; o Node 24 não.
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 1,
+});
+
+// Valor curto pros eixos e rótulos dos gráficos: "R$ 300", "R$ 1,2 mil" (BL-008).
+export function formatCompactCurrency(value: number): string {
+    return compactCurrency.format(Math.abs(value) < 1000 ? Math.round(value) : value);
+}
+
 export function maskCurrency(value: number, isHidden: boolean): string {
     return isHidden ? "••••••" : formatCurrency(value);
 }

@@ -1,4 +1,5 @@
 import { Decimal } from "decimal.js";
+import { dateOnlyParts, dateOnlyUtc, daysInMonth } from "./date-only";
 
 export interface InvoiceMonth {
     month: number; // 1-12
@@ -9,9 +10,8 @@ export interface InvoiceMonth {
 // do mês atual se D < closingDay; se D >= closingDay, o ciclo já fechou e a
 // compra vai para a fatura do mês seguinte.
 export function getInvoiceReferenceMonth(purchaseDate: Date, closingDay: number): InvoiceMonth {
-    const day = purchaseDate.getDate();
-    let month = purchaseDate.getMonth() + 1;
-    let year = purchaseDate.getFullYear();
+    const { day } = dateOnlyParts(purchaseDate);
+    let { month, year } = dateOnlyParts(purchaseDate);
     if (day >= closingDay) {
         month += 1;
         if (month > 12) {
@@ -48,8 +48,7 @@ export function computeInvoiceDueDate(invoiceMonth: number, invoiceYear: number,
         }
     }
     // Clamp para o último dia do mês, caso dueDay (ex: 31) não exista nesse mês
-    const daysInDueMonth = new Date(dueYear, dueMonth, 0).getDate();
-    return new Date(dueYear, dueMonth - 1, Math.min(dueDay, daysInDueMonth));
+    return dateOnlyUtc(dueYear, dueMonth, Math.min(dueDay, daysInMonth(dueYear, dueMonth)));
 }
 
 // Inverso de computeInvoiceDueDate: dado o vencimento real de uma fatura já
@@ -57,8 +56,7 @@ export function computeInvoiceDueDate(invoiceMonth: number, invoiceYear: number,
 // corresponde — necessário pra conciliar uma fatura real com faturas
 // projetadas, que são indexadas por mês de referência, não por vencimento.
 export function getReferenceMonthFromDueDate(dueDate: Date, closingDay: number, dueDay: number): InvoiceMonth {
-    let month = dueDate.getMonth() + 1;
-    let year = dueDate.getFullYear();
+    let { month, year } = dateOnlyParts(dueDate);
     if (dueDay <= closingDay) {
         month -= 1;
         if (month < 1) {

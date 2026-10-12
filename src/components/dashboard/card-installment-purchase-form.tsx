@@ -72,8 +72,8 @@ export function CardInstallmentPurchaseForm({ categories, creditCards, onSuccess
             )}
 
             <div className="space-y-2">
-                <Label>Cartão</Label>
-                <Combobox
+                <Label htmlFor="cip-cartao">Cartão</Label>
+                <Combobox id="cip-cartao"
                     options={creditCards.map(c => ({ value: c.id, label: `${c.nome} (fecha dia ${c.closingDay})` }))}
                     value={creditCardId}
                     onValueChange={(v) => setValue("credit_card_id", v)}
@@ -97,8 +97,8 @@ export function CardInstallmentPurchaseForm({ categories, creditCards, onSuccess
                     {errors.valor && <p className="text-xs text-red-500">{errors.valor.message as string}</p>}
                 </div>
                 <div className="space-y-2">
-                    <Label>Data da Compra</Label>
-                    <DatePicker date={dataCompra} setDate={(d) => setValue("data_compra", d as Date)} />
+                    <Label htmlFor="cip-data-compra">Data da Compra</Label>
+                    <DatePicker id="cip-data-compra" date={dataCompra} setDate={(d) => setValue("data_compra", d as Date)} />
                     {errors.data_compra && <p className="text-xs text-red-500">{errors.data_compra.message as string}</p>}
                 </div>
             </div>
@@ -110,8 +110,8 @@ export function CardInstallmentPurchaseForm({ categories, creditCards, onSuccess
                     {errors.installmentsCount && <p className="text-xs text-red-500">{errors.installmentsCount.message as string}</p>}
                 </div>
                 <div className="space-y-2">
-                    <Label>Categoria</Label>
-                    <Combobox
+                    <Label htmlFor="cip-categoria">Categoria</Label>
+                    <Combobox id="cip-categoria"
                         options={categories.filter(c => c.tipo === "SAIDA").map(c => ({ value: c.id, label: c.nome }))}
                         value={categoriaId}
                         onValueChange={(v) => setValue("categoria_id", v)}

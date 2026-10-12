@@ -1,6 +1,7 @@
 import { expect, test } from "vitest";
 import { addDays } from "date-fns";
 import { db } from "@/lib/db";
+import { dateOnlyUtc } from "@/lib/date-only";
 import { getNotificationsForUser } from "./notifications";
 import { createUserWithCard, invoiceHeaderData, type Scenario } from "../../../test/fixtures";
 
@@ -43,6 +44,42 @@ test("classifica pendências em atrasada, vencendo, fatura a importar e prevista
         ["invoice_pending_import", "Cartão Teste"],
         ["estimate_pending", "Mercado (estimativa)"],
     ]);
+});
+
+// BL-025: datas gravadas como meia-noite UTC do dia (como faz a importação).
+test("conta que vence hoje está vencendo, não atrasada; a de ontem está atrasada", async () => {
+    const s = await createUserWithCard();
+    await expense(s, "Vence hoje", dateOnlyUtc(2026, 10, 15));
+    await expense(s, "Venceu ontem", dateOnlyUtc(2026, 10, 14));
+    await expense(s, "Vence em 3 dias", dateOnlyUtc(2026, 10, 18));
+    await expense(s, "Vence em 4 dias", dateOnlyUtc(2026, 10, 19));
+
+    const notifications = await getNotificationsForUser(s.user.id, now);
+
+    expect(notifications.map(n => [n.type, n.title])).toEqual([
+        ["overdue", "Venceu ontem"],
+        ["due_soon", "Vence hoje"],
+        ["due_soon", "Vence em 3 dias"],
+    ]);
+});
+
+test("às 22h de Brasília (já é amanhã em UTC), a conta de hoje ainda não está atrasada", async () => {
+    const s = await createUserWithCard();
+    await expense(s, "Vence hoje", dateOnlyUtc(2026, 10, 15));
+
+    const lateTonight = new Date("2026-10-16T01:00:00Z");
+    const notifications = await getNotificationsForUser(s.user.id, lateTonight);
+
+    expect(notifications.map(n => n.type)).toEqual(["due_soon"]);
+});
+
+test("link da notificação abre o mês do vencimento (dia 1º não volta pro mês anterior)", async () => {
+    const s = await createUserWithCard();
+    await expense(s, "Aluguel", dateOnlyUtc(2026, 11, 1));
+
+    const [n] = await getNotificationsForUser(s.user.id, new Date(2026, 9, 30, 12, 0));
+
+    expect(n.href).toBe("/?month=11&year=2026");
 });
 
 test("não mostra pendências de outro usuário", async () => {

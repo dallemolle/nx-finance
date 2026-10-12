@@ -1,6 +1,8 @@
 import { describe, expect, test } from "vitest";
 import { addMonths } from "date-fns";
 import { db } from "@/lib/db";
+import { currentMonthInAppZone, dateOnlyUtc } from "@/lib/date-only";
+import { addInvoiceMonths } from "@/lib/credit-card-cycle";
 import { getInvoiceTimelineDetailForUser } from "./credit-card-provision";
 import { createUserWithCard, invoiceHeaderData } from "../../../test/fixtures";
 
@@ -49,6 +51,25 @@ describe("getInvoiceTimelineDetailForUser", () => {
 
         const empty = groups[0].months.find(m => m !== m0 && m !== m1)!;
         expect({ items: empty.items.length, total: empty.total }).toEqual({ items: 0, total: 0 });
+    });
+
+    // BL-025: vencimento gravado à meia-noite UTC do dia 1º. Lido no fuso de
+    // Brasília, caía no último dia do mês anterior (e no mês errado).
+    test("fatura com vencimento no dia 1º fica no mês do vencimento", async () => {
+        const s = await createUserWithCard();
+        const { year, month } = currentMonthInAppZone();
+        const next = addInvoiceMonths(month, year, 1);
+        const header = await db.transaction.create({
+            data: invoiceHeaderData(s, { invoiceMonth: month, invoiceYear: year, dueDate: dateOnlyUtc(next.year, next.month, 1), provisioned: true }),
+        });
+        await db.creditCardInvoiceItem.create({
+            data: { transactionId: header.id, descricao: "Parcela", valor: 40, data_compra: new Date(), categoria_id: s.category.id, is_provisioned: true },
+        });
+
+        const [group] = await getInvoiceTimelineDetailForUser(s.user.id);
+        const withItems = group.months.filter(m => m.items.length > 0).map(m => `${m.year}-${m.month}`);
+
+        expect(withItems).toEqual([`${next.year}-${next.month}`]);
     });
 
     test("não mostra faturas de outro usuário", async () => {

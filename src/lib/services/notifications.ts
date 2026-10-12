@@ -2,7 +2,7 @@
 // explicitamente. NÃO é "use server": o Server Action em lib/notifications.ts
 // confere a sessão e delega pra cá.
 import { db } from "@/lib/db";
-import { addDays, endOfMonth } from "date-fns";
+import { currentMonthInAppZone, dateOnlyParts, monthRange, todayDateOnly } from "@/lib/date-only";
 
 export type NotificationType = "due_soon" | "overdue" | "estimate_pending" | "invoice_pending_import";
 
@@ -18,6 +18,7 @@ export interface AppNotification {
 
 const DUE_SOON_DAYS = 3;
 const INVOICE_PENDING_IMPORT_DAYS = 7;
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 // Central de notificações computada sob demanda — sem tabela nova no banco,
 // sem cron, sem provedor externo. Mesma filosofia do status ATRASADO em
@@ -25,13 +26,19 @@ const INVOICE_PENDING_IMPORT_DAYS = 7;
 // notificação "some" sozinha quando o usuário resolve a causa (paga,
 // efetiva, importa a fatura), sem precisar de um estado de "lida".
 export async function getNotificationsForUser(userId: string, now: Date = new Date()): Promise<AppNotification[]> {
+    // Vencimentos são datas sem hora (meia-noite UTC do dia): compara com o dia
+    // de hoje em Brasília, não com o instante atual — senão a conta que vence
+    // hoje já apareceria como atrasada (BL-025).
+    const today = todayDateOnly(now);
+    const inDays = (days: number) => new Date(today.getTime() + days * DAY_MS);
+    const current = currentMonthInAppZone(now);
     const [dueSoon, overdue, estimatesPending, invoicesPendingImport] = await Promise.all([
         db.transaction.findMany({
             where: {
                 userId,
                 is_provisioned: false,
                 status: { not: "PAGO" },
-                data_vencimento: { gte: now, lte: addDays(now, DUE_SOON_DAYS) },
+                data_vencimento: { gte: today, lt: inDays(DUE_SOON_DAYS + 1) },
             },
             include: { category: true },
             orderBy: { data_vencimento: "asc" },
@@ -41,7 +48,7 @@ export async function getNotificationsForUser(userId: string, now: Date = new Da
                 userId,
                 is_provisioned: false,
                 status: { not: "PAGO" },
-                data_vencimento: { lt: now },
+                data_vencimento: { lt: today },
             },
             include: { category: true },
             orderBy: { data_vencimento: "asc" },
@@ -51,7 +58,7 @@ export async function getNotificationsForUser(userId: string, now: Date = new Da
                 userId,
                 is_provisioned: true,
                 credit_card_id: null,
-                data_vencimento: { lte: endOfMonth(now) },
+                data_vencimento: { lt: monthRange(current.year, current.month).lt },
             },
             include: { category: true },
             orderBy: { data_vencimento: "asc" },
@@ -62,14 +69,17 @@ export async function getNotificationsForUser(userId: string, now: Date = new Da
                 is_invoice_header: true,
                 is_provisioned: true,
                 credit_card_id: { not: null },
-                data_vencimento: { gte: now, lte: addDays(now, INVOICE_PENDING_IMPORT_DAYS) },
+                data_vencimento: { gte: today, lt: inDays(INVOICE_PENDING_IMPORT_DAYS + 1) },
             },
             include: { creditCard: true },
             orderBy: { data_vencimento: "asc" },
         }),
     ]);
 
-    const monthHref = (date: Date) => `/?month=${date.getMonth() + 1}&year=${date.getFullYear()}`;
+    const monthHref = (date: Date) => {
+        const { month, year } = dateOnlyParts(date);
+        return `/?month=${month}&year=${year}`;
+    };
 
     const notifications: AppNotification[] = [
         ...dueSoon.map((t): AppNotification => ({

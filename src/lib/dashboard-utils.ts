@@ -17,6 +17,29 @@ const normalizeCategoryText = (s: string) =>
 
 const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
+// Preposições, artigos e conjunções que ficam em minúscula no meio do título.
+const LOWERCASE_WORDS = new Set([
+    "a", "o", "as", "os", "e", "de", "da", "do", "das", "dos", "em", "na", "no", "nas", "nos",
+    "ao", "aos", "à", "às", "com", "para", "pra", "por", "pela", "pelo", "pelas", "pelos",
+]);
+
+// Exibição em "Título" (substitui o CSS `capitalize`, que punha maiúscula em
+// toda palavra: "Imposto De Renda Da Pessoa Física" — BL-011). Só muda a
+// exibição; o texto gravado não muda. Palavra toda em maiúscula (sigla, texto
+// do banco como "UBER *TRIP") fica como está.
+export function titleCasePtBr(text: string): string {
+    let isFirstWord = true;
+    return text.split(/(\s+)/).map(token => {
+        const letters = token.match(/\p{L}/gu);
+        if (!letters) return token;
+        const first = isFirstWord;
+        isFirstWord = false;
+        if (letters.length > 1 && letters.every(l => l === l.toUpperCase())) return token;
+        if (!first && LOWERCASE_WORDS.has(token.toLowerCase())) return token.toLowerCase();
+        return token.replace(/\p{L}/u, l => l.toUpperCase());
+    }).join("");
+}
+
 // Agrupa fatias de categoria quase-duplicadas que getCategoryGroupName não
 // generaliza (ex: "Transp" e "Transporte" são registros de Category
 // distintos, já que o nome é único só por usuário+tipo — não sinônimos

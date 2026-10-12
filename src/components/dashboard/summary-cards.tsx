@@ -5,6 +5,7 @@ import { Badge } from "../ui/badge";
 import { TrendingDown, TrendingUp, Wallet } from "lucide-react";
 import { cn, maskCurrency } from "@/lib/utils";
 import { useIsPrivacyMode } from "./privacy-provider";
+import { formatPercentChange, variationTone, type VariationTone } from "@/lib/dashboard-metrics";
 
 interface SummaryCardsProps {
     summary: {
@@ -17,15 +18,27 @@ interface SummaryCardsProps {
     };
 }
 
-function Variation({ value }: { value: number }) {
-    const isPositive = value >= 0;
+const toneClass: Record<VariationTone, string> = {
+    good: "text-emerald-600 dark:text-emerald-400",
+    bad: "text-rose-600 dark:text-rose-400",
+    neutral: "text-muted-foreground",
+};
+
+// goodWhen: "up" quando subir é bom (entradas), "down" quando é ruim (saídas).
+function Variation({ value, goodWhen }: { value: number; goodWhen: "up" | "down" }) {
     return (
-        <div className={`flex items-center text-xs font-medium ${isPositive ? 'text-emerald-500' : 'text-rose-500'}`}>
-            {isPositive ? '+' : ''}{value.toFixed(1)}%
+        <div className="flex items-center text-xs font-medium">
+            <span className={toneClass[variationTone(value, goodWhen)]}>{formatPercentChange(value)}</span>
             <span className="text-muted-foreground ml-1">vs mês anterior</span>
         </div>
     );
 }
+
+const saldoToneClass: Record<VariationTone, string> = {
+    good: "bg-emerald-500/10 text-emerald-400",
+    bad: "bg-rose-500/10 text-rose-400",
+    neutral: "bg-slate-500/10 text-slate-400",
+};
 
 export function SummaryCards({ summary }: SummaryCardsProps) {
     const isHidden = useIsPrivacyMode();
@@ -46,16 +59,14 @@ export function SummaryCards({ summary }: SummaryCardsProps) {
                     <div className="flex items-center gap-2">
                         <Badge className={cn(
                             "border-none px-2 py-0.5 text-xs font-semibold gap-1",
-                            summary.deltaSaldo >= 0
-                                ? "bg-emerald-500/10 text-emerald-400"
-                                : "bg-rose-500/10 text-rose-400"
+                            saldoToneClass[variationTone(summary.deltaSaldo, "up")]
                         )}>
                             {summary.deltaSaldo >= 0 ? (
                                 <TrendingUp className="w-3 h-3" />
                             ) : (
                                 <TrendingDown className="w-3 h-3" />
                             )}
-                            {Math.abs(summary.deltaSaldo).toFixed(1)}%
+                            {formatPercentChange(summary.deltaSaldo)}
                         </Badge>
                         <span className="text-[10px] text-slate-400 opacity-60">desde o último mês</span>
                     </div>
@@ -73,7 +84,7 @@ export function SummaryCards({ summary }: SummaryCardsProps) {
                     <div className="text-3xl font-bold text-emerald-600 dark:text-emerald-400 italic">
                         {maskCurrency(summary.totalEntradas, isHidden)}
                     </div>
-                    <Variation value={summary.deltaEntradas} />
+                    <Variation value={summary.deltaEntradas} goodWhen="up" />
                 </CardContent>
             </Card>
 
@@ -88,7 +99,7 @@ export function SummaryCards({ summary }: SummaryCardsProps) {
                     <div className="text-3xl font-bold text-rose-600 dark:text-rose-400 italic">
                         {maskCurrency(summary.totalSaidas, isHidden)}
                     </div>
-                    <Variation value={summary.deltaSaidas} />
+                    <Variation value={summary.deltaSaidas} goodWhen="down" />
                 </CardContent>
             </Card>
         </div>

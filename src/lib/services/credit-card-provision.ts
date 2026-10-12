@@ -3,7 +3,7 @@
 // Server Actions em credit-card-provision-actions.ts resolvem o userId pela
 // sessão e delegam pra cá — o que também permite testar estas funções.
 import { db } from "@/lib/db";
-import { addMonths, differenceInCalendarMonths, endOfMonth, format, startOfMonth } from "date-fns";
+import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Decimal } from "decimal.js";
 import {
@@ -22,6 +22,7 @@ import {
     getOrCreateInvoiceCategory,
     getOrCreateProvisionedPaymentMethod,
 } from "@/lib/credit-card-shared";
+import { currentMonthInAppZone, dateOnlyParts, monthRange } from "@/lib/date-only";
 import type { Prisma } from "@prisma/client";
 
 type Tx = Prisma.TransactionClient;
@@ -57,7 +58,7 @@ export async function findOrCreateProvisionedHeader(
     // vencimento em setembro nomeada "08/2026", parecendo estar em agosto.
     return tx.transaction.create({
         data: {
-            descricao: `Fatura Prevista - ${args.card.nome} - ${String(dueDate.getMonth() + 1).padStart(2, "0")}/${dueDate.getFullYear()}`,
+            descricao: `Fatura Prevista - ${args.card.nome} - ${String(dateOnlyParts(dueDate).month).padStart(2, "0")}/${dateOnlyParts(dueDate).year}`,
             valor: 0,
             data_vencimento: dueDate,
             status: "PENDENTE",
@@ -238,7 +239,7 @@ export const TIMELINE_MONTHS_MAX = 36;
 // que existem no banco mas nunca aparecem nessa tela (janela fixa de 6 meses
 // só cobre o começo do parcelamento). Teto de segurança em TIMELINE_MONTHS_MAX.
 export async function getInvoiceTimelineDetailForUser(userId: string, monthsAhead?: number) {
-    const now = new Date();
+    const current = currentMonthInAppZone();
 
     let effectiveMonthsAhead = monthsAhead ?? TIMELINE_MONTHS_DEFAULT;
     if (monthsAhead === undefined) {
@@ -247,20 +248,24 @@ export async function getInvoiceTimelineDetailForUser(userId: string, monthsAhea
             _max: { data_vencimento: true },
         });
         if (furthest._max.data_vencimento) {
-            const monthsUntilFurthest = differenceInCalendarMonths(startOfMonth(furthest._max.data_vencimento), startOfMonth(now)) + 1;
+            const furthestDue = dateOnlyParts(furthest._max.data_vencimento);
+            const monthsUntilFurthest = (furthestDue.year - current.year) * 12 + (furthestDue.month - current.month) + 1;
             effectiveMonthsAhead = Math.min(Math.max(effectiveMonthsAhead, monthsUntilFurthest), TIMELINE_MONTHS_MAX);
         }
     }
 
-    const rangeStart = startOfMonth(now);
-    const rangeEnd = endOfMonth(addMonths(now, effectiveMonthsAhead - 1));
+    const monthBuckets = Array.from({ length: effectiveMonthsAhead }, (_, i) => {
+        const { month, year } = addInvoiceMonths(current.month, current.year, i);
+        return { month, year, label: format(new Date(year, month - 1, 1), "MMM/yy", { locale: ptBR }) };
+    });
+    const last = monthBuckets[monthBuckets.length - 1];
 
     const [headers, cards] = await Promise.all([
         db.transaction.findMany({
             where: {
                 userId,
                 is_invoice_header: true,
-                data_vencimento: { gte: rangeStart, lte: rangeEnd },
+                data_vencimento: { gte: monthRange(current.year, current.month).gte, lt: monthRange(last.year, last.month).lt },
                 credit_card_id: { not: null },
             },
             include: {
@@ -273,15 +278,6 @@ export async function getInvoiceTimelineDetailForUser(userId: string, monthsAhea
         db.creditCard.findMany({ where: { userId }, orderBy: { nome: "asc" } }),
     ]);
 
-    const monthBuckets = Array.from({ length: effectiveMonthsAhead }, (_, i) => {
-        const bucketDate = addMonths(now, i);
-        return {
-            month: bucketDate.getMonth() + 1,
-            year: bucketDate.getFullYear(),
-            label: format(bucketDate, "MMM/yy", { locale: ptBR }),
-        };
-    });
-
     return cards.map(card => {
         const months = monthBuckets.map(b => {
             // filter (não find): nada impede duas faturas reais pro mesmo cartão+mês
@@ -290,8 +286,8 @@ export async function getInvoiceTimelineDetailForUser(userId: string, monthsAhea
             // (ciclo de fechamento — ver nota em getInvoiceTimeline).
             const matchingHeaders = headers.filter(
                 h => h.credit_card_id === card.id
-                    && h.data_vencimento.getMonth() + 1 === b.month
-                    && h.data_vencimento.getFullYear() === b.year
+                    && dateOnlyParts(h.data_vencimento).month === b.month
+                    && dateOnlyParts(h.data_vencimento).year === b.year
             );
             const items = matchingHeaders.flatMap(h =>
                 h.invoiceItems.map(item => ({

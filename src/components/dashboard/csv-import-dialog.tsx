@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -15,6 +15,7 @@ import { InstitutionCombobox } from "@/components/dashboard/institution-combobox
 import { processBatchTransactions, getMappingSuggestions, type BatchTransactionInput } from "@/lib/csv-actions";
 import { getMerchantSignature } from "@/lib/dashboard-utils";
 import { cn, getErrorMessage } from "@/lib/utils";
+import { parseInvoiceDate } from "@/lib/invoice-import";
 import { createCategory, createPaymentMethod } from "@/lib/actions";
 import { Combobox } from "@/components/ui/combobox";
 import { toast } from "sonner";
@@ -114,12 +115,8 @@ export function CsvImportDialog({ userId, className }: { userId: string, classNa
                         const rawAmount = row.amount || row.valor || row.Value || row.Amount || "0";
                         const amount = parseFloat(String(rawAmount).replace(/[R$\s]/g, '').replace(',', '.'));
                         const rawDate = row.date || row.data || row.Date || row.Data || "";
-                        const parsed = new Date(rawDate);
-                        const date = !isNaN(parsed.getTime())
-                            ? parsed.toISOString().split('T')[0]
-                            : rawDate.includes('/')
-                                ? rawDate.split('/').reverse().join('-')
-                                : new Date().toISOString().split('T')[0];
+                        // Barra é dia/mês (extrato brasileiro); sem data válida, usa hoje (BL-025).
+                        const date = parseInvoiceDate(String(rawDate), new Date());
 
                         // Find category suggestion based on search_term
                         const signature = getMerchantSignature(title);
@@ -234,6 +231,7 @@ export function CsvImportDialog({ userId, className }: { userId: string, classNa
             <DialogContent className="sm:max-w-[800px] h-[80vh] flex flex-col">
                 <DialogHeader className="shrink-0">
                     <DialogTitle>Importar Transações</DialogTitle>
+                    <DialogDescription>Envie o CSV do extrato do banco, revise as categorias e importe os lançamentos.</DialogDescription>
                 </DialogHeader>
 
                 <div className="flex-1 min-h-0 overflow-y-auto pr-2 mt-4 space-y-6">
@@ -253,6 +251,7 @@ export function CsvImportDialog({ userId, className }: { userId: string, classNa
                                 <Input
                                     type="file"
                                     accept=".csv"
+                                    aria-label="Arquivo CSV do extrato"
                                     ref={fileInputRef}
                                     onChange={handleFileChange}
                                     className="max-w-xs"
@@ -261,8 +260,8 @@ export function CsvImportDialog({ userId, className }: { userId: string, classNa
 
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                                 <div className="space-y-2">
-                                    <Label>Instituição Financeira</Label>
-                                    <InstitutionCombobox
+                                    <Label htmlFor="csv-instituicao">Instituição Financeira</Label>
+                                    <InstitutionCombobox id="csv-instituicao"
                                         options={institutions}
                                         value={institutionId}
                                         onValueChange={setInstitutionId}
@@ -273,8 +272,8 @@ export function CsvImportDialog({ userId, className }: { userId: string, classNa
                                     />
                                 </div>
                                 <div className="space-y-2">
-                                    <Label>Data de Vencimento do Lote</Label>
-                                    <Input
+                                    <Label htmlFor="csv-data-vencimento">Data de Vencimento do Lote</Label>
+                                    <Input id="csv-data-vencimento"
                                         type="date"
                                         value={dueDate}
                                         onChange={(e) => setDueDate(e.target.value)}
@@ -282,8 +281,8 @@ export function CsvImportDialog({ userId, className }: { userId: string, classNa
                                     />
                                 </div>
                                 <div className="space-y-2">
-                                    <Label>Meio de Pagamento</Label>
-                                    <Combobox
+                                    <Label htmlFor="csv-meio-pagamento">Meio de Pagamento</Label>
+                                    <Combobox id="csv-meio-pagamento"
                                         options={paymentMethods.map(pm => ({ value: pm.id, label: pm.nome }))}
                                         value={paymentMethodId === "none" ? "" : paymentMethodId}
                                         onValueChange={setPaymentMethodId}
@@ -311,10 +310,11 @@ export function CsvImportDialog({ userId, className }: { userId: string, classNa
                                         </TableRow>
                                     </TableHeader>
                                     <TableBody>
-                                        {parsedData.map((row) => (
+                                        {parsedData.map((row, index) => (
                                             <TableRow key={row.id}>
                                                 <TableCell className="p-2">
                                                     <Input
+                                                        aria-label={`Título do item ${index + 1}`}
                                                         value={row.title}
                                                         onChange={(e) => handleRowChange(row.id, "title", e.target.value)}
                                                         className="h-8 text-sm"
@@ -324,6 +324,7 @@ export function CsvImportDialog({ userId, className }: { userId: string, classNa
                                                     <Input
                                                         type="number"
                                                         step="0.01"
+                                                        aria-label={`Valor do item ${index + 1}`}
                                                         value={row.amount}
                                                         onChange={(e) => handleRowChange(row.id, "amount", parseFloat(e.target.value))}
                                                         className="h-8 text-sm w-[100px]"
@@ -339,7 +340,7 @@ export function CsvImportDialog({ userId, className }: { userId: string, classNa
                                                             handleRowChange(row.id, "category_id", val);
                                                         }
                                                     }}>
-                                                        <SelectTrigger className="h-8 text-sm">
+                                                        <SelectTrigger className="h-8 text-sm" aria-label={`Categoria do item ${index + 1}`}>
                                                             <SelectValue placeholder="Categoria..." />
                                                         </SelectTrigger>
                                                         <SelectContent>
@@ -370,6 +371,7 @@ export function CsvImportDialog({ userId, className }: { userId: string, classNa
                                                         variant="ghost"
                                                         size="icon"
                                                         className="h-8 w-8 text-slate-400 hover:text-red-500"
+                                                        aria-label={`Remover item ${index + 1}`}
                                                         onClick={() => setParsedData(prev => prev.filter(r => r.id !== row.id))}
                                                     >
                                                         <X className="w-4 h-4" />

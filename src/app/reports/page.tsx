@@ -5,6 +5,7 @@ import { authOptions } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { TopNav } from "@/components/layout/top-nav";
 import { ReportContent } from "./report-content";
+import { currentMonthInAppZone } from "@/lib/date-only";
 
 interface ReportsPageProps {
     searchParams: Promise<{
@@ -24,9 +25,9 @@ export default async function ReportsPage({ searchParams }: ReportsPageProps) {
         year: yearParam,
     } = await searchParams;
 
-    const now = new Date();
-    const month = monthParam ? parseInt(monthParam) : now.getMonth() + 1;
-    const year = yearParam ? parseInt(yearParam) : now.getFullYear();
+    const now = currentMonthInAppZone();
+    const month = monthParam ? parseInt(monthParam) : now.month;
+    const year = yearParam ? parseInt(yearParam) : now.year;
 
     // Buscamos todas as transações do mês e os dados auxiliares
     const [allTransactions, categories, institutions, paymentMethods] = await Promise.all([

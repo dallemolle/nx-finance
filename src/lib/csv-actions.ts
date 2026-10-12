@@ -1,6 +1,7 @@
 "use server";
 
 import { db } from "@/lib/db";
+import { toDateOnly } from "./date-only";
 import { revalidatePath } from "next/cache";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
@@ -77,7 +78,7 @@ export async function processBatchTransactions(transactions: BatchTransactionInp
                 data: {
                     descricao: t.descricao,
                     valor: t.valor,
-                    data_vencimento: new Date(t.data_vencimento),
+                    data_vencimento: toDateOnly(t.data_vencimento),
                     status: t.status || "PENDENTE",
                     tipo: t.tipo || "SAIDA",
                     userId,

@@ -16,8 +16,8 @@ Combinada em 2026-10-09. Cada etapa vai no seu próprio branch `feature/...`.
 
 1. **Importação de fatura:** BL-001, BL-002, BL-003, BL-005, BL-004, BL-006 e a parte de BL-012 que toca nesse diálogo. Em seguida, BL-023. ✅ Concluída.
 1.1. **Correção urgente (bug em produção):** BL-026, BL-027, BL-028 e BL-029, no branch `feature/2026-10-09_corrige_conciliacao_parcelas`. ✅ Concluída.
-2. **Datas:** BL-025. Entrou antes da etapa de dashboard porque afeta o que todas as telas mostram.
-3. **Dashboard e faturas:** BL-007, BL-009, BL-011, BL-008, BL-010 e o restante de BL-012.
+2. **Datas:** BL-025. Entrou antes da etapa de dashboard porque afeta o que todas as telas mostram. ✅ Concluída.
+3. **Dashboard e faturas:** BL-007, BL-009, BL-011, BL-008, BL-010 e o restante de BL-012, no branch `feature/2026-10-12_dashboard_e_faturas`. ✅ Concluída.
 4. **Código:** BL-013 junto com BL-014, depois BL-015 e BL-016.
 5. **Segurança da conta:** BL-021, depois BL-022.
 6. **Depois, só com motivo concreto:** BL-017 e BL-018.
@@ -25,35 +25,6 @@ Combinada em 2026-10-09. Cada etapa vai no seu próprio branch `feature/...`.
 8. **Funcionalidades novas, sem pressa:** BL-030 e BL-031.
 
 ## Pendentes
-
-### Importação de fatura
-
-O fluxo mais usado no dia a dia. Arquivo principal: `src/components/dashboard/credit-card-invoice-dialog.tsx`. Os itens BL-001 a BL-006, BL-023, BL-024 e BL-026 a BL-029 foram concluídos (ver [Concluídos](#concluídos)).
-
-- [ ] **BL-025: datas aparecem um dia antes no fuso de Brasília.** **Alta.**
-  Encontrado pelo teste de ponta a ponta (BL-023). As datas sem hora que vêm como texto (`"2026-10-06"`) passam por `z.coerce.date` e são gravadas à meia-noite UTC. As telas formatam no fuso do navegador (`format(new Date(...))`), então em Brasília aparece o dia anterior: a compra de 06/10 vira "05 de out" e o vencimento 08/11 vira 07/11. Os 378 itens de fatura já importados no banco de dev estão nessa situação, e a produção provavelmente também.
-  Pontos a resolver:
-  - escolher uma convenção única para datas sem hora (o formulário de nova transação grava meia-noite local, que é 03:00 UTC, e a importação grava meia-noite UTC);
-  - formatar essas datas de forma consistente (`credit-card-invoice-dialog`, `recent-transactions`, `category-chart`, `invoice-analysis-content` e outros);
-  - verificar o agrupamento por mês no servidor: em produção (UTC) e localmente (Brasília), uma compra no dia 1º pode cair em meses diferentes;
-  - decidir se os dados existentes precisam de correção.
-  Hoje o teste e2e confere a data gravada pelo dia do calendário em UTC (a convenção atual).
-
-### Dashboard e faturas
-
-- [ ] **BL-007: cor e formato da variação percentual.** **Média.**
-  Em "Saídas", um aumento de gasto aparece em verde. O número usa ponto (`0.0%`) em vez de vírgula. Arquivo: `src/components/dashboard/summary-cards.tsx`.
-- [ ] **BL-008: valores e eixos nos gráficos.** **Média.**
-  A tendência de 6 meses e as barras de fatura (dashboard e `/faturas`) não mostram valores nem eixo. A legenda "Confirmado" aparece mesmo quando não há nenhuma barra confirmada.
-- [ ] **BL-009: etiqueta vazia na "Fatura Prevista".** **Baixa.**
-  Na lista de lançamentos do dashboard, a linha de fatura prevista mostra uma etiqueta de status sem texto.
-- [ ] **BL-010: gráficos de `/faturas` demoram a aparecer.** **Média.**
-  Levam de 2 a 3 segundos para mostrar as barras, e até lá o card fica vazio. Investigar se a causa é a busca dos dados ou a animação, e mostrar um placeholder enquanto carrega.
-- [ ] **BL-011: preposições em maiúscula nas descrições.** **Baixa.**
-  Aparece "Imposto **De** Renda **Da** Pessoa Física". Descobrir onde a descrição vira Title Case e manter preposições (de, da, do, das, dos, e) em minúscula.
-- [ ] **BL-012: acessibilidade dos formulários e diálogos.** **Média.**
-  Os diálogos não têm `Description`, o que gera aviso no console, e há campos sem rótulo associado (`htmlFor`/`id`).
-  **Parcial (2026-10-09, `2343bdd`):** a importação de fatura já foi corrigida (rótulos ligados, `aria-label` nas linhas da revisão, `DialogDescription`). Os componentes `Combobox` e `InstitutionCombobox` agora aceitam `id`. Falta aplicar o mesmo nos outros diálogos: nova transação, editar transação, importar CSV, compra parcelada e despesa prevista.
 
 ### Técnico
 
@@ -123,8 +94,15 @@ Ideias que vieram do branch abandonado `feature/2026-07-18_prev-desc-new_table` 
 | BL-005 | Importação: valores em formato de moeda e estornos destacados | 2026-10-09 · `2343bdd` |
 | BL-006 | Importação: atalho de 1 clique também para parcela N/M com N > 1 (exceto a última) | 2026-10-09 · `2343bdd` |
 | BL-019 | 👤 Ruleset "Proteger staging e main" ativo: exige PR e os checks "Lint, tipos e testes" e "Testes de ponta a ponta", os dois aceitos só do GitHub Actions; bloqueia push forçado e exclusão | 2026-10-10 |
+| BL-007 | Variação "vs mês anterior": cor pelo sentido do que se mede (saída subindo é vermelho), formato pt-BR ("+12,3%") e saldo saindo do negativo como melhora (dividia pelo valor com sinal: -100 → +50 aparecia -150%) | 2026-10-12 · `d4ed11b` |
+| BL-008 | Gráficos: eixo Y compacto, grade discreta, total no topo das colunas de fatura, valor do mês atual no saldo, linha do zero, legenda só das séries com dados, tooltip em português e no tema escuro, mensagem quando não há fatura; modo privacidade esconde valores. Cores validadas | 2026-10-12 · `e0a2983` |
+| BL-009 | Etiqueta da fatura prevista já mostrava "Previsto" (não reproduz). Achado no lugar: previsões tinham o botão "Liquidar", que deixava o lançamento pago e ainda previsto, fora dos totais — botão removido e `payTransaction` recusa previsto | 2026-10-12 · `d4ed11b` |
+| BL-010 | Não reproduz: com a página compilada, 1ª barra em ~0,3 s e animação completa em ~0,7 s; os 2–3 s eram a compilação do `next dev` na primeira visita | 2026-10-12 · `e0a2983` |
+| BL-011 | "Imposto De Renda Da" vinha do CSS `capitalize`; `titleCasePtBr()` mantém preposições/artigos em minúscula e siglas como estão (só exibição) | 2026-10-12 · `d4ed11b` |
+| BL-012 | Acessibilidade dos diálogos: descrição em todos, rótulos ligados aos campos, nomes nas linhas da revisão do CSV e no botão de editar; teste e2e de regressão | 2026-10-09 · `2343bdd` (importação de fatura) · 2026-10-12 · `09b28ac` (demais) |
 | BL-023 | Teste de ponta a ponta da importação (`npm run test:e2e`, Playwright, banco `<nome>_e2e`): CSV, cartão, revisão, parcela, categorias, importação e `/faturas`; roda no CI antes do `db push` | 2026-10-09 · `04ca85c` |
 | BL-024 | Leitura do CSV: `02/10/2026` era lido como 10 de fevereiro e `R$ 1.234,56` como 1,234; datas com barra agora são dia/mês e o separador de milhar é tratado | 2026-10-09 · `2343bdd` |
+| BL-025 | 🐞 Datas sem hora no dia certo no fuso de Brasília: convenção "meia-noite UTC do dia" em `src/lib/date-only.ts`, aplicada nos schemas, telas (antes um dia antes), intervalos de mês do servidor (lançamento do dia 1º caía no mês anterior no dev) e notificações (conta que vence hoje aparecia atrasada). Dados existentes já seguem a convenção, sem correção no banco. Testes rodam em Brasília; e2e com servidor em UTC | 2026-10-12 · `94a3b80` |
 | BL-026 | 🐞 Importar a fatura real substitui a fatura prevista do mesmo cartão e ciclo (apagada inteira) em vez de mover as parcelas previstas para ela, o que duplicava a parcela do mês | 2026-10-09 · `efebf70` |
 | BL-027 | 🐞 Vencimento sugerido na importação fica no mês corrente, mesmo já vencido (antes pulava para o mês seguinte e a importação caía na fatura errada) | 2026-10-09 · `e168d6a` |
 | BL-028 | Excluir lançamentos previstos em lote em `/faturas` (por item, por mês ou todos do cartão) | 2026-10-09 · `faf4bad` |

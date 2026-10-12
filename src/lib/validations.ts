@@ -1,4 +1,8 @@
 import { z } from "zod";
+import { toDateOnly } from "./date-only";
+
+// Data sem hora (vencimento, compra): sai como meia-noite UTC do dia (BL-025).
+const dateOnly = z.coerce.date().transform(toDateOnly);
 
 export const TransactionType = z.enum(["ENTRADA", "SAIDA"]);
 export const TransactionStatus = z.enum(["PENDENTE", "PAGO", "ATRASADO"]);
@@ -6,7 +10,7 @@ export const TransactionStatus = z.enum(["PENDENTE", "PAGO", "ATRASADO"]);
 export const transactionSchema = z.object({
     descricao: z.string().min(1, "Descrição é obrigatória").transform(val => val.trim().charAt(0).toUpperCase() + val.slice(1).toLowerCase()),
     valor: z.coerce.number().positive("Valor deve ser positivo"),
-    data_vencimento: z.coerce.date(),
+    data_vencimento: dateOnly,
     data_pagamento: z.coerce.date().optional().nullable(),
     status: TransactionStatus,
     tipo: TransactionType,
@@ -60,7 +64,7 @@ export const creditCardInvoiceItemSchema = z.object({
     // Negativo representa estorno/reembolso — reduz o total da fatura em vez de somar.
     valor: z.coerce.number().refine(v => v !== 0, "Valor não pode ser zero"),
     categoria_id: z.string().min(1, "Categoria é obrigatória"),
-    data_compra: z.coerce.date(),
+    data_compra: dateOnly,
     isInstallment: z.boolean().default(false),
     // Qual parcela este item representa (permite começar no meio de um parcelamento
     // já em andamento, ex: usuário só passou a usar o app na parcela 3/6).
@@ -76,7 +80,7 @@ export const creditCardInvoiceItemSchema = z.object({
 
 export const creditCardInvoiceSchema = z.object({
     descricao: z.string().min(1, "Descrição da fatura é obrigatória").transform(val => val.trim().charAt(0).toUpperCase() + val.slice(1).toLowerCase()),
-    data_vencimento: z.coerce.date(),
+    data_vencimento: dateOnly,
     institution_id: z.string().min(1, "Instituição é obrigatória"),
     tipo_pagamento_id: z.string().min(1, "Meio de pagamento é obrigatório"),
     credit_card_id: z.string().optional().nullable(),
@@ -96,7 +100,7 @@ export const cardInstallmentPurchaseSchema = z.object({
     credit_card_id: z.string().min(1, "Cartão é obrigatório"),
     descricao: z.string().min(1, "Descrição é obrigatória").transform(val => val.trim().charAt(0).toUpperCase() + val.slice(1).toLowerCase()),
     valor: z.coerce.number().positive("Valor deve ser positivo"),
-    data_compra: z.coerce.date(),
+    data_compra: dateOnly,
     installmentsCount: z.coerce.number().int().min(1, "Mínimo de 1 parcela").max(48, "Máximo de 48 parcelas"),
     categoria_id: z.string().min(1, "Categoria é obrigatória"),
 });
@@ -124,7 +128,7 @@ export const confirmEstimatedExpenseSchema = z.object({
     valor: z.coerce.number().positive("Valor deve ser positivo"),
     descricao: z.string().min(1, "Descrição é obrigatória").optional(),
     categoria_id: z.string().min(1).optional(),
-    data_vencimento: z.coerce.date().optional(),
+    data_vencimento: dateOnly.optional(),
 });
 
 // Server Actions receive data *before* Zod coercion runs (e.g. dates/numbers

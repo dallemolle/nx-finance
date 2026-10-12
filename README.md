@@ -154,7 +154,7 @@ Documentação técnica completa (regras de negócio, convenções, gaps conheci
 
 ### Pré-requisitos
 
-- Node.js ≥ 18
+- Node.js 24 (versão em `.nvmrc`, a mesma usada no CI — `nvm use` ou `fnm use` lê o arquivo)
 - PostgreSQL (local ou via Docker)
 - npm
 

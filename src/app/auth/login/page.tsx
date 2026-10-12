@@ -52,7 +52,7 @@ export default function LoginPage() {
                 <CardHeader className="space-y-1 text-center">
                     <CardTitle className="text-2xl font-bold tracking-tight">Nx Finance</CardTitle>
                     <CardDescription>
-                        {show2FA ? "Insira o código enviado por e-mail" : "Entre com sua conta para continuar"}
+                        {show2FA ? "Digite o código de 6 dígitos do seu aplicativo autenticador" : "Entre com sua conta para continuar"}
                     </CardDescription>
                 </CardHeader>
                 <form onSubmit={handleSubmit}>
@@ -93,10 +93,16 @@ export default function LoginPage() {
                                     id="code"
                                     placeholder="000000"
                                     required
-                                    maxLength={6}
+                                    autoFocus
+                                    autoComplete="one-time-code"
+                                    aria-describedby="code-help"
+                                    maxLength={12}
                                     value={formData.code}
                                     onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData({ ...formData, code: e.target.value })}
                                 />
+                                <p id="code-help" className="text-xs text-muted-foreground">
+                                    Sem acesso ao aplicativo? Digite um dos seus códigos de recuperação (formato XXXXX-XXXXX). Cada um funciona uma vez.
+                                </p>
                             </div>
                         )}
                     </CardContent>

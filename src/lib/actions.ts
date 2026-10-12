@@ -121,6 +121,12 @@ export async function payTransaction(id: string) {
     try {
         const userId = await getUserId();
 
+        // Previsão não se liquida: ou é efetivada (despesa prevista) ou é
+        // substituída pela fatura importada (fatura prevista). Pagá-la deixava
+        // o lançamento pago e ainda previsto, fora dos totais (BL-009).
+        const current = await db.transaction.findFirst({ where: { id, userId }, select: { is_provisioned: true } });
+        if (current?.is_provisioned) throw new Error("Lançamento previsto não pode ser liquidado. Efetive a despesa prevista ou importe a fatura real.");
+
         const transaction = await db.transaction.update({
             where: { id, userId },
             data: { status: "PAGO", data_pagamento: new Date() },

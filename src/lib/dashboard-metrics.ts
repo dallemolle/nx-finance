@@ -34,3 +34,33 @@ export function projectMonthlyOutflow({ saidas, today, month, year }: {
 export function incomeCommitmentPercent(spent: number, income: number): number | null {
     return income > 0 ? (spent / income) * 100 : null;
 }
+
+// Variação % em relação ao mês anterior. Divide pelo valor absoluto do mês
+// anterior: com o saldo saindo de -100 pra +50, a variação é +150% (melhorou),
+// não -150%. Sem valor no mês anterior, não há base de comparação: 0.
+export function percentChange(current: number, previous: number): number {
+    if (previous === 0) return 0;
+    return ((current - previous) / Math.abs(previous)) * 100;
+}
+
+const percentFormatter = new Intl.NumberFormat("pt-BR", {
+    minimumFractionDigits: 1,
+    maximumFractionDigits: 1,
+    signDisplay: "exceptZero",
+});
+
+// "+12,3%", "-4,0%", "0,0%" (BL-007: antes "12.3%", com ponto).
+export function formatPercentChange(value: number): string {
+    // Arredonda antes pra -0,01 não virar "-0,0%".
+    const rounded = Math.round(value * 10) / 10;
+    return `${percentFormatter.format(rounded === 0 ? 0 : rounded)}%`;
+}
+
+export type VariationTone = "good" | "bad" | "neutral";
+
+// Se a variação é boa ou ruim depende do que se mede: entrada e saldo subindo
+// é bom ("up"); saída subindo é ruim ("down"). Antes, saída subindo ficava verde.
+export function variationTone(value: number, goodWhen: "up" | "down"): VariationTone {
+    if (Math.abs(value) < 0.05) return "neutral";
+    return (value > 0) === (goodWhen === "up") ? "good" : "bad";
+}

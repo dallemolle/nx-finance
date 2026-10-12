@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { detectInstallmentInDescription } from "./dashboard-utils";
+import { detectInstallmentInDescription, titleCasePtBr } from "./dashboard-utils";
 
 describe("detectInstallmentInDescription", () => {
     test.each([
@@ -28,5 +28,32 @@ describe("detectInstallmentInDescription", () => {
         ["Uber Trip", "sem separador numérico"],
     ])("não detecta parcela em %s (%s)", (descricao) => {
         expect(detectInstallmentInDescription(descricao)).toBeNull();
+    });
+});
+
+// BL-011: o CSS `capitalize` deixava "Imposto De Renda Da Pessoa Física".
+describe("titleCasePtBr", () => {
+    test("maiúscula em cada palavra, preposições em minúscula", () => {
+        expect(titleCasePtBr("Imposto de renda da pessoa física (01/08)")).toBe("Imposto de Renda da Pessoa Física (01/08)");
+        expect(titleCasePtBr("Imposto De Renda Da Pessoa Física")).toBe("Imposto de Renda da Pessoa Física");
+        expect(titleCasePtBr("arroz e feijão com ovo para o almoço")).toBe("Arroz e Feijão com Ovo para o Almoço");
+    });
+
+    test("a primeira palavra sempre começa com maiúscula", () => {
+        expect(titleCasePtBr("de volta ao mercado")).toBe("De Volta ao Mercado");
+    });
+
+    test("pontuação antes da palavra (parênteses) não impede a maiúscula", () => {
+        expect(titleCasePtBr("Pix diogo (troca de oleo biz)")).toBe("Pix Diogo (Troca de Oleo Biz)");
+    });
+
+    test("siglas e texto do banco em maiúscula ficam como estão", () => {
+        expect(titleCasePtBr("UBER *TRIP 1111")).toBe("UBER *TRIP 1111");
+        expect(titleCasePtBr("Ultima fatura TIM (multa)")).toBe("Ultima Fatura TIM (Multa)");
+    });
+
+    test("separadores e números se mantêm", () => {
+        expect(titleCasePtBr("fatura prevista - nubank - 10/2026")).toBe("Fatura Prevista - Nubank - 10/2026");
+        expect(titleCasePtBr("")).toBe("");
     });
 });

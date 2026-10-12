@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { cardInstallmentPurchaseSchema, confirmEstimatedExpenseSchema, creditCardInvoiceSchema, transactionSchema } from "./validations";
+import { cardInstallmentPurchaseSchema, confirmEstimatedExpenseSchema, creditCardInvoiceSchema, estimatedExpenseSchema, transactionSchema } from "./validations";
 
 // BL-025: toda data sem hora sai do schema como meia-noite UTC do dia.
 describe("datas sem hora nos schemas", () => {
@@ -38,5 +38,31 @@ describe("datas sem hora nos schemas", () => {
 
     test("data inválida é rejeitada", () => {
         expect(transactionSchema.safeParse({ ...base, data_vencimento: "abc" }).success).toBe(false);
+    });
+});
+
+// BL-030: despesa prevista recorrente (mesmo valor repetido por N meses).
+describe("estimatedExpenseSchema: recorrente", () => {
+    const base = { descricao: "academia", valor: 120, categoria_id: "c", invoice_month: 11, invoice_year: 2026, credit_card_id: "k" };
+
+    test("aceita recorrente de 2 a 36 meses", () => {
+        expect(estimatedExpenseSchema.parse({ ...base, isRecurring: true, recurringMonths: 12 }).recurringMonths).toBe(12);
+        expect(estimatedExpenseSchema.safeParse({ ...base, isRecurring: true, recurringMonths: 36 }).success).toBe(true);
+    });
+
+    test("recusa fora do intervalo ou sem a quantidade de meses", () => {
+        expect(estimatedExpenseSchema.safeParse({ ...base, isRecurring: true, recurringMonths: 1 }).success).toBe(false);
+        expect(estimatedExpenseSchema.safeParse({ ...base, isRecurring: true, recurringMonths: 37 }).success).toBe(false);
+        expect(estimatedExpenseSchema.safeParse({ ...base, isRecurring: true }).success).toBe(false);
+    });
+
+    test("não pode ser parcelada e recorrente ao mesmo tempo", () => {
+        const r = estimatedExpenseSchema.safeParse({ ...base, isRecurring: true, recurringMonths: 6, isInstallment: true, installmentsCount: 3 });
+        expect(r.success).toBe(false);
+    });
+
+    test("sem os campos novos continua valendo como antes (uma vez)", () => {
+        const parsed = estimatedExpenseSchema.parse(base);
+        expect([parsed.isRecurring, parsed.isInstallment]).toEqual([false, false]);
     });
 });

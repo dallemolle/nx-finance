@@ -3,8 +3,6 @@
 import { db } from "@/lib/db";
 import { getSessionUserId } from "@/lib/session";
 import { formatDateOnly, monthRange, todayDateOnly } from "./date-only";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
 import type { Prisma, TransactionStatus } from "@prisma/client";
 
 export interface ReportFilters {
@@ -88,18 +86,15 @@ export async function getFinancialInstitutions() {
     return db.financialInstitution.findMany({ where: { userId } });
 }
 
-// Chamada diretamente do client (command-palette.tsx), então autentica pela
-// sessão em vez de receber userId como parâmetro confiável.
+// Chamada diretamente do client (command-palette.tsx): o userId vem da sessão.
 export async function searchTransactions(query: string) {
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id) throw new Error("Não autorizado");
-
+    const userId = await getSessionUserId();
     const trimmed = query.trim();
     if (!trimmed) return [];
 
     const transactions = await db.transaction.findMany({
         where: {
-            userId: session.user.id,
+            userId,
             descricao: { contains: trimmed, mode: "insensitive" },
         },
         select: { id: true, descricao: true, valor: true, tipo: true, data_vencimento: true },

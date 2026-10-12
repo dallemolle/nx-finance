@@ -71,9 +71,9 @@ export interface InstallmentSplit {
     value: Decimal;
 }
 
-// Split cents-accurate: mesma lógica de createTransaction (src/lib/actions.ts)
-// — divide com arredondamento pra baixo e a última parcela absorve o
-// centavo residual, pra soma das parcelas bater exatamente com o total.
+// Divisão em parcelas exata no centavo, usada por todo parcelamento do app
+// (cartão, despesa genérica e prevista — BL-013): divide com arredondamento
+// pra baixo e a última parcela absorve o resto, pra soma bater com o total.
 export function splitInstallments(totalValue: Decimal, count: number): InstallmentSplit[] {
     const installmentValue = totalValue.dividedBy(count).toDecimalPlaces(2, Decimal.ROUND_DOWN);
     const lastInstallmentValue = totalValue.minus(installmentValue.times(count - 1));

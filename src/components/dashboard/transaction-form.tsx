@@ -17,8 +17,8 @@ import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { Switch } from "@/components/ui/switch";
 import { addMonths, format } from "date-fns";
-import { ptBR } from "date-fns/locale";
 import { Decimal } from "decimal.js";
+import { splitInstallments } from "@/lib/credit-card-cycle";
 import { cn, getErrorMessage } from "@/lib/utils";
 import { dateOnlyToLocal } from "@/lib/date-only";
 import type { TransactionFormValues, TransactionInput } from "@/lib/validations";
@@ -323,15 +323,11 @@ export function TransactionForm({ categories: initialCategories, paymentMethods:
                                                 </tr>
                                             </thead>
                                             <tbody>
-                                                {Array.from({ length: installmentsCount }).map((_, i) => {
-                                                    const totalValue = new Decimal(valorAtual);
-                                                    const count = installmentsCount;
-                                                    const installmentValue = totalValue.dividedBy(count).toDecimalPlaces(2, Decimal.ROUND_DOWN);
-                                                    const lastInstallmentValue = totalValue.minus(installmentValue.times(count - 1));
-
-                                                    const currentVal = i === count - 1 ? lastInstallmentValue : installmentValue;
+                                                {splitInstallments(new Decimal(valorAtual), installmentsCount).map((installment, i, installments) => {
+                                                    const count = installments.length;
+                                                    const currentVal = installment.value;
                                                     const dueDate = addMonths(dataVencimento, i);
-                                                    const isAdjusted = i === count - 1 && !lastInstallmentValue.equals(installmentValue);
+                                                    const isAdjusted = i === count - 1 && !currentVal.equals(installments[0].value);
 
                                                     return (
                                                         <tr key={i} className={cn("border-b last:border-0", isAdjusted && "bg-blue-50/50 dark:bg-blue-900/20")}>

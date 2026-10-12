@@ -1,23 +1,16 @@
 "use server";
 
 import { db } from "@/lib/db";
+import { getSessionUserId } from "@/lib/session";
 import { toDateOnly } from "./date-only";
 import { revalidatePath } from "next/cache";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
 import { getErrorMessage, getPrismaErrorMessage } from "@/lib/utils";
 import { getMerchantSignature } from "@/lib/dashboard-utils";
 import type { TransactionStatus, TransactionType } from "@prisma/client";
 
-async function getUserId() {
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id) throw new Error("Não autorizado");
-    return session.user.id;
-}
-
 export async function getMappingSuggestions() {
     try {
-        const userId = await getUserId();
+        const userId = await getSessionUserId();
         const suggestions = await db.mappingSuggestion.findMany({
             where: { userId },
             include: { category: true }
@@ -31,7 +24,7 @@ export async function getMappingSuggestions() {
 
 export async function saveMappingSuggestion(searchTerm: string, categoryId: string) {
     try {
-        const userId = await getUserId();
+        const userId = await getSessionUserId();
         const signature = getMerchantSignature(searchTerm);
         const suggestion = await db.mappingSuggestion.upsert({
             where: {
@@ -70,7 +63,7 @@ export interface BatchTransactionInput {
 
 export async function processBatchTransactions(transactions: BatchTransactionInput[]) {
     try {
-        const userId = await getUserId();
+        const userId = await getSessionUserId();
 
         // Save the transactions
         const createdTransactions = await db.$transaction(

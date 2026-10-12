@@ -18,7 +18,7 @@ interface PopoverContentProps
 
 const PopoverContent = React.forwardRef<
     React.ElementRef<typeof PopoverPrimitive.Content>,
-    React.ComponentPropsWithoutRef<typeof PopoverPrimitive.Content> & { portal?: boolean }
+    PopoverContentProps
 >(({ className, align = "center", sideOffset = 4, portal = true, ...props }, ref) => {
     const content = (
         <PopoverPrimitive.Content

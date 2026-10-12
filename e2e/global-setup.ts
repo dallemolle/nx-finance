@@ -21,6 +21,7 @@ export default async function globalSetup() {
     const db = new PrismaClient({ datasourceUrl: url });
     try {
         await db.user.deleteMany();
+        await db.loginFailure.deleteMany(); // não pende de User (BL-036)
         const user = await db.user.create({
             data: { email: E2E_USER.email, password: await bcrypt.hash(E2E_USER.password, 10) },
         });

@@ -18,7 +18,7 @@ Combinada em 2026-10-09. Cada etapa vai no seu próprio branch `feature/...`.
 1.1. **Correção urgente (bug em produção):** BL-026, BL-027, BL-028 e BL-029, no branch `feature/2026-10-09_corrige_conciliacao_parcelas`. ✅ Concluída.
 2. **Datas:** BL-025. Entrou antes da etapa de dashboard porque afeta o que todas as telas mostram. ✅ Concluída.
 3. **Dashboard e faturas:** BL-007, BL-009, BL-011, BL-008, BL-010 e o restante de BL-012, no branch `feature/2026-10-12_dashboard_e_faturas`. ✅ Concluída.
-4. **Código:** BL-033 primeiro (prazo: 19/10/2026), com BL-034 e BL-035, que mexem no mesmo CI; depois BL-013 junto com BL-014, BL-015 e BL-016.
+4. **Código:** BL-033 primeiro (prazo: 19/10/2026), com BL-034 e BL-035, que mexem no mesmo CI; depois BL-013 junto com BL-014, BL-015 e BL-016, no branch `feature/2026-10-12_etapa_codigo`. ✅ Concluída. BL-014 continua como prática: cobrir com teste cada arquivo que for mexido.
 5. **Segurança da conta:** BL-021, depois BL-022.
 6. **Depois, só com motivo concreto:** BL-017 e BL-018.
 7. **Com o usuário:** BL-020 e BL-032 (em validação até novembro de 2026). (BL-019 ✅ concluído.)
@@ -28,24 +28,10 @@ Combinada em 2026-10-09. Cada etapa vai no seu próprio branch `feature/...`.
 
 ### Técnico
 
-- [ ] **BL-013: unificar o cálculo de parcelas de despesa genérica.** **Média.**
-  `createTransaction` (`src/lib/actions.ts`) tem uma cópia própria da divisão em parcelas em vez de usar `splitInstallments`. Unificar e cobrir com teste.
-- [ ] **BL-014: testes para o que ainda não tem cobertura.** **Média.**
-  `actions.ts`, `csv-actions.ts`, `reports.ts` e `getDashboardData` não têm testes. Seguir o padrão de `src/lib/services/` e cobrir aos poucos, a cada mudança nesses arquivos.
-- [ ] **BL-015: um único `getUserId`.** **Baixa.**
-  Ainda há cópias de `getUserId` em `actions.ts`, `csv-actions.ts`, `credit-card-actions.ts` e `credit-card-provision-actions.ts`. Substituir todas por `getSessionUserId` de `src/lib/session.ts`.
-- [ ] **BL-016: avisos antigos de lint.** **Baixa.**
-  `npm run lint` mostra 15 avisos, quase todos variáveis e imports sem uso.
 - [ ] **BL-017: vulnerabilidades que exigem versão principal nova.** **Baixa.**
   O `npm audit` aponta 13 vulnerabilidades, todas em ferramentas de desenvolvimento e build: Tailwind 3 (resolvida no 4), a CLI do Prisma (via `effect`, resolvida no 8) e o `eslint-config-next`. Cada uma é uma migração; tratar como projeto próprio.
 - [ ] **BL-018: deploy da Vercel sem sincronia com o banco.** **Baixa.**
   A Vercel publica o código sem esperar o CI, então o código novo pode entrar no ar antes do `db push`. Enquanto isso não muda, mudanças que removem algo do schema devem ir em dois deploys. Se o schema passar a mudar com frequência, avaliar a migração para `prisma migrate` (histórico e `migrate deploy`).
-- [ ] **BL-033: fixar a imagem do runner do CI em `ubuntu-24.04`.** **Alta.** ⏰ **Antes de 19/10/2026.**
-  O GitHub vai trocar o `ubuntu-latest` pelo Ubuntu 26 a partir de 19/10/2026. Desde o BL-C15, o CI usa o Postgres que já vem instalado no runner (`systemctl start postgresql`); se a imagem nova trouxer outra versão do Postgres, ou nenhuma, os jobs "Lint, tipos e testes" e "Testes de ponta a ponta" quebram e o merge fica bloqueado. Trocar `runs-on: ubuntu-latest` por `ubuntu-24.04` nos workflows. Atualizar para o 26 depois, de propósito, conferindo a versão do Postgres.
-- [ ] **BL-034: mesma versão do Node no CI e localmente.** **Média.**
-  O CI usa o Node 22 e a máquina de desenvolvimento, o Node 24. A diferença já quebrou o CI uma vez: `Intl.NumberFormat` formata moeda compacta de jeitos diferentes nas duas versões ("R$ 2,0 mil" × "R$ 2 mil"), e o teste só falhou no CI (corrigido em `c33de7f`). Escolher uma versão, declarar em `.nvmrc` e em `engines` do `package.json`, e usar no `setup-node` do CI.
-- [ ] **BL-035: atualizar as ações do GitHub que rodam no Node 20.** **Baixa.**
-  O CI avisa que `actions/checkout@v4` e `actions/setup-node@v4` usam o Node 20, descontinuado nos runners (hoje são forçadas a rodar no Node 24). Subir para as versões principais seguintes nos workflows.
 
 ### Segurança da conta (vindo do AUDIT.md)
 
@@ -99,6 +85,13 @@ Ideias que vieram do branch abandonado `feature/2026-07-18_prev-desc-new_table` 
 | BL-004 | Importação: arrastar e soltar o CSV | 2026-10-09 · `2343bdd` |
 | BL-005 | Importação: valores em formato de moeda e estornos destacados | 2026-10-09 · `2343bdd` |
 | BL-006 | Importação: atalho de 1 clique também para parcela N/M com N > 1 (exceto a última) | 2026-10-09 · `2343bdd` |
+| BL-013 | Uma só divisão em parcelas: `createTransaction`, despesa prevista genérica e as prévias dos três formulários passam a usar `splitInstallments` (prévia e gravação saem da mesma conta) | 2026-10-12 · `a2f4e02` |
+| BL-014 | Testes de integração de `createTransaction`/`updateTransaction`, `payTransaction`, `getDashboardData`/`getMonthlyTrend` e despesa prevista genérica. Faltam `csv-actions.ts` e `reports.ts`: cobrir quando forem mexidos | 2026-10-12 · `a2f4e02` |
+| BL-015 | Um só `getSessionUserId` (4 cópias de `getUserId` e a sessão lida à mão em `searchTransactions`); `two-factor-actions` mantém o próprio por precisar do e-mail | 2026-10-12 · `a2f4e02` |
+| BL-016 | Lint de 9 avisos para 0, e `npm run lint` passa a falhar com qualquer aviso (`--max-warnings 0`) | 2026-10-12 · `a2f4e02` |
+| BL-033 | CI com runner fixo em `ubuntu-24.04` (o `ubuntu-latest` vira Ubuntu 26 em 19/10/2026 e o CI depende do Postgres da imagem) | 2026-10-12 · `21d38b2` |
+| BL-034 | Node 24 em `.nvmrc`, lido pelo CI (`node-version-file`) e citado no README. **Conferir na Vercel** (Settings → Build and Deployment → Node.js Version) se a produção também está no 24.x | 2026-10-12 · `21d38b2` |
+| BL-035 | `actions/checkout`, `setup-node` e `upload-artifact` na v7 (Node 24; a v4 rodava no Node 20, descontinuado) | 2026-10-12 · `21d38b2` |
 | BL-019 | 👤 Ruleset "Proteger staging e main" ativo: exige PR e os checks "Lint, tipos e testes" e "Testes de ponta a ponta", os dois aceitos só do GitHub Actions; bloqueia push forçado e exclusão | 2026-10-10 |
 | BL-007 | Variação "vs mês anterior": cor pelo sentido do que se mede (saída subindo é vermelho), formato pt-BR ("+12,3%") e saldo saindo do negativo como melhora (dividia pelo valor com sinal: -100 → +50 aparecia -150%) | 2026-10-12 · `d4ed11b` |
 | BL-008 | Gráficos: eixo Y compacto, grade discreta, total no topo das colunas de fatura, valor do mês atual no saldo, linha do zero, legenda só das séries com dados, tooltip em português e no tema escuro, mensagem quando não há fatura; modo privacidade esconde valores. Cores validadas | 2026-10-12 · `e0a2983` |

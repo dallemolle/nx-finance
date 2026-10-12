@@ -41,6 +41,17 @@ model TwoFactorRecoveryCode {
   @@index([userId])
 }
 
+// Tentativas de login que falharam (BL-036), pra limitar força bruta de senha
+// e do código do 2FA. key = "email:<email>" ou "ip:<ip>". No banco (não em
+// memória) porque na Vercel cada requisição pode cair numa instância diferente.
+model LoginFailure {
+  id        String   @id @default(cuid())
+  key       String
+  createdAt DateTime @default(now())
+
+  @@index([key, createdAt])
+}
+
 enum TransactionStatus {
   PENDENTE
   PAGO

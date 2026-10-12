@@ -19,7 +19,7 @@ Combinada em 2026-10-09. Cada etapa vai no seu próprio branch `feature/...`.
 2. **Datas:** BL-025. Entrou antes da etapa de dashboard porque afeta o que todas as telas mostram. ✅ Concluída.
 3. **Dashboard e faturas:** BL-007, BL-009, BL-011, BL-008, BL-010 e o restante de BL-012, no branch `feature/2026-10-12_dashboard_e_faturas`. ✅ Concluída.
 4. **Código:** BL-033 primeiro (prazo: 19/10/2026), com BL-034 e BL-035, que mexem no mesmo CI; depois BL-013 junto com BL-014, BL-015 e BL-016, no branch `feature/2026-10-12_etapa_codigo`. ✅ Concluída. BL-014 continua como prática: cobrir com teste cada arquivo que for mexido.
-5. **Segurança da conta:** BL-021, depois BL-022, no branch `feature/2026-10-12_seguranca_conta`. ✅ Concluída. Achado: BL-036 (limite de tentativas no login).
+5. **Segurança da conta:** BL-021, depois BL-022, no branch `feature/2026-10-12_seguranca_conta`. ✅ Concluída. Achado: BL-036 (limite de tentativas no login), feito em seguida no branch `feature/2026-10-12_limite_tentativas_login`. ✅
 6. **Depois, só com motivo concreto:** BL-017 e BL-018.
 7. **Com o usuário:** BL-020 e BL-032 (em validação até novembro de 2026). (BL-019 ✅ concluído.)
 8. **Funcionalidades novas, sem pressa:** BL-030 e BL-031.
@@ -32,11 +32,6 @@ Combinada em 2026-10-09. Cada etapa vai no seu próprio branch `feature/...`.
   O `npm audit` aponta 13 vulnerabilidades, todas em ferramentas de desenvolvimento e build: Tailwind 3 (resolvida no 4), a CLI do Prisma (via `effect`, resolvida no 8) e o `eslint-config-next`. Cada uma é uma migração; tratar como projeto próprio.
 - [ ] **BL-018: deploy da Vercel sem sincronia com o banco.** **Baixa.**
   A Vercel publica o código sem esperar o CI, então o código novo pode entrar no ar antes do `db push`. Enquanto isso não muda, mudanças que removem algo do schema devem ir em dois deploys. Se o schema passar a mudar com frequência, avaliar a migração para `prisma migrate` (histórico e `migrate deploy`).
-
-### Segurança da conta
-
-- [ ] **BL-036: limitar tentativas de login.** **Alta.**
-  O login (`authorize()` em `src/lib/auth.ts`) não tem limite de tentativas: dá pra testar senhas sem parar e, sabendo a senha, os 1.000.000 de códigos de 6 dígitos do 2FA (com a tolerância de ±30 s, 3 deles valem a cada momento). Limitar por e-mail e por IP (ex.: 10 tentativas a cada 15 minutos, com bloqueio progressivo). Na Vercel cada requisição pode cair numa instância diferente, então o contador em memória não serve: guardar no banco (tabela de tentativas) ou num Redis. Os códigos de recuperação não precisam disso (50 bits aleatórios).
 
 ### Funcionalidades novas
 
@@ -106,3 +101,4 @@ Ideias que vieram do branch abandonado `feature/2026-07-18_prev-desc-new_table` 
 | BL-027 | 🐞 Vencimento sugerido na importação fica no mês corrente, mesmo já vencido (antes pulava para o mês seguinte e a importação caía na fatura errada) | 2026-10-09 · `e168d6a` |
 | BL-028 | Excluir lançamentos previstos em lote em `/faturas` (por item, por mês ou todos do cartão) | 2026-10-09 · `faf4bad` |
 | BL-029 | Excluir uma fatura importada (e os itens dela) pela lixeira em "Lançamentos do Mês", para refazer uma importação errada; não afeta as previstas | 2026-10-09 · `7094a43` |
+| BL-036 | Limite de tentativas de login: 10 erros por e-mail ou 30 por IP em 15 minutos bloqueiam (senha errada, e-mail inexistente e código 2FA errado contam), contados no banco (tabela `LoginFailure`), checado antes de comparar a senha | 2026-10-12 · `de2ab90` |

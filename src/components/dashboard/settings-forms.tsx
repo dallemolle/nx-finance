@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { toast } from "sonner";
-import { Trash2, Save, Undo2 } from "lucide-react";
+import { Trash2, Save, Undo2, Dices } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -15,6 +15,7 @@ import {
     deletePaymentMethod
 } from "@/lib/actions";
 import { getErrorMessage } from "@/lib/utils";
+import { suggestCategoryColor } from "@/lib/category-colors";
 import type { Category, PaymentMethod, FinancialInstitution } from "@/types/models";
 
 interface SettingsRowItem {
@@ -28,9 +29,11 @@ interface SettingsItemProps<T extends SettingsRowItem> {
     onUpdate: (id: string, data: { nome?: string; cor?: string }) => Promise<unknown>;
     onDelete: (id: string) => Promise<unknown>;
     hasColor?: boolean;
+    // Sorteia uma cor nova a partir da atual (botão "Sugerir cor"; só categorias).
+    suggestColor?: (currentColor: string) => string;
 }
 
-function SettingsRow<T extends SettingsRowItem>({ item, onUpdate, onDelete, hasColor = false }: SettingsItemProps<T>) {
+function SettingsRow<T extends SettingsRowItem>({ item, onUpdate, onDelete, hasColor = false, suggestColor }: SettingsItemProps<T>) {
     const [name, setName] = useState(item.nome);
     const [color, setColor] = useState(item.cor || "#64748b");
     const [isPending, setIsPending] = useState(false);
@@ -88,15 +91,30 @@ function SettingsRow<T extends SettingsRowItem>({ item, onUpdate, onDelete, hasC
             </div>
             
             {hasColor && (
-                <div className="w-full sm:w-16 space-y-1 shrink-0">
+                <div className={suggestColor ? "w-full sm:w-28 space-y-1 shrink-0" : "w-full sm:w-16 space-y-1 shrink-0"}>
                     <Label className="text-[10px] uppercase font-bold text-muted-foreground ml-1">Cor</Label>
                     <div className="flex items-center gap-2">
                         <Input 
                             type="color" 
+                            aria-label={`Cor de ${item.nome}`}
                             value={color} 
                             onChange={(e) => setColor(e.target.value)} 
                             className="h-9 w-full p-1 bg-slate-50 border-none dark:bg-slate-800 cursor-pointer"
                         />
+                        {suggestColor && (
+                            <Button
+                                type="button"
+                                variant="outline"
+                                size="icon"
+                                onClick={() => setColor(suggestColor(color))}
+                                className="h-9 w-9 shrink-0"
+                                title="Sugerir cor"
+                                aria-label={`Sugerir cor para ${item.nome}`}
+                                disabled={isPending}
+                            >
+                                <Dices className="h-4 w-4" />
+                            </Button>
+                        )}
                     </div>
                 </div>
             )}
@@ -108,6 +126,8 @@ function SettingsRow<T extends SettingsRowItem>({ item, onUpdate, onDelete, hasC
                             variant="ghost" 
                             size="icon" 
                             onClick={handleReset}
+                            aria-label={`Desfazer alterações em ${item.nome}`}
+                            title="Desfazer"
                             className="h-9 w-9 text-slate-400 hover:text-slate-600"
                             disabled={isPending}
                         >
@@ -117,6 +137,8 @@ function SettingsRow<T extends SettingsRowItem>({ item, onUpdate, onDelete, hasC
                             variant="secondary" 
                             size="icon" 
                             onClick={handleUpdate}
+                            aria-label={`Salvar ${item.nome}`}
+                            title="Salvar"
                             className="h-9 w-9 bg-slate-900 text-white hover:bg-slate-800 dark:bg-slate-100 dark:text-slate-900"
                             disabled={isPending}
                         >
@@ -128,6 +150,8 @@ function SettingsRow<T extends SettingsRowItem>({ item, onUpdate, onDelete, hasC
                     variant="ghost" 
                     size="icon" 
                     onClick={handleDelete}
+                    aria-label={`Excluir ${item.nome}`}
+                    title="Excluir"
                     className="h-9 w-9 text-rose-300 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30"
                     disabled={isPending}
                 >
@@ -167,6 +191,8 @@ export function CategorySettings({ categories }: { categories: Category[] }) {
                     onUpdate={updateCategory} 
                     onDelete={deleteCategory}
                     hasColor
+                    // Diferente da cor atual e das outras categorias.
+                    suggestColor={(current) => suggestCategoryColor([...categories.filter(c => c.id !== cat.id).map(c => c.cor), current])}
                 />
             ))}
             {categories.length === 0 && (

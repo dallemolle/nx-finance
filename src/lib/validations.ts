@@ -37,6 +37,11 @@ export const categorySchema = z.object({
     tipo: TransactionType,
 });
 
+// Criação: sem cor, o servidor sorteia uma diferente das categorias do usuário.
+export const newCategorySchema = categorySchema.extend({
+    cor: z.string().regex(/^#[0-9A-F]{6}$/i, "Cor inválida").optional(),
+});
+
 export const paymentMethodSchema = z.object({
     nome: z.string().min(1, "Nome é obrigatório").transform(val => val.trim().charAt(0).toUpperCase() + val.slice(1).toLowerCase()),
 });
@@ -160,6 +165,7 @@ export type TransactionInput = z.input<typeof transactionSchema>;
 // (form state already holds real Date/number values, not raw strings).
 export type TransactionFormValues = z.infer<typeof transactionSchema>;
 export type CategoryInput = z.input<typeof categorySchema>;
+export type NewCategoryInput = z.input<typeof newCategorySchema>;
 export type PaymentMethodInput = z.input<typeof paymentMethodSchema>;
 export type FinancialInstitutionInput = z.input<typeof financialInstitutionSchema>;
 export type EnableTwoFactorInput = z.input<typeof enableTwoFactorSchema>;

@@ -5,17 +5,20 @@ import { getSessionUserId } from "@/lib/session";
 import { revalidatePath } from "next/cache";
 import {
     categorySchema,
+    newCategorySchema,
     paymentMethodSchema,
     transactionSchema,
     financialInstitutionSchema,
     type TransactionInput,
     type CategoryInput,
+    type NewCategoryInput,
     type PaymentMethodInput,
     type FinancialInstitutionInput,
 } from "@/lib/validations";
 import { addMonthsDateOnly } from "./date-only";
 import { Decimal } from "decimal.js";
 import { splitInstallments } from "./credit-card-cycle";
+import { suggestCategoryColor } from "./category-colors";
 import { getPrismaErrorMessage } from "@/lib/utils";
 
 // Transaction Actions
@@ -150,10 +153,10 @@ export async function deleteTransaction(id: string) {
 }
 
 // Category Actions
-export async function createCategory(data: CategoryInput) {
+export async function createCategory(data: NewCategoryInput) {
     try {
         const userId = await getSessionUserId();
-        const validatedData = categorySchema.parse(data);
+        const validatedData = newCategorySchema.parse(data);
 
         // Check if category already exists for this user and type (case-insensitive)
         const existing = await db.category.findFirst({
@@ -169,9 +172,15 @@ export async function createCategory(data: CategoryInput) {
 
         if (existing) return existing;
 
+        // Sem cor informada: sorteia uma que não repete nem lembra as do usuário.
+        const cor = validatedData.cor ?? suggestCategoryColor(
+            (await db.category.findMany({ where: { userId }, select: { cor: true } })).map(c => c.cor),
+        );
+
         const category = await db.category.create({
             data: {
                 ...validatedData,
+                cor,
                 userId,
             },
         });

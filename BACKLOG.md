@@ -16,7 +16,7 @@ Combinada em 2026-10-09. Cada etapa vai no seu próprio branch `feature/...`.
 
 1. **Importação de fatura:** BL-001, BL-002, BL-003, BL-005, BL-004, BL-006 e a parte de BL-012 que toca nesse diálogo. Em seguida, BL-023. ✅ Concluída.
 1.1. **Correção urgente (bug em produção):** BL-026, BL-027, BL-028 e BL-029, no branch `feature/2026-10-09_corrige_conciliacao_parcelas`. ✅ Concluída.
-2. **Datas:** BL-025. Entrou antes da etapa de dashboard porque afeta o que todas as telas mostram.
+2. **Datas:** BL-025. Entrou antes da etapa de dashboard porque afeta o que todas as telas mostram. ✅ Concluída.
 3. **Dashboard e faturas:** BL-007, BL-009, BL-011, BL-008, BL-010 e o restante de BL-012.
 4. **Código:** BL-013 junto com BL-014, depois BL-015 e BL-016.
 5. **Segurança da conta:** BL-021, depois BL-022.
@@ -25,19 +25,6 @@ Combinada em 2026-10-09. Cada etapa vai no seu próprio branch `feature/...`.
 8. **Funcionalidades novas, sem pressa:** BL-030 e BL-031.
 
 ## Pendentes
-
-### Importação de fatura
-
-O fluxo mais usado no dia a dia. Arquivo principal: `src/components/dashboard/credit-card-invoice-dialog.tsx`. Os itens BL-001 a BL-006, BL-023, BL-024 e BL-026 a BL-029 foram concluídos (ver [Concluídos](#concluídos)).
-
-- [ ] **BL-025: datas aparecem um dia antes no fuso de Brasília.** **Alta.**
-  Encontrado pelo teste de ponta a ponta (BL-023). As datas sem hora que vêm como texto (`"2026-10-06"`) passam por `z.coerce.date` e são gravadas à meia-noite UTC. As telas formatam no fuso do navegador (`format(new Date(...))`), então em Brasília aparece o dia anterior: a compra de 06/10 vira "05 de out" e o vencimento 08/11 vira 07/11. Os 378 itens de fatura já importados no banco de dev estão nessa situação, e a produção provavelmente também.
-  Pontos a resolver:
-  - escolher uma convenção única para datas sem hora (o formulário de nova transação grava meia-noite local, que é 03:00 UTC, e a importação grava meia-noite UTC);
-  - formatar essas datas de forma consistente (`credit-card-invoice-dialog`, `recent-transactions`, `category-chart`, `invoice-analysis-content` e outros);
-  - verificar o agrupamento por mês no servidor: em produção (UTC) e localmente (Brasília), uma compra no dia 1º pode cair em meses diferentes;
-  - decidir se os dados existentes precisam de correção.
-  Hoje o teste e2e confere a data gravada pelo dia do calendário em UTC (a convenção atual).
 
 ### Dashboard e faturas
 
@@ -125,6 +112,7 @@ Ideias que vieram do branch abandonado `feature/2026-07-18_prev-desc-new_table` 
 | BL-019 | 👤 Ruleset "Proteger staging e main" ativo: exige PR e os checks "Lint, tipos e testes" e "Testes de ponta a ponta", os dois aceitos só do GitHub Actions; bloqueia push forçado e exclusão | 2026-10-10 |
 | BL-023 | Teste de ponta a ponta da importação (`npm run test:e2e`, Playwright, banco `<nome>_e2e`): CSV, cartão, revisão, parcela, categorias, importação e `/faturas`; roda no CI antes do `db push` | 2026-10-09 · `04ca85c` |
 | BL-024 | Leitura do CSV: `02/10/2026` era lido como 10 de fevereiro e `R$ 1.234,56` como 1,234; datas com barra agora são dia/mês e o separador de milhar é tratado | 2026-10-09 · `2343bdd` |
+| BL-025 | 🐞 Datas sem hora no dia certo no fuso de Brasília: convenção "meia-noite UTC do dia" em `src/lib/date-only.ts`, aplicada nos schemas, telas (antes um dia antes), intervalos de mês do servidor (lançamento do dia 1º caía no mês anterior no dev) e notificações (conta que vence hoje aparecia atrasada). Dados existentes já seguem a convenção, sem correção no banco. Testes rodam em Brasília; e2e com servidor em UTC | 2026-10-12 · `94a3b80` |
 | BL-026 | 🐞 Importar a fatura real substitui a fatura prevista do mesmo cartão e ciclo (apagada inteira) em vez de mover as parcelas previstas para ela, o que duplicava a parcela do mês | 2026-10-09 · `efebf70` |
 | BL-027 | 🐞 Vencimento sugerido na importação fica no mês corrente, mesmo já vencido (antes pulava para o mês seguinte e a importação caía na fatura errada) | 2026-10-09 · `e168d6a` |
 | BL-028 | Excluir lançamentos previstos em lote em `/faturas` (por item, por mês ou todos do cartão) | 2026-10-09 · `faf4bad` |

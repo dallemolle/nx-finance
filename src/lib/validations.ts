@@ -46,8 +46,19 @@ export const financialInstitutionSchema = z.object({
     cor: z.string().regex(/^#[0-9A-F]{6}$/i, "Cor inválida").optional().or(z.literal("")),
 });
 
-export const twoFactorCodeSchema = z.object({
-    code: z.string().length(6, "Código deve ter 6 dígitos").regex(/^\d+$/, "Código deve conter apenas números"),
+// Ativar o 2FA: código de 6 dígitos do app + senha (BL-022 — sessão roubada
+// não ativa 2FA com outro celular e tranca o dono fora).
+export const enableTwoFactorSchema = z.object({
+    secret: z.string().min(16).max(128),
+    code: z.string().trim().regex(/^\d{6}$/, "Código deve ter 6 dígitos"),
+    password: z.string().min(1, "Informe sua senha"),
+});
+
+// Desativar o 2FA ou gerar novos códigos de recuperação: senha + código do app
+// ou de recuperação (BL-021/BL-022).
+export const twoFactorConfirmSchema = z.object({
+    code: z.string().trim().min(6, "Informe o código").max(20, "Código inválido"),
+    password: z.string().min(1, "Informe sua senha"),
 });
 
 export const loginSchema = z.object({
@@ -141,7 +152,8 @@ export type TransactionFormValues = z.infer<typeof transactionSchema>;
 export type CategoryInput = z.input<typeof categorySchema>;
 export type PaymentMethodInput = z.input<typeof paymentMethodSchema>;
 export type FinancialInstitutionInput = z.input<typeof financialInstitutionSchema>;
-export type TwoFactorCodeInput = z.input<typeof twoFactorCodeSchema>;
+export type EnableTwoFactorInput = z.input<typeof enableTwoFactorSchema>;
+export type TwoFactorConfirmInput = z.input<typeof twoFactorConfirmSchema>;
 export type LoginInput = z.input<typeof loginSchema>;
 export type RegisterInput = z.input<typeof registerSchema>;
 export type CreditCardInvoiceItemInput = z.input<typeof creditCardInvoiceItemSchema>;

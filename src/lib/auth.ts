@@ -2,11 +2,7 @@ import { NextAuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
 import { db } from "@/lib/db";
 import bcrypt from "bcryptjs";
-import { verify } from "otplib";
-
-// Tolerância de 1 time-step (30s) pra frente e pra trás, absorvendo pequeno
-// drift de relógio entre o servidor e o app autenticador do usuário.
-const EPOCH_TOLERANCE = 30;
+import { verifySecondFactor } from "@/lib/services/two-factor";
 
 export const authOptions: NextAuthOptions = {
     providers: [
@@ -15,7 +11,7 @@ export const authOptions: NextAuthOptions = {
             credentials: {
                 email: { label: "Email", type: "email" },
                 password: { label: "Senha", type: "password" },
-                code: { label: "Código 2FA", type: "text" },
+                code: { label: "Código 2FA ou de recuperação", type: "text" },
             },
             async authorize(credentials) {
                 if (!credentials?.email || !credentials?.password) return null;
@@ -32,12 +28,8 @@ export const authOptions: NextAuthOptions = {
                     if (!credentials.code) {
                         throw new Error("2FA_REQUIRED");
                     }
-                    const result = await verify({
-                        secret: user.secret_2fa!,
-                        token: credentials.code,
-                        epochTolerance: EPOCH_TOLERANCE,
-                    });
-                    if (!result.valid) {
+                    // Código do app ou de recuperação (uso único) — BL-021.
+                    if (!(await verifySecondFactor(user, credentials.code))) {
                         throw new Error("Código de verificação inválido");
                     }
                 }

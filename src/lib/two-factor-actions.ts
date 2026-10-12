@@ -1,18 +1,19 @@
 "use server";
 
-import { db } from "@/lib/db";
 import { revalidatePath } from "next/cache";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { generateSecret, generateURI, verify } from "otplib";
+import { generateSecret, generateURI } from "otplib";
 import QRCode from "qrcode";
-import { twoFactorCodeSchema, type TwoFactorCodeInput } from "@/lib/validations";
+import type { EnableTwoFactorInput, TwoFactorConfirmInput } from "@/lib/validations";
 import { getPrismaErrorMessage } from "@/lib/utils";
+import {
+    disableTwoFactorForUser,
+    enableTwoFactorForUser,
+    regenerateRecoveryCodesForUser,
+} from "@/lib/services/two-factor";
 
-// Tolerância de 1 time-step (30s) pra frente e pra trás, absorvendo pequeno
-// drift de relógio entre o servidor e o app autenticador do usuário.
-const EPOCH_TOLERANCE = 30;
-
+// Precisa do e-mail (rótulo no app autenticador), além do userId.
 async function getSession() {
     const session = await getServerSession(authOptions);
     if (!session?.user?.id || !session.user.email) throw new Error("Não autorizado");
@@ -34,48 +35,38 @@ export async function generateTwoFactorSetup() {
     }
 }
 
-export async function enableTwoFactor(secret: string, data: TwoFactorCodeInput) {
+// Regras em services/two-factor.ts. Ativar devolve os códigos de recuperação
+// (mostrados uma vez só na tela).
+export async function enableTwoFactor(input: EnableTwoFactorInput) {
     try {
         const { userId } = await getSession();
-        const { code } = twoFactorCodeSchema.parse(data);
-
-        const result = await verify({ secret, token: code, epochTolerance: EPOCH_TOLERANCE });
-        if (!result.valid) {
-            throw new Error("Código de verificação inválido");
-        }
-
-        await db.user.update({
-            where: { id: userId },
-            data: { status_2fa: true, secret_2fa: secret },
-        });
+        const { recoveryCodes } = await enableTwoFactorForUser(userId, input);
 
         revalidatePath("/dashboard/settings");
-        return { success: true };
+        return { success: true, recoveryCodes };
     } catch (error: unknown) {
         console.error("Error enabling 2FA:", error);
         throw new Error(getPrismaErrorMessage(error, "Erro ao ativar 2FA"));
     }
 }
 
-export async function disableTwoFactor(data: TwoFactorCodeInput) {
+export async function regenerateRecoveryCodes(input: TwoFactorConfirmInput) {
     try {
         const { userId } = await getSession();
-        const { code } = twoFactorCodeSchema.parse(data);
+        const { recoveryCodes } = await regenerateRecoveryCodesForUser(userId, input);
 
-        const user = await db.user.findUnique({ where: { id: userId }, select: { secret_2fa: true } });
-        if (!user?.secret_2fa) {
-            throw new Error("2FA não está ativado");
-        }
+        revalidatePath("/dashboard/settings");
+        return { success: true, recoveryCodes };
+    } catch (error: unknown) {
+        console.error("Error regenerating recovery codes:", error);
+        throw new Error(getPrismaErrorMessage(error, "Erro ao gerar novos códigos de recuperação"));
+    }
+}
 
-        const result = await verify({ secret: user.secret_2fa, token: code, epochTolerance: EPOCH_TOLERANCE });
-        if (!result.valid) {
-            throw new Error("Código de verificação inválido");
-        }
-
-        await db.user.update({
-            where: { id: userId },
-            data: { status_2fa: false, secret_2fa: null },
-        });
+export async function disableTwoFactor(input: TwoFactorConfirmInput) {
+    try {
+        const { userId } = await getSession();
+        await disableTwoFactorForUser(userId, input);
 
         revalidatePath("/dashboard/settings");
         return { success: true };

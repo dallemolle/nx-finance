@@ -8,6 +8,7 @@ import { CategorySettings, InstitutionSettings, PaymentMethodSettings } from "@/
 import { SecuritySettings } from "@/components/dashboard/security-settings";
 import { CreditCardSettings } from "@/components/dashboard/credit-card-settings";
 import { getCreditCards } from "@/lib/credit-card-provision-actions";
+import { countRemainingRecoveryCodesForUser } from "@/lib/services/two-factor";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
 export default async function SettingsPage() {
@@ -18,12 +19,13 @@ export default async function SettingsPage() {
 
     const userId = session.user.id;
 
-    const [categories, institutions, paymentMethods, user, creditCards] = await Promise.all([
+    const [categories, institutions, paymentMethods, user, creditCards, recoveryCodesLeft] = await Promise.all([
         db.category.findMany({ where: { userId }, orderBy: { nome: "asc" } }),
         db.financialInstitution.findMany({ where: { userId }, orderBy: { nome: "asc" } }),
         db.paymentMethod.findMany({ where: { userId }, orderBy: { nome: "asc" } }),
         db.user.findUnique({ where: { id: userId }, select: { status_2fa: true } }),
         getCreditCards(),
+        countRemainingRecoveryCodesForUser(userId),
     ]);
 
     return (
@@ -67,7 +69,7 @@ export default async function SettingsPage() {
                             </TabsContent>
 
                             <TabsContent value="security" className="mt-0 focus-visible:outline-none focus-visible:ring-0">
-                                <SecuritySettings enabled={user?.status_2fa ?? false} />
+                                <SecuritySettings enabled={user?.status_2fa ?? false} recoveryCodesLeft={recoveryCodesLeft} />
                             </TabsContent>
                         </Tabs>
                     </CardContent>

@@ -244,9 +244,23 @@ git push origin feature/nome-da-feature
 
 ---
 
+## Deploy
+
+Um push em `staging` ou `main` passa por `.github/workflows/ci.yml` nesta ordem:
+
+1. **Lint, tipos e testes** e **Testes de ponta a ponta**;
+2. **Sincroniza schema**: `prisma db push` no banco do branch;
+3. **Publica na Vercel**: chama o deploy hook do branch, e a Vercel publica o último commit dele.
+
+O deploy automático da Vercel está desligado para `main` e `staging` (`vercel.json`), pra que o código novo nunca rode contra o schema antigo. Previews de branches de feature continuam automáticos.
+
+**Configuração (uma vez):** na Vercel, *Settings → Git → Deploy Hooks*, crie um hook para o branch `main` e outro para `staging`; no GitHub, *Settings → Secrets and variables → Actions*, salve as URLs como `VERCEL_DEPLOY_HOOK_MAIN` e `VERCEL_DEPLOY_HOOK_STAGING`. Sem o secret, o job "Publica na Vercel" falha com uma mensagem dizendo qual falta.
+
+**Mudança de schema que remove algo** (coluna, tabela) ainda pede dois deploys: primeiro o código para de usar, depois a remoção — entre o `db push` e o fim do deploy, o código antigo continua no ar.
+
 ## Verificando o deploy
 
-O app é publicado pela Vercel (sem workflow de deploy próprio neste repo — o job `db-sync` de `.github/workflows/ci.yml` só sincroniza o schema do Prisma, não garante que o build/deploy do app já rodou). Pra confirmar qual commit está de fato no ar em staging/produção, sem depender de lembrar se um push específico já foi mergeado e implantado:
+Pra confirmar qual commit está de fato no ar em staging/produção, sem depender de lembrar se um push específico já foi mergeado e implantado:
 
 - Acesse `/api/version` — retorna `{ commit, commitShort, commitMessage, branch, vercelEnv }`.
 - Ou olhe o banner laranja "AMBIENTE DE HOMOLOGAÇÃO", que mostra o hash curto do commit ao lado do texto.

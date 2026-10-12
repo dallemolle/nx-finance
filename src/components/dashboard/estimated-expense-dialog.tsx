@@ -15,7 +15,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Combobox } from "@/components/ui/combobox";
 import { InstitutionCombobox } from "@/components/dashboard/institution-combobox";
-import { Switch } from "@/components/ui/switch";
 import { Loader2, CalendarPlus } from "lucide-react";
 import { toast } from "sonner";
 import { Decimal } from "decimal.js";
@@ -29,6 +28,33 @@ const MONTHS = [
     "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro",
 ];
 
+type RepeatMode = "once" | "installments" | "recurring";
+
+// Prévia mês a mês da parcelada ou da recorrente.
+function MonthsPreview({ rows, tagHeader }: { rows: { tag?: string; month: number; year: number; value: number }[]; tagHeader?: string }) {
+    return (
+        <div className="max-h-[160px] overflow-y-auto rounded-md border bg-background/50 mt-2">
+            <table className="w-full text-left text-xs">
+                <thead className="sticky top-0 bg-muted/50 border-b">
+                    <tr>
+                        {tagHeader && <th className="p-2 font-medium w-16 text-center">{tagHeader}</th>}
+                        <th className="p-2 font-medium">Mês</th>
+                        <th className="p-2 font-medium text-right">Valor</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {rows.map((row, i) => (
+                        <tr key={i} className="border-b last:border-0">
+                            {tagHeader && <td className="p-2 text-center text-muted-foreground">{row.tag}</td>}
+                            <td className="p-2 capitalize">{MONTHS[row.month - 1]}/{row.year}</td>
+                            <td className="p-2 text-right font-medium">{formatCurrency(row.value)}</td>
+                        </tr>
+                    ))}
+                </tbody>
+            </table>
+        </div>
+    );
+}
 export function EstimatedExpenseDialog({ userId, className }: { userId: string; className?: string }) {
     const [open, setOpen] = useState(false);
     const [isPending, startTransition] = useTransition();
@@ -57,6 +83,7 @@ export function EstimatedExpenseDialog({ userId, className }: { userId: string; 
             invoice_month: now.getMonth() + 2 > 12 ? 1 : now.getMonth() + 2,
             invoice_year: now.getMonth() + 2 > 12 ? now.getFullYear() + 1 : now.getFullYear(),
             isInstallment: false,
+            isRecurring: false,
         },
     });
 
@@ -67,6 +94,22 @@ export function EstimatedExpenseDialog({ userId, className }: { userId: string; 
     const invoiceMonth = Number(watch("invoice_month"));
     const invoiceYear = Number(watch("invoice_year"));
     const isInstallment = watch("isInstallment");
+    const isRecurring = watch("isRecurring");
+    const recurringMonths = Number(watch("recurringMonths") || 0);
+    const repeatMode: RepeatMode = isInstallment ? "installments" : isRecurring ? "recurring" : "once";
+    const setRepeatMode = (mode: RepeatMode) => {
+        setValue("isInstallment", mode === "installments");
+        setValue("isRecurring", mode === "recurring");
+        if (mode === "installments" && !installmentsCount) setValue("installmentsCount", 2);
+        if (mode === "recurring" && !recurringMonths) setValue("recurringMonths", 12);
+    };
+    // Mês da linha i da prévia: ciclo da fatura no cartão, mês calendário na genérica.
+    const monthAt = (i: number) => useCard
+        ? addInvoiceMonths(invoiceMonth, invoiceYear, i)
+        : (() => {
+            const d = addMonths(new Date(invoiceYear, invoiceMonth - 1, 1), i);
+            return { month: d.getMonth() + 1, year: d.getFullYear() };
+        })();
     const installmentsCount = Number(watch("installmentsCount") || 0);
     const valorAtual = Number(watch("valor") || 0);
 
@@ -166,8 +209,8 @@ export function EstimatedExpenseDialog({ userId, className }: { userId: string; 
                     </div>
 
                     <div className="flex items-center gap-2 rounded-lg border p-1 bg-muted/20 w-fit">
-                        <Button type="button" size="sm" variant={useCard ? "secondary" : "ghost"} onClick={() => setUseCard(true)}>No cartão</Button>
-                        <Button type="button" size="sm" variant={!useCard ? "secondary" : "ghost"} onClick={() => setUseCard(false)}>Genérica</Button>
+                        <Button type="button" size="sm" variant={useCard ? "secondary" : "ghost"} aria-pressed={useCard} onClick={() => setUseCard(true)}>No cartão</Button>
+                        <Button type="button" size="sm" variant={!useCard ? "secondary" : "ghost"} aria-pressed={!useCard} onClick={() => setUseCard(false)}>Genérica</Button>
                     </div>
 
                     {useCard ? (
@@ -209,23 +252,29 @@ export function EstimatedExpenseDialog({ userId, className }: { userId: string; 
                     )}
 
                     <div className="space-y-4 rounded-lg border p-4 bg-muted/20">
-                        <div className="flex items-center justify-between">
-                            <div className="space-y-0.5">
-                                <Label htmlFor="ee-parcelada">Despesa Prevista Parcelada?</Label>
-                                <p className="text-xs text-muted-foreground">O valor será dividido entre os meses seguintes a partir do mês selecionado.</p>
+                        <div className="space-y-2">
+                            <p className="text-sm font-medium" id="ee-repeticao-label">Repetição</p>
+                            <div role="group" aria-labelledby="ee-repeticao-label" className="flex items-center gap-2 rounded-lg border p-1 bg-background/50 w-fit">
+                                {([
+                                    ["once", "Uma vez"],
+                                    ["installments", "Parcelada"],
+                                    ["recurring", "Recorrente"],
+                                ] as const).map(([mode, label]) => (
+                                    <Button key={mode} type="button" size="sm" variant={repeatMode === mode ? "secondary" : "ghost"} aria-pressed={repeatMode === mode} onClick={() => setRepeatMode(mode)}>
+                                        {label}
+                                    </Button>
+                                ))}
                             </div>
-                            <Switch id="ee-parcelada"
-                                checked={isInstallment}
-                                onCheckedChange={(checked) => {
-                                    setValue("isInstallment", checked);
-                                    if (checked && !installmentsCount) {
-                                        setValue("installmentsCount", 2);
-                                    }
-                                }}
-                            />
+                            <p className="text-xs text-muted-foreground">
+                                {repeatMode === "installments"
+                                    ? "O valor será dividido entre os meses seguintes a partir do mês selecionado."
+                                    : repeatMode === "recurring"
+                                        ? "O valor cheio se repete todo mês a partir do mês selecionado (assinatura, mensalidade)."
+                                        : "Uma única despesa prevista no mês selecionado."}
+                            </p>
                         </div>
 
-                        {isInstallment && (
+                        {repeatMode === "installments" && (
                             <div className="space-y-2 animate-in fade-in slide-in-from-top-2 duration-300">
                                 <Label htmlFor="installmentsCount">Quantidade de Parcelas</Label>
                                 <Input
@@ -239,44 +288,42 @@ export function EstimatedExpenseDialog({ userId, className }: { userId: string; 
                                 {errors.installmentsCount && <p className="text-xs text-red-500">{errors.installmentsCount.message as string}</p>}
 
                                 {valorAtual > 0 && installmentsCount > 0 && (
-                                    <div className="max-h-[160px] overflow-y-auto rounded-md border bg-background/50 mt-2">
-                                        <table className="w-full text-left text-xs">
-                                            <thead className="sticky top-0 bg-muted/50 border-b">
-                                                <tr>
-                                                    <th className="p-2 font-medium w-16 text-center">Parc.</th>
-                                                    <th className="p-2 font-medium">Mês</th>
-                                                    <th className="p-2 font-medium text-right">Valor</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody>
-                                                {(() => {
-                                                    const installments = splitInstallments(new Decimal(valorAtual), installmentsCount);
+                                    <MonthsPreview
+                                        rows={splitInstallments(new Decimal(valorAtual), installmentsCount).map((installment, i) => ({
+                                            tag: `${String(i + 1).padStart(2, "0")}/${String(installmentsCount).padStart(2, "0")}`,
+                                            ...monthAt(i),
+                                            value: installment.value.toNumber(),
+                                        }))}
+                                        tagHeader="Parc."
+                                    />
+                                )}
+                            </div>
+                        )}
 
-                                                    return Array.from({ length: installmentsCount }).map((_, i) => {
-                                                        const currentVal = installments[i].value;
-                                                        const { month, year } = useCard
-                                                            ? addInvoiceMonths(invoiceMonth, invoiceYear, i)
-                                                            : (() => {
-                                                                const d = addMonths(new Date(invoiceYear, invoiceMonth - 1, 1), i);
-                                                                return { month: d.getMonth() + 1, year: d.getFullYear() };
-                                                            })();
-                                                        return (
-                                                            <tr key={i} className="border-b last:border-0">
-                                                                <td className="p-2 text-center text-muted-foreground">{String(i + 1).padStart(2, "0")}/{String(installmentsCount).padStart(2, "0")}</td>
-                                                                <td className="p-2 capitalize">{MONTHS[month - 1]}/{year}</td>
-                                                                <td className="p-2 text-right font-medium">{formatCurrency(currentVal.toNumber())}</td>
-                                                            </tr>
-                                                        );
-                                                    });
-                                                })()}
-                                            </tbody>
-                                        </table>
-                                    </div>
+                        {repeatMode === "recurring" && (
+                            <div className="space-y-2 animate-in fade-in slide-in-from-top-2 duration-300">
+                                <Label htmlFor="recurringMonths">Repetir por quantos meses</Label>
+                                <Input
+                                    id="recurringMonths"
+                                    type="number"
+                                    min={2}
+                                    max={36}
+                                    {...register("recurringMonths")}
+                                    placeholder="Ex: 12"
+                                />
+                                {errors.recurringMonths && <p className="text-xs text-red-500">{errors.recurringMonths.message as string}</p>}
+
+                                {valorAtual > 0 && recurringMonths >= 2 && recurringMonths <= 36 && (
+                                    <>
+                                        <MonthsPreview rows={Array.from({ length: recurringMonths }, (_, i) => ({ ...monthAt(i), value: valorAtual }))} />
+                                        <p className="text-xs text-muted-foreground">
+                                            Total no período: <span className="font-semibold text-foreground">{formatCurrency(valorAtual * recurringMonths)}</span>
+                                        </p>
+                                    </>
                                 )}
                             </div>
                         )}
                     </div>
-
                     <Button type="submit" className="w-full" disabled={isPending}>
                         {isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                         Lançar Despesa Prevista

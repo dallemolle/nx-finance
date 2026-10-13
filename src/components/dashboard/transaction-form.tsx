@@ -149,7 +149,6 @@ export function TransactionForm({ categories: initialCategories, paymentMethods:
         try {
             const newCat = await createCategory({
                 nome: name,
-                cor: "#3b82f6",
                 icone: "Wallet",
                 tipo: tipo,
             });

@@ -289,7 +289,6 @@ export function CreditCardInvoiceDialog({ userId, className }: { userId: string;
         try {
             const newCat = await createCategory({
                 nome: catName,
-                cor: "#3b82f6",
                 icone: "Wallet",
                 tipo: "SAIDA",
             });

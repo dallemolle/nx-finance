@@ -2,7 +2,8 @@ import { beforeEach, describe, expect, test, vi } from "vitest";
 import { getServerSession } from "next-auth";
 import { db } from "@/lib/db";
 import { dateOnlyUtc, dateOnlyYmd } from "@/lib/date-only";
-import { createTransaction, payTransaction, updateTransaction } from "./actions";
+import { createCategory, createTransaction, payTransaction, updateTransaction } from "./actions";
+import { areColorsSimilar, CATEGORY_PALETTE } from "./category-colors";
 import { createUserWithCard, type Scenario } from "../../test/fixtures";
 
 vi.mock("next-auth", () => ({ getServerSession: vi.fn() }));
@@ -103,3 +104,41 @@ describe("createTransaction e updateTransaction (BL-013/BL-014)", () => {
         expect(Number((await db.transaction.findUniqueOrThrow({ where: { id: theirs.id } })).valor)).toBe(10);
     });
 });
+// Nova categoria sem cor: o servidor sorteia uma diferente das que o usuário já usa.
+describe("createCategory: cor sorteada", () => {
+    let s: Scenario;
+    beforeEach(async () => {
+        s = await createUserWithCard();
+        vi.mocked(getServerSession).mockResolvedValue({ user: { id: s.user.id } });
+    });
+
+    test("sem cor: sorteia uma que não repete nem lembra as existentes", async () => {
+        const used = ["#3b82f6", "#ef4444", "#22c55e", "#f59e0b", "#8b5cf6", "#ec4899"];
+        await db.category.createMany({ data: used.map((cor, i) => ({ nome: `Usada ${i}`, cor, icone: "Tag", tipo: "SAIDA" as const, userId: s.user.id })) });
+        const all = [...used, s.category.cor];
+
+        for (let i = 0; i < 5; i++) {
+            const created = await createCategory({ nome: `nova ${i}`, icone: "Tag", tipo: "SAIDA" });
+            expect(created.cor).toMatch(/^#[0-9a-f]{6}$/);
+            expect(all.some(c => areColorsSimilar(c, created.cor)), created.cor).toBe(false);
+            all.push(created.cor);
+        }
+    });
+
+    test("cor informada é respeitada", async () => {
+        const created = await createCategory({ nome: "escolhida", cor: "#123456", icone: "Tag", tipo: "SAIDA" });
+
+        expect(created.cor).toBe("#123456");
+    });
+
+    test("só olha as categorias do próprio usuário", async () => {
+        // Eu uso a paleta toda menos o azul-petróleo; o outro usuário usa justamente ele.
+        const mine = CATEGORY_PALETTE.filter(c => c !== "#14b8a6");
+        await db.category.createMany({ data: mine.map((cor, i) => ({ nome: `Minha ${i}`, cor, icone: "Tag", tipo: "SAIDA" as const, userId: s.user.id })) });
+        const other = await createUserWithCard();
+        await db.category.update({ where: { id: other.category.id }, data: { cor: "#14b8a6" } });
+
+        const created = await createCategory({ nome: "nova", icone: "Tag", tipo: "SAIDA" });
+
+        expect(created.cor).toBe("#14b8a6");
+    });});

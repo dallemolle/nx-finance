@@ -160,7 +160,6 @@ export function CsvImportDialog({ userId, className }: { userId: string, classNa
         try {
             const newCat = await createCategory({
                 nome: catName,
-                cor: "#3b82f6", // Default blue
                 icone: "Wallet",
                 tipo: "SAIDA" // Default assumtion for imports
             });

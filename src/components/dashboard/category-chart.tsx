@@ -9,6 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { formatDateOnly } from "@/lib/date-only";
 import { getCategoryGroupName, mergeSimilarCategories, capToTopNPlusOthers, titleCasePtBr } from "@/lib/dashboard-utils";
 import { useIsPrivacyMode } from "./privacy-provider";
+import { chartTooltipProps } from "./chart-tooltip";
 import { ProvisionedBadge } from "./provisioned-badge";
 import type { TransactionDisplay } from "@/types/models";
 
@@ -74,14 +75,8 @@ export function CategoryChart({ data, transactions = [] }: CategoryChartProps) {
                                         ))}
                                     </Pie>
                                     <Tooltip
-                                        formatter={(value: number) => formatCurrency(value)}
-                                        contentStyle={{
-                                            borderRadius: '12px',
-                                            border: 'none',
-                                            boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)',
-                                            backgroundColor: 'rgba(255, 255, 255, 0.95)',
-                                            backdropFilter: 'blur(4px)'
-                                        }}
+                                        formatter={(value: number) => maskCurrency(value, isHidden)}
+                                        {...chartTooltipProps}
                                     />
                                 </PieChart>
                             </ResponsiveContainer>

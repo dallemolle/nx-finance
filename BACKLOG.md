@@ -23,7 +23,7 @@ Combinada em 2026-10-09. Cada etapa vai no seu próprio branch `feature/...`.
 6. **Depois, só com motivo concreto:** BL-017. (BL-018 ✅ feito em 2026-10-12, no branch `feature/2026-10-12_deploy_apos_ci`.)
 7. **Com o usuário:** BL-020 e BL-032 (em validação até novembro de 2026). (BL-019 ✅ concluído.)
 8. **Funcionalidades novas, sem pressa:** BL-030 (✅ 2026-10-12) e BL-031.
-9. **Lançamentos do mês** (2026-10-16): BL-038 no branch `feature/2026-10-16_excluir_lancamento_pendente` (✅ 2026-10-16); depois BL-039; BL-040 sem pressa.
+9. **Lançamentos do mês** (2026-10-16): BL-038 no branch `feature/2026-10-16_excluir_lancamento_pendente` (✅ 2026-10-16); depois BL-039; BL-040 sem pressa. BL-041 (tooltip no modo escuro) ✅ 2026-10-16, no branch `feature/2026-10-16_tooltip_grafico_modo_escuro`.
 
 ## Pendentes
 
@@ -118,3 +118,4 @@ Ideias que vieram do branch abandonado `feature/2026-07-18_prev-desc-new_table` 
 | BL-030 | Despesa prevista recorrente: opção **Recorrente** no diálogo (Uma vez · Parcelada · Recorrente), valor cheio por 2 a 36 meses, no cartão ou genérica, com prévia e total do período; sem mudança no banco. Cancelamento da genérica fica mês a mês (decisão do usuário) | 2026-10-12 · `1408e66` |
 | BL-037 | Cor de categoria sorteada: nova categoria nasce com uma cor que não repete nem lembra as do usuário (antes, sempre o azul `#3b82f6`), e Configurações → Categorias ganhou o botão 🎲 "Sugerir cor". Pedido do usuário | 2026-10-12 · `d524a60` |
 | BL-038 | Excluir lançamento pendente: lixeira em todo lançamento de "Nova Transação" pendente ou atrasado (entrada ou saída, avulso ou parcela), com confirmação; o registro é apagado, então sai da lista e das somas. Lançamento ou fatura importada **paga** não tem lixeira, e o servidor também recusa: para excluir, editar e voltar para Pendente. Junto: voltar de Pago para Pendente limpa a data de pagamento. Pedido do usuário (lançamento duplicado sem como apagar) | 2026-10-16 · `1008896` |
+| BL-041 | Tooltip dos gráficos legível no modo escuro: na linha do tempo de faturas, "Confirmado"/"Previsto" saíam em preto sobre fundo escuro (a cor das barras vem de classe CSS, e sem cor da série o Recharts usa preto). Estilo do tooltip compartilhado (`chart-tooltip.ts`) nos três gráficos; a pizza de categorias perdeu o fundo branco fixo e passou a respeitar o modo privacidade. E2E mede o contraste (≥ 4,5) no modo escuro. Reportado pelo usuário, com print | 2026-10-16 · `dfdf16d` |

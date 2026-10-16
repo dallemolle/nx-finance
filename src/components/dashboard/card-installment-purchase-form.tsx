@@ -18,6 +18,7 @@ import { cn, formatCurrency, getErrorMessage } from "@/lib/utils";
 import { getInvoiceReferenceMonth, addInvoiceMonths, splitInstallments } from "@/lib/credit-card-cycle";
 import type { Category, CreditCardDisplay } from "@/types/models";
 
+import { unwrap } from "@/lib/action-result";
 interface CardInstallmentPurchaseFormProps {
     categories: Category[];
     creditCards: CreditCardDisplay[];
@@ -51,7 +52,7 @@ export function CardInstallmentPurchaseForm({ categories, creditCards, onSuccess
         setError(null);
         startTransition(async () => {
             try {
-                await provisionCardInstallmentPurchase(data);
+                await provisionCardInstallmentPurchase(data).then(unwrap);
                 toast.success("Compra parcelada lançada!");
                 reset();
                 onSuccess();

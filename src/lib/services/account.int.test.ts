@@ -77,7 +77,8 @@ describe("registerUser", () => {
         vi.stubEnv("ALLOW_REGISTRATION", "");
         const address = email();
 
-        await expect(registerUser({ email: address, password: "senha-123" })).rejects.toThrow(/cadastro .* fechado/i);
+        expect(await registerUser({ email: address, password: "senha-123" }))
+            .toEqual({ success: false, error: "O cadastro de novos usuários está fechado." });
         expect(await db.user.count({ where: { email: address } })).toBe(0);
     });
 
@@ -85,7 +86,7 @@ describe("registerUser", () => {
         vi.stubEnv("ALLOW_REGISTRATION", "true");
         const address = email();
 
-        await registerUser({ email: address, password: "senha-123" });
+        expect((await registerUser({ email: address, password: "senha-123" })).success).toBe(true);
 
         const user = await db.user.findUniqueOrThrow({ where: { email: address }, include: { categories: true } });
         expect(user.categories).toHaveLength(4);

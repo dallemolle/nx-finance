@@ -19,13 +19,26 @@ import { addMonthsDateOnly } from "./date-only";
 import { Decimal } from "decimal.js";
 import { splitInstallments } from "./credit-card-cycle";
 import { suggestCategoryColor } from "./category-colors";
-import { getPrismaErrorMessage } from "@/lib/utils";
+import { actionResult } from "./action-result";
 import { deleteTransactionForUser, paymentDateForStatus } from "./services/transactions";
+
+// Todas devolvem ActionResult (BL-044): o navegador usa unwrap() pra ter o
+// dado ou um erro com a mensagem legível, também no build de produção.
+
+function revalidateTransactions() {
+    revalidatePath("/dashboard");
+    revalidatePath("/reports");
+}
+
+function revalidateSettings() {
+    revalidateTransactions();
+    revalidatePath("/dashboard/settings");
+}
 
 // Transaction Actions
 export async function createTransaction(data: TransactionInput) {
-    try {
-        const userId = await getSessionUserId();
+    const userId = await getSessionUserId();
+    return actionResult("Erro ao criar transação", async () => {
         const validatedData = transactionSchema.parse(data);
         const { isInstallment, installmentsCount, installmentDescriptions, ...rest } = validatedData;
 
@@ -47,15 +60,8 @@ export async function createTransaction(data: TransactionInput) {
                 })
             );
 
-            revalidatePath("/dashboard");
-            revalidatePath("/reports");
-            return {
-                success: true,
-                data: {
-                    ...transactions[0],
-                    valor: Number(transactions[0].valor)
-                }
-            };
+            revalidateTransactions();
+            return { ...transactions[0], valor: Number(transactions[0].valor) };
         }
 
         const transaction = await db.transaction.create({
@@ -65,24 +71,14 @@ export async function createTransaction(data: TransactionInput) {
             },
         });
 
-        revalidatePath("/dashboard");
-        revalidatePath("/reports");
-        return {
-            success: true,
-            data: {
-                ...transaction,
-                valor: Number(transaction.valor)
-            }
-        };
-    } catch (error: unknown) {
-        console.error("Error creating transaction:", error);
-        throw new Error(getPrismaErrorMessage(error, "Erro ao criar transação"));
-    }
+        revalidateTransactions();
+        return { ...transaction, valor: Number(transaction.valor) };
+    });
 }
 
 export async function updateTransaction(id: string, data: TransactionInput) {
-    try {
-        const userId = await getSessionUserId();
+    const userId = await getSessionUserId();
+    return actionResult("Erro ao atualizar transação", async () => {
         const validatedData = transactionSchema.parse(data);
         // Parcelamento só existe na criação; na edição esses campos do formulário não são gravados.
         const { isInstallment, installmentsCount, installmentDescriptions, data_pagamento, ...rest } = validatedData;
@@ -95,25 +91,14 @@ export async function updateTransaction(id: string, data: TransactionInput) {
             data: { ...rest, data_pagamento: paymentDateForStatus(rest.status, data_pagamento ?? current.data_pagamento) },
         });
 
-        revalidatePath("/dashboard");
-        revalidatePath("/reports");
-        return {
-            success: true,
-            data: {
-                ...transaction,
-                valor: Number(transaction.valor)
-            }
-        };
-    } catch (error: unknown) {
-        console.error("Error updating transaction:", error);
-        throw new Error(getPrismaErrorMessage(error, "Erro ao atualizar transação"));
-    }
+        revalidateTransactions();
+        return { ...transaction, valor: Number(transaction.valor) };
+    });
 }
 
 export async function payTransaction(id: string) {
-    try {
-        const userId = await getSessionUserId();
-
+    const userId = await getSessionUserId();
+    return actionResult("Erro ao liquidar transação", async () => {
         // Previsão não se liquida: ou é efetivada (despesa prevista) ou é
         // substituída pela fatura importada (fatura prevista). Pagá-la deixava
         // o lançamento pago e ainda previsto, fora dos totais (BL-009).
@@ -125,39 +110,23 @@ export async function payTransaction(id: string) {
             data: { status: "PAGO", data_pagamento: new Date() },
         });
 
-        revalidatePath("/dashboard");
-        revalidatePath("/reports");
-        return {
-            success: true,
-            data: {
-                ...transaction,
-                valor: Number(transaction.valor)
-            }
-        };
-    } catch (error: unknown) {
-        console.error("Error paying transaction:", error);
-        throw new Error(getPrismaErrorMessage(error, "Erro ao liquidar transação"));
-    }
+        revalidateTransactions();
+        return { ...transaction, valor: Number(transaction.valor) };
+    });
 }
 
 export async function deleteTransaction(id: string) {
-    try {
-        const userId = await getSessionUserId();
+    const userId = await getSessionUserId();
+    return actionResult("Erro ao deletar transação", async () => {
         await deleteTransactionForUser(userId, id);
-
-        revalidatePath("/dashboard");
-        revalidatePath("/reports");
-        return { success: true };
-    } catch (error: unknown) {
-        console.error("Error deleting transaction:", error);
-        throw new Error(getPrismaErrorMessage(error, "Erro ao deletar transação"));
-    }
+        revalidateTransactions();
+    });
 }
 
 // Category Actions
 export async function createCategory(data: NewCategoryInput) {
-    try {
-        const userId = await getSessionUserId();
+    const userId = await getSessionUserId();
+    return actionResult("Erro ao criar categoria", async () => {
         const validatedData = newCategorySchema.parse(data);
 
         // Check if category already exists for this user and type (case-insensitive)
@@ -187,19 +156,14 @@ export async function createCategory(data: NewCategoryInput) {
             },
         });
 
-        revalidatePath("/dashboard");
-        revalidatePath("/reports");
-        revalidatePath("/dashboard/settings");
+        revalidateSettings();
         return category;
-    } catch (error: unknown) {
-        console.error("Error creating category:", error);
-        throw new Error(getPrismaErrorMessage(error, "Erro ao criar categoria"));
-    }
+    });
 }
 
 export async function updateCategory(id: string, data: Partial<CategoryInput>) {
-    try {
-        const userId = await getSessionUserId();
+    const userId = await getSessionUserId();
+    return actionResult("Erro ao atualizar categoria", async () => {
         const validatedData = categorySchema.partial().parse(data);
 
         const category = await db.category.update({
@@ -207,20 +171,14 @@ export async function updateCategory(id: string, data: Partial<CategoryInput>) {
             data: validatedData,
         });
 
-        revalidatePath("/dashboard");
-        revalidatePath("/reports");
-        revalidatePath("/dashboard/settings");
+        revalidateSettings();
         return category;
-    } catch (error: unknown) {
-        console.error("Error updating category:", error);
-        throw new Error(getPrismaErrorMessage(error, "Erro ao atualizar categoria"));
-    }
+    });
 }
 
 export async function deleteCategory(id: string) {
-    try {
-        const userId = await getSessionUserId();
-
+    const userId = await getSessionUserId();
+    return actionResult("Erro ao excluir categoria", async () => {
         const transactionCount = await db.transaction.count({
             where: { userId, categoria_id: id },
         });
@@ -233,20 +191,14 @@ export async function deleteCategory(id: string) {
             where: { id, userId },
         });
 
-        revalidatePath("/dashboard");
-        revalidatePath("/reports");
-        revalidatePath("/dashboard/settings");
-        return { success: true };
-    } catch (error: unknown) {
-        console.error("Error deleting category:", error);
-        throw new Error(getPrismaErrorMessage(error, "Erro ao excluir categoria"));
-    }
+        revalidateSettings();
+    });
 }
 
 // Payment Method Actions
 export async function createPaymentMethod(data: PaymentMethodInput) {
-    try {
-        const userId = await getSessionUserId();
+    const userId = await getSessionUserId();
+    return actionResult("Erro ao criar meio de pagamento", async () => {
         const validatedData = paymentMethodSchema.parse(data);
 
         // Check if payment method already exists for this user
@@ -268,19 +220,14 @@ export async function createPaymentMethod(data: PaymentMethodInput) {
             },
         });
 
-        revalidatePath("/dashboard");
-        revalidatePath("/reports");
-        revalidatePath("/dashboard/settings");
+        revalidateSettings();
         return paymentMethod;
-    } catch (error: unknown) {
-        console.error("Error creating payment method:", error);
-        throw new Error(getPrismaErrorMessage(error, "Erro ao criar meio de pagamento"));
-    }
+    });
 }
 
 export async function updatePaymentMethod(id: string, data: Partial<PaymentMethodInput>) {
-    try {
-        const userId = await getSessionUserId();
+    const userId = await getSessionUserId();
+    return actionResult("Erro ao atualizar meio de pagamento", async () => {
         const validatedData = paymentMethodSchema.partial().parse(data);
 
         const paymentMethod = await db.paymentMethod.update({
@@ -288,20 +235,14 @@ export async function updatePaymentMethod(id: string, data: Partial<PaymentMetho
             data: validatedData,
         });
 
-        revalidatePath("/dashboard");
-        revalidatePath("/reports");
-        revalidatePath("/dashboard/settings");
+        revalidateSettings();
         return paymentMethod;
-    } catch (error: unknown) {
-        console.error("Error updating payment method:", error);
-        throw new Error(getPrismaErrorMessage(error, "Erro ao atualizar meio de pagamento"));
-    }
+    });
 }
 
 export async function deletePaymentMethod(id: string) {
-    try {
-        const userId = await getSessionUserId();
-
+    const userId = await getSessionUserId();
+    return actionResult("Erro ao excluir meio de pagamento", async () => {
         const transactionCount = await db.transaction.count({
             where: { userId, tipo_pagamento_id: id },
         });
@@ -314,20 +255,14 @@ export async function deletePaymentMethod(id: string) {
             where: { id, userId },
         });
 
-        revalidatePath("/dashboard");
-        revalidatePath("/reports");
-        revalidatePath("/dashboard/settings");
-        return { success: true };
-    } catch (error: unknown) {
-        console.error("Error deleting payment method:", error);
-        throw new Error(getPrismaErrorMessage(error, "Erro ao excluir meio de pagamento"));
-    }
+        revalidateSettings();
+    });
 }
 
 // Financial Institution Actions
 export async function createFinancialInstitution(data: FinancialInstitutionInput) {
-    try {
-        const userId = await getSessionUserId();
+    const userId = await getSessionUserId();
+    return actionResult("Erro ao criar instituição financeira", async () => {
         const validatedData = financialInstitutionSchema.parse(data);
 
         // Check if institution already exists for this user
@@ -349,19 +284,14 @@ export async function createFinancialInstitution(data: FinancialInstitutionInput
             },
         });
 
-        revalidatePath("/dashboard");
-        revalidatePath("/reports");
-        revalidatePath("/dashboard/settings");
+        revalidateSettings();
         return financialInstitution;
-    } catch (error: unknown) {
-        console.error("Error creating financial institution:", error);
-        throw new Error(getPrismaErrorMessage(error, "Erro ao criar instituição financeira"));
-    }
+    });
 }
 
 export async function updateFinancialInstitution(id: string, data: Partial<FinancialInstitutionInput>) {
-    try {
-        const userId = await getSessionUserId();
+    const userId = await getSessionUserId();
+    return actionResult("Erro ao atualizar instituição financeira", async () => {
         const validatedData = financialInstitutionSchema.partial().parse(data);
 
         const financialInstitution = await db.financialInstitution.update({
@@ -369,20 +299,14 @@ export async function updateFinancialInstitution(id: string, data: Partial<Finan
             data: validatedData,
         });
 
-        revalidatePath("/dashboard");
-        revalidatePath("/reports");
-        revalidatePath("/dashboard/settings");
+        revalidateSettings();
         return financialInstitution;
-    } catch (error: unknown) {
-        console.error("Error updating financial institution:", error);
-        throw new Error(getPrismaErrorMessage(error, "Erro ao atualizar instituição financeira"));
-    }
+    });
 }
 
 export async function deleteFinancialInstitution(id: string) {
-    try {
-        const userId = await getSessionUserId();
-
+    const userId = await getSessionUserId();
+    return actionResult("Erro ao excluir instituição financeira", async () => {
         // Validation: verify if the institution has linked transactions
         const transactionCount = await db.transaction.count({
             where: {
@@ -402,12 +326,6 @@ export async function deleteFinancialInstitution(id: string) {
             },
         });
 
-        revalidatePath("/dashboard");
-        revalidatePath("/reports");
-        revalidatePath("/dashboard/settings");
-        return { success: true };
-    } catch (error: unknown) {
-        console.error("Error deleting financial institution:", error);
-        throw new Error(getPrismaErrorMessage(error, "Erro ao excluir instituição financeira"));
-    }
+        revalidateSettings();
+    });
 }

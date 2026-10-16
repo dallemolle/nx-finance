@@ -23,6 +23,7 @@ import { toast } from "sonner";
 import { getErrorMessage } from "@/lib/utils";
 import type { FinancialInstitution } from "@/types/models";
 
+import { unwrap } from "@/lib/action-result";
 interface InstitutionComboboxProps {
   options: { id: string; nome: string; cor?: string | null }[];
   value?: string | null;
@@ -53,7 +54,7 @@ export function InstitutionCombobox({ options, value, onValueChange, onAdded, id
       const newInst = await createFinancialInstitution({
         nome: newName,
         cor: newColor,
-      });
+      }).then(unwrap);
       toast.success("Instituição criada com sucesso!");
       onValueChange(newInst.id);
       if (onAdded) onAdded(newInst);

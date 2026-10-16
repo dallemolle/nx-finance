@@ -35,4 +35,14 @@ describe("Server Actions", () => {
 
         expect(offenders).toEqual([]);
     });
+
+    // BL-044: em produção o React troca a mensagem de um erro lançado por
+    // "Minified React error #441". Erro esperado volta como valor (actionResult).
+    test("não relançam erro esperado com mensagem pro usuário (usar actionResult)", () => {
+        const offenders = serverActionFiles
+            .filter(file => /throw new Error\(getPrismaErrorMessage\(/.test(readFileSync(file, "utf8")))
+            .map(file => path.relative(SRC, file));
+
+        expect(offenders).toEqual([]);
+    });
 });

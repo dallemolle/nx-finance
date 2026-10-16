@@ -3,26 +3,27 @@
 import { db } from "@/lib/db";
 import bcrypt from "bcryptjs";
 import { registerSchema, type RegisterInput } from "@/lib/validations";
-import { getPrismaErrorMessage } from "@/lib/utils";
+import { actionResult } from "@/lib/action-result";
 import { isRegistrationOpen, PASSWORD_HASH_ROUNDS } from "@/lib/services/account";
 
+// Devolve ActionResult (BL-044): o navegador usa unwrap().
 export async function registerUser(data: RegisterInput) {
-    // Fechado por padrão (BL-043): a tela some, mas a action continua sendo um
-    // endpoint público, então a trava vale aqui também.
-    if (!isRegistrationOpen()) throw new Error("O cadastro de novos usuários está fechado.");
-    const validatedData = registerSchema.parse(data);
+    return actionResult("Erro ao cadastrar usuário", async () => {
+        // Fechado por padrão (BL-043): a tela some, mas a action continua sendo um
+        // endpoint público, então a trava vale aqui também.
+        if (!isRegistrationOpen()) throw new Error("O cadastro de novos usuários está fechado.");
+        const validatedData = registerSchema.parse(data);
 
-    const existingUser = await db.user.findUnique({
-        where: { email: validatedData.email },
-    });
+        const existingUser = await db.user.findUnique({
+            where: { email: validatedData.email },
+        });
 
-    if (existingUser) {
-        throw new Error("E-mail já cadastrado");
-    }
+        if (existingUser) {
+            throw new Error("E-mail já cadastrado");
+        }
 
-    const hashedPassword = await bcrypt.hash(validatedData.password, PASSWORD_HASH_ROUNDS);
+        const hashedPassword = await bcrypt.hash(validatedData.password, PASSWORD_HASH_ROUNDS);
 
-    try {
         const user = await db.user.create({
             data: {
                 email: validatedData.email,
@@ -39,10 +40,5 @@ export async function registerUser(data: RegisterInput) {
                 { nome: "Lazer", cor: "#f59e0b", icone: "Gamepad2", tipo: "SAIDA", userId: user.id },
             ],
         });
-
-        return { success: true };
-    } catch (error: unknown) {
-        console.error("Error registering user:", error);
-        throw new Error(getPrismaErrorMessage(error, "Erro ao cadastrar usuário"));
-    }
+    });
 }

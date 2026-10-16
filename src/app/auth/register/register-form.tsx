@@ -11,6 +11,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Loader2 } from "lucide-react";
 
+import { unwrap } from "@/lib/action-result";
 export function RegisterForm() {
     const router = useRouter();
     const [loading, setLoading] = useState(false);
@@ -23,7 +24,7 @@ export function RegisterForm() {
         setError("");
 
         try {
-            await registerUser(formData);
+            await registerUser(formData).then(unwrap);
             router.push("/auth/login?registered=true");
         } catch (err: unknown) {
             setError(getErrorMessage(err, "Erro ao cadastrar. Tente novamente."));

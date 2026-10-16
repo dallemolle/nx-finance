@@ -12,6 +12,7 @@ import { toast } from "sonner";
 import { formatCurrency, getErrorMessage } from "@/lib/utils";
 import { deleteProvisionedInvoiceItems, type getInvoiceTimelineDetail } from "@/lib/credit-card-provision-actions";
 
+import { unwrap } from "@/lib/action-result";
 type InvoiceTimelineGroups = Awaited<ReturnType<typeof getInvoiceTimelineDetail>>;
 type InvoiceMonth = InvoiceTimelineGroups[number]["months"][number];
 
@@ -91,7 +92,7 @@ export function InvoiceAnalysisContent({ groups }: InvoiceAnalysisContentProps) 
         if (!confirm(`Excluir ${label} (${formatCurrency(selectedTotal)})? Essa ação não pode ser desfeita.`)) return;
         startDelete(async () => {
             try {
-                const { deletedCount } = await deleteProvisionedInvoiceItems(ids);
+                const { deletedCount } = await deleteProvisionedInvoiceItems(ids).then(unwrap);
                 toast.success(deletedCount === 1 ? "1 lançamento previsto excluído." : `${deletedCount} lançamentos previstos excluídos.`);
                 setSelected(new Set());
                 router.refresh();

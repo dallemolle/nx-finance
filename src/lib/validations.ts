@@ -66,6 +66,19 @@ export const twoFactorConfirmSchema = z.object({
     password: z.string().min(1, "Informe sua senha"),
 });
 
+// Alterar senha (BL-042): a atual confirma que é o dono; a nova, digitada duas vezes.
+export const changePasswordSchema = z.object({
+    currentPassword: z.string().min(1, "Informe sua senha atual"),
+    newPassword: z.string().min(8, "A nova senha deve ter no mínimo 8 caracteres").max(128, "A nova senha deve ter no máximo 128 caracteres"),
+    confirmPassword: z.string(),
+}).refine((data) => data.newPassword === data.confirmPassword, {
+    message: "A confirmação não confere com a nova senha",
+    path: ["confirmPassword"],
+}).refine((data) => data.newPassword !== data.currentPassword, {
+    message: "A nova senha deve ser diferente da atual",
+    path: ["newPassword"],
+});
+
 export const loginSchema = z.object({
     email: z.string().email("Email inválido"),
     password: z.string().min(6, "Senha deve ter no mínimo 6 caracteres"),
@@ -170,6 +183,7 @@ export type PaymentMethodInput = z.input<typeof paymentMethodSchema>;
 export type FinancialInstitutionInput = z.input<typeof financialInstitutionSchema>;
 export type EnableTwoFactorInput = z.input<typeof enableTwoFactorSchema>;
 export type TwoFactorConfirmInput = z.input<typeof twoFactorConfirmSchema>;
+export type ChangePasswordInput = z.input<typeof changePasswordSchema>;
 export type LoginInput = z.input<typeof loginSchema>;
 export type RegisterInput = z.input<typeof registerSchema>;
 export type CreditCardInvoiceItemInput = z.input<typeof creditCardInvoiceItemSchema>;

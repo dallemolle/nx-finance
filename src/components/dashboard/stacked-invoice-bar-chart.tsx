@@ -3,6 +3,7 @@
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, LabelList, Rectangle, ResponsiveContainer, Tooltip, type RectangleProps } from "recharts";
 import { formatCompactCurrency, maskCurrency } from "@/lib/utils";
 import { useIsPrivacyMode } from "./privacy-provider";
+import { chartTooltipProps } from "./chart-tooltip";
 
 interface StackedInvoiceBarChartProps {
     data: { label: string; confirmed: number; provisioned: number }[];
@@ -58,15 +59,7 @@ export function StackedInvoiceBarChart({ data, height = 220 }: StackedInvoiceBar
                         <Tooltip
                             cursor={{ fill: "hsl(var(--muted))", opacity: 0.5 }}
                             formatter={(value: number, name: string) => [maskCurrency(value, isHidden), name]}
-                            contentStyle={{
-                                borderRadius: "12px",
-                                border: "1px solid hsl(var(--border))",
-                                boxShadow: "0 10px 15px -3px rgb(0 0 0 / 0.1)",
-                                backgroundColor: "hsl(var(--popover))",
-                                color: "hsl(var(--popover-foreground))",
-                                fontSize: 12,
-                            }}
-                            labelClassName="capitalize font-semibold"
+                            {...chartTooltipProps}
                         />
                         <Bar
                             dataKey="confirmed"

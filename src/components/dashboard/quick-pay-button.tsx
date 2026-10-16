@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { payTransaction } from "@/lib/actions";
 import { getErrorMessage } from "@/lib/utils";
 
+import { unwrap } from "@/lib/action-result";
 interface QuickPayButtonProps {
     transactionId: string;
 }
@@ -17,7 +18,7 @@ export function QuickPayButton({ transactionId }: QuickPayButtonProps) {
     const handlePay = () => {
         startTransition(async () => {
             try {
-                await payTransaction(transactionId);
+                await payTransaction(transactionId).then(unwrap);
                 toast.success("Lançamento liquidado!");
             } catch (error) {
                 toast.error(getErrorMessage(error, "Erro ao liquidar lançamento"));

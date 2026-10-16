@@ -21,6 +21,7 @@ import { Combobox } from "@/components/ui/combobox";
 import { toast } from "sonner";
 import type { Category, PaymentMethod, FinancialInstitution } from "@/types/models";
 
+import { unwrap } from "@/lib/action-result";
 interface ParsedRow {
     id: number;
     original_title: string;
@@ -162,7 +163,7 @@ export function CsvImportDialog({ userId, className }: { userId: string, classNa
                 nome: catName,
                 icone: "Wallet",
                 tipo: "SAIDA" // Default assumtion for imports
-            });
+            }).then(unwrap);
             setCategories(prev => [...prev, newCat]);
             handleRowChange(id, "category_id", newCat.id);
         } catch (e: unknown) {
@@ -173,7 +174,7 @@ export function CsvImportDialog({ userId, className }: { userId: string, classNa
 
     const handlePaymentMethodAdd = async (name: string) => {
         try {
-            const newPM = await createPaymentMethod({ nome: name });
+            const newPM = await createPaymentMethod({ nome: name }).then(unwrap);
             setPaymentMethods(prev => [...prev, newPM]);
             setPaymentMethodId(newPM.id);
         } catch (e: unknown) {
@@ -205,7 +206,7 @@ export function CsvImportDialog({ userId, className }: { userId: string, classNa
         }));
 
         try {
-            await processBatchTransactions(payload);
+            await processBatchTransactions(payload).then(unwrap);
             setOpen(false);
             router.refresh();
         } catch (e: unknown) {

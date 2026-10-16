@@ -23,6 +23,7 @@ import { cn, formatCurrency, getErrorMessage } from "@/lib/utils";
 import { addInvoiceMonths, splitInstallments } from "@/lib/credit-card-cycle";
 import type { Category, PaymentMethod, FinancialInstitution, CreditCardDisplay } from "@/types/models";
 
+import { unwrap } from "@/lib/action-result";
 const MONTHS = [
     "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
     "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro",
@@ -124,7 +125,7 @@ export function EstimatedExpenseDialog({ userId, className }: { userId: string; 
                     credit_card_id: useCard ? data.credit_card_id : null,
                     tipo_pagamento_id: useCard ? null : data.tipo_pagamento_id,
                     institution_id: useCard ? null : data.institution_id,
-                });
+                }).then(unwrap);
                 toast.success("Despesa prevista lançada!");
                 reset();
                 setOpen(false);

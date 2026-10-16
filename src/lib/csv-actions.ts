@@ -4,7 +4,8 @@ import { db } from "@/lib/db";
 import { getSessionUserId } from "@/lib/session";
 import { toDateOnly } from "./date-only";
 import { revalidatePath } from "next/cache";
-import { getErrorMessage, getPrismaErrorMessage } from "@/lib/utils";
+import { getErrorMessage } from "@/lib/utils";
+import { actionResult } from "@/lib/action-result";
 import { getMerchantSignature } from "@/lib/dashboard-utils";
 import type { TransactionStatus, TransactionType } from "@prisma/client";
 
@@ -22,9 +23,10 @@ export async function getMappingSuggestions() {
     }
 }
 
+// As que alteram dados devolvem ActionResult (BL-044): o navegador usa unwrap().
 export async function saveMappingSuggestion(searchTerm: string, categoryId: string) {
-    try {
-        const userId = await getSessionUserId();
+    const userId = await getSessionUserId();
+    return actionResult("Erro ao salvar mapeamento inteligente", async () => {
         const signature = getMerchantSignature(searchTerm);
         const suggestion = await db.mappingSuggestion.upsert({
             where: {
@@ -43,10 +45,7 @@ export async function saveMappingSuggestion(searchTerm: string, categoryId: stri
             }
         });
         return suggestion;
-    } catch (error: unknown) {
-        console.error("Error saving mapping suggestion:", error);
-        throw new Error(getPrismaErrorMessage(error, "Erro ao salvar mapeamento inteligente"));
-    }
+    });
 }
 
 export interface BatchTransactionInput {
@@ -62,9 +61,8 @@ export interface BatchTransactionInput {
 }
 
 export async function processBatchTransactions(transactions: BatchTransactionInput[]) {
-    try {
-        const userId = await getSessionUserId();
-
+    const userId = await getSessionUserId();
+    return actionResult("Erro ao importar transações em lote", async () => {
         // Save the transactions
         const createdTransactions = await db.$transaction(
             transactions.map(t => db.transaction.create({
@@ -110,9 +108,6 @@ export async function processBatchTransactions(transactions: BatchTransactionInp
         revalidatePath("/dashboard");
         revalidatePath("/reports");
 
-        return { success: true, count: createdTransactions.length };
-    } catch (error: unknown) {
-        console.error("Error processing batch transactions:", error);
-        throw new Error(getPrismaErrorMessage(error, "Erro ao importar transações em lote"));
-    }
+        return { count: createdTransactions.length };
+    });
 }

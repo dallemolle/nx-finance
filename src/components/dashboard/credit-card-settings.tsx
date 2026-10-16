@@ -9,6 +9,7 @@ import { getErrorMessage } from "@/lib/utils";
 import { CreditCardFormDialog } from "@/components/dashboard/credit-card-form-dialog";
 import type { CreditCardDisplay, FinancialInstitution } from "@/types/models";
 
+import { unwrap } from "@/lib/action-result";
 interface CreditCardSettingsProps {
     creditCards: CreditCardDisplay[];
     institutions: FinancialInstitution[];
@@ -23,7 +24,7 @@ export function CreditCardSettings({ creditCards: initialCards, institutions: in
         if (!confirm(`Tem certeza que deseja excluir o cartão "${card.nome}"?`)) return;
         setDeletingId(card.id);
         try {
-            await deleteCreditCard(card.id);
+            await deleteCreditCard(card.id).then(unwrap);
             setCards(prev => prev.filter(c => c.id !== card.id));
             toast.success("Cartão excluído com sucesso!");
         } catch (error: unknown) {

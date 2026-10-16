@@ -8,6 +8,7 @@ import { deleteImportedInvoice } from "@/lib/credit-card-actions";
 import { formatCurrency, getErrorMessage } from "@/lib/utils";
 import { toast } from "sonner";
 
+import { unwrap } from "@/lib/action-result";
 interface DeleteImportedInvoiceButtonProps {
     id: string;
     descricao: string;
@@ -29,7 +30,7 @@ export function DeleteImportedInvoiceButton({ id, descricao, valor, itemsCount }
         if (!confirm(message)) return;
         startTransition(async () => {
             try {
-                await deleteImportedInvoice(id);
+                await deleteImportedInvoice(id).then(unwrap);
                 toast.success("Fatura excluída.");
                 router.refresh();
             } catch (err: unknown) {

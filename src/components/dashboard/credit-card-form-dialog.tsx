@@ -15,6 +15,7 @@ import { toast } from "sonner";
 import { getErrorMessage } from "@/lib/utils";
 import type { FinancialInstitution, CreditCardDisplay } from "@/types/models";
 
+import { unwrap } from "@/lib/action-result";
 interface CreditCardFormDialogProps {
     institutions: FinancialInstitution[];
     onInstitutionAdded: (inst: FinancialInstitution) => void;
@@ -59,11 +60,11 @@ export function CreditCardFormDialog({ institutions, onInstitutionAdded, onSaved
     const onSubmit = async (data: CreditCardInput) => {
         setIsPending(true);
         try {
-            const result = initialData
-                ? await updateCreditCard(initialData.id, data)
-                : await createCreditCard(data);
+            const card = initialData
+                ? await updateCreditCard(initialData.id, data).then(unwrap)
+                : await createCreditCard(data).then(unwrap);
             toast.success(initialData ? "Cartão atualizado!" : "Cartão criado!");
-            onSaved(result.data as CreditCardDisplay);
+            onSaved(card as CreditCardDisplay);
             setOpen(false);
             if (!initialData) reset({ cor: "#6366f1" });
         } catch (error: unknown) {

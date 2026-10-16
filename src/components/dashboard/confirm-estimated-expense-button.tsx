@@ -14,6 +14,7 @@ import { dateOnlyToLocal } from "@/lib/date-only";
 import { toast } from "sonner";
 import type { TransactionDisplay } from "@/types/models";
 
+import { unwrap } from "@/lib/action-result";
 interface ConfirmEstimatedExpenseButtonProps {
     transaction: TransactionDisplay;
 }
@@ -37,7 +38,7 @@ export function ConfirmEstimatedExpenseButton({ transaction }: ConfirmEstimatedE
         }
         startTransition(async () => {
             try {
-                await confirmEstimatedExpense(transaction.id, { valor: parsed, data_vencimento: dataVencimento });
+                await confirmEstimatedExpense(transaction.id, { valor: parsed, data_vencimento: dataVencimento }).then(unwrap);
                 toast.success("Despesa efetivada!");
                 setOpen(false);
                 router.refresh();

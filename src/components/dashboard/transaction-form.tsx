@@ -24,6 +24,7 @@ import { dateOnlyToLocal } from "@/lib/date-only";
 import type { TransactionFormValues, TransactionInput } from "@/lib/validations";
 import type { Category, PaymentMethod, FinancialInstitution, TransactionDisplay } from "@/types/models";
 
+import { unwrap } from "@/lib/action-result";
 interface TransactionFormProps {
     categories: Category[];
     paymentMethods: PaymentMethod[];
@@ -127,10 +128,10 @@ export function TransactionForm({ categories: initialCategories, paymentMethods:
         startTransition(async () => {
             try {
                 if (initialData?.id) {
-                    await updateTransaction(initialData.id, submissionData);
+                    await updateTransaction(initialData.id, submissionData).then(unwrap);
                     toast.success("Transação atualizada com sucesso!");
                 } else {
-                    await createTransaction(submissionData);
+                    await createTransaction(submissionData).then(unwrap);
                     toast.success("Transação realizada com sucesso!");
                 }
                 reset();
@@ -151,7 +152,7 @@ export function TransactionForm({ categories: initialCategories, paymentMethods:
                 nome: name,
                 icone: "Wallet",
                 tipo: tipo,
-            });
+            }).then(unwrap);
             setCategories([...categories, newCat]);
             setValue("categoria_id", newCat.id);
             toast.success(`Categoria "${name}" criada!`);
@@ -162,7 +163,7 @@ export function TransactionForm({ categories: initialCategories, paymentMethods:
 
     const handleAddPaymentMethod = async (name: string) => {
         try {
-            const newPM = await createPaymentMethod({ nome: name });
+            const newPM = await createPaymentMethod({ nome: name }).then(unwrap);
             setPaymentMethods([...paymentMethods, newPM]);
             setValue("tipo_pagamento_id", newPM.id);
             toast.success(`Meio "${name}" criado!`);

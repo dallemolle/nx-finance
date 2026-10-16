@@ -10,6 +10,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { generateTwoFactorSetup, enableTwoFactor, disableTwoFactor, regenerateRecoveryCodes } from "@/lib/two-factor-actions";
 import { getErrorMessage } from "@/lib/utils";
 
+import { unwrap } from "@/lib/action-result";
 interface SecuritySettingsProps {
     enabled: boolean;
     recoveryCodesLeft: number;
@@ -45,11 +46,11 @@ export function SecuritySettings({ enabled, recoveryCodesLeft }: SecuritySetting
         }
     };
 
-    const handleStartSetup = () => run(async () => setSetupData(await generateTwoFactorSetup()), "Erro ao gerar configuração de 2FA");
+    const handleStartSetup = () => run(async () => setSetupData(await generateTwoFactorSetup().then(unwrap)), "Erro ao gerar configuração de 2FA");
 
     const handleConfirmEnable = () => run(async () => {
         if (!setupData) return;
-        const { recoveryCodes } = await enableTwoFactor({ secret: setupData.secret, code, password });
+        const { recoveryCodes } = await enableTwoFactor({ secret: setupData.secret, code, password }).then(unwrap);
         toast.success("2FA ativado com sucesso!");
         setIsEnabled(true);
         setSetupData(null);
@@ -60,12 +61,12 @@ export function SecuritySettings({ enabled, recoveryCodesLeft }: SecuritySetting
 
     const handleConfirm = () => run(async () => {
         if (confirmMode === "regenerate") {
-            const { recoveryCodes } = await regenerateRecoveryCodes({ code, password });
+            const { recoveryCodes } = await regenerateRecoveryCodes({ code, password }).then(unwrap);
             toast.success("Novos códigos gerados. Os antigos não valem mais.");
             setShownCodes(recoveryCodes);
             setCodesLeft(recoveryCodes.length);
         } else {
-            await disableTwoFactor({ code, password });
+            await disableTwoFactor({ code, password }).then(unwrap);
             toast.success("2FA desativado.");
             setIsEnabled(false);
             setCodesLeft(0);

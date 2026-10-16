@@ -15,7 +15,7 @@ import {
     type EstimatedExpenseInput,
     type ConfirmEstimatedExpenseInput,
 } from "@/lib/validations";
-import { getPrismaErrorMessage } from "@/lib/utils";
+import { actionResult } from "@/lib/action-result";
 import { addInvoiceMonths, splitInstallments } from "@/lib/credit-card-cycle";
 import {
     getOrCreateInvoiceCategory,
@@ -42,71 +42,58 @@ export async function getCreditCards() {
     return cards.map(c => ({ ...c, limite: c.limite ? Number(c.limite) : null }));
 }
 
+// As que alteram dados devolvem ActionResult (BL-044): o navegador usa unwrap().
 export async function createCreditCard(data: CreditCardInput) {
-    try {
-        const userId = await getSessionUserId();
+    const userId = await getSessionUserId();
+    return actionResult("Erro ao criar cartão", async () => {
         const validatedData = creditCardSchema.parse(data);
         const card = await db.creditCard.create({ data: { ...validatedData, userId } });
         revalidatePath("/dashboard/settings");
-        return { success: true, data: { ...card, limite: card.limite ? Number(card.limite) : null } };
-    } catch (error: unknown) {
-        console.error("Error creating credit card:", error);
-        throw new Error(getPrismaErrorMessage(error, "Erro ao criar cartão"));
-    }
+        return { ...card, limite: card.limite ? Number(card.limite) : null };
+    });
 }
 
 export async function updateCreditCard(id: string, data: Partial<CreditCardInput>) {
-    try {
-        const userId = await getSessionUserId();
+    const userId = await getSessionUserId();
+    return actionResult("Erro ao atualizar cartão", async () => {
         const validatedData = creditCardSchema.partial().parse(data);
         const card = await db.creditCard.update({
             where: { id, userId },
             data: validatedData,
         });
         revalidatePath("/dashboard/settings");
-        return { success: true, data: { ...card, limite: card.limite ? Number(card.limite) : null } };
-    } catch (error: unknown) {
-        console.error("Error updating credit card:", error);
-        throw new Error(getPrismaErrorMessage(error, "Erro ao atualizar cartão"));
-    }
+        return { ...card, limite: card.limite ? Number(card.limite) : null };
+    });
 }
 
 export async function deleteCreditCard(id: string) {
-    try {
-        const userId = await getSessionUserId();
+    const userId = await getSessionUserId();
+    return actionResult("Erro ao excluir cartão", async () => {
         const linkedCount = await db.transaction.count({ where: { credit_card_id: id, userId } });
         if (linkedCount > 0) {
             throw new Error("Não é possível excluir um cartão com faturas ou compras vinculadas.");
         }
         await db.creditCard.delete({ where: { id, userId } });
         revalidatePath("/dashboard/settings");
-        return { success: true };
-    } catch (error: unknown) {
-        console.error("Error deleting credit card:", error);
-        throw new Error(getPrismaErrorMessage(error, "Erro ao excluir cartão"));
-    }
+    });
 }
 
 // --- Provisionamento ---
 
 // Regra em services/credit-card-provision.ts (provisionCardInstallmentPurchaseForUser).
 export async function provisionCardInstallmentPurchase(data: CardInstallmentPurchaseInput) {
-    try {
-        const userId = await getSessionUserId();
+    const userId = await getSessionUserId();
+    return actionResult("Erro ao provisionar compra parcelada", async () => {
         await provisionCardInstallmentPurchaseForUser(userId, data);
 
         revalidatePath("/dashboard");
         revalidatePath("/reports");
-        return { success: true };
-    } catch (error: unknown) {
-        console.error("Error provisioning card installment purchase:", error);
-        throw new Error(getPrismaErrorMessage(error, "Erro ao provisionar compra parcelada"));
-    }
+    });
 }
 
 export async function provisionEstimatedExpense(data: EstimatedExpenseInput) {
-    try {
-        const userId = await getSessionUserId();
+    const userId = await getSessionUserId();
+    return actionResult("Erro ao provisionar despesa prevista", async () => {
         const validatedData = estimatedExpenseSchema.parse(data);
 
         await db.$transaction(async (tx) => {
@@ -228,50 +215,44 @@ export async function provisionEstimatedExpense(data: EstimatedExpenseInput) {
 
         revalidatePath("/dashboard");
         revalidatePath("/reports");
-        return { success: true };
-    } catch (error: unknown) {
-        console.error("Error provisioning estimated expense:", error);
-        throw new Error(getPrismaErrorMessage(error, "Erro ao provisionar despesa prevista"));
-    }
+    });
 }
 
 // Exclui um ou mais itens de faturas projetadas (parcelas futuras ou
 // estimativas no cartão). Regra em services/credit-card-provision.ts
 // (deleteProvisionedInvoiceItemsForUser).
-export async function deleteProvisionedInvoiceItems(itemIds: string[]) {
-    try {
-        const userId = await getSessionUserId();
-        const result = await deleteProvisionedInvoiceItemsForUser(userId, itemIds);
+async function deleteProvisionedItems(userId: string, itemIds: string[]) {
+    const result = await deleteProvisionedInvoiceItemsForUser(userId, itemIds);
 
-        revalidatePath("/");
-        revalidatePath("/faturas");
-        revalidatePath("/reports");
-        return { success: true, deletedCount: result.deletedCount };
-    } catch (error: unknown) {
-        console.error("Error deleting provisioned invoice items:", error);
-        throw new Error(getPrismaErrorMessage(error, "Erro ao excluir itens previstos"));
-    }
+    revalidatePath("/");
+    revalidatePath("/faturas");
+    revalidatePath("/reports");
+    return { deletedCount: result.deletedCount };
+}
+
+export async function deleteProvisionedInvoiceItems(itemIds: string[]) {
+    const userId = await getSessionUserId();
+    return actionResult("Erro ao excluir itens previstos", () => deleteProvisionedItems(userId, itemIds));
 }
 
 export async function deleteProvisionedInvoiceItem(itemId: string) {
-    const result = await deleteProvisionedInvoiceItems([itemId]);
-    if (result.deletedCount === 0) throw new Error("Item previsto não encontrado.");
-    return { success: true };
+    const userId = await getSessionUserId();
+    return actionResult("Erro ao excluir item previsto", async () => {
+        const { deletedCount } = await deleteProvisionedItems(userId, [itemId]);
+        if (deletedCount === 0) throw new Error("Item previsto não encontrado.");
+    });
 }
 
 // Regra em services/credit-card-provision.ts (confirmEstimatedExpenseForUser).
 export async function confirmEstimatedExpense(id: string, data: ConfirmEstimatedExpenseInput) {
-    try {
-        const userId = await getSessionUserId();
+    const userId = await getSessionUserId();
+    return actionResult("Erro ao efetivar despesa prevista", async () => {
         const updated = await confirmEstimatedExpenseForUser(userId, id, data);
 
         revalidatePath("/dashboard");
         revalidatePath("/reports");
-        return { success: true, data: { ...updated, valor: Number(updated.valor) } };
-    } catch (error: unknown) {
-        console.error("Error confirming estimated expense:", error);
-        throw new Error(getPrismaErrorMessage(error, "Erro ao efetivar despesa prevista"));
-    }
+        return { ...updated, valor: Number(updated.valor) };
+    });
 }
 
 // --- Timeline de faturas / comprometimento mensal ---

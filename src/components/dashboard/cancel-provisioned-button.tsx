@@ -9,6 +9,7 @@ import { deleteProvisionedInvoiceItem } from "@/lib/credit-card-provision-action
 import { getErrorMessage } from "@/lib/utils";
 import { toast } from "sonner";
 
+import { unwrap } from "@/lib/action-result";
 interface CancelProvisionedButtonProps {
     // "transaction": despesa prevista genérica (sem cartão), exclui a Transaction inteira.
     // "invoiceItem": parcela futura ou estimativa dentro de uma fatura projetada, exclui só o item.
@@ -25,9 +26,9 @@ export function CancelProvisionedButton({ kind, id }: CancelProvisionedButtonPro
         startTransition(async () => {
             try {
                 if (kind === "transaction") {
-                    await deleteTransaction(id);
+                    await deleteTransaction(id).then(unwrap);
                 } else {
-                    await deleteProvisionedInvoiceItem(id);
+                    await deleteProvisionedInvoiceItem(id).then(unwrap);
                 }
                 toast.success("Lançamento previsto excluído!");
                 router.refresh();

@@ -181,7 +181,12 @@ DATABASE_URL="postgresql://user:password@localhost:5432/nx_finance?schema=public
 # NextAuth
 NEXTAUTH_SECRET="gere-um-segredo-com-openssl-rand-base64-32"
 NEXTAUTH_URL="http://localhost:3000"
+
+# Cadastro de novos usuários (/auth/register). Fechado se ausente — deixe assim em produção.
+ALLOW_REGISTRATION="true"
 ```
+
+> O cadastro fica fechado por padrão (app pessoal): sem `ALLOW_REGISTRATION="true"`, o link "Cadastre-se" some do login e `/auth/register` leva pro login. Abra só pra criar a conta e feche depois. A senha se troca em Configurações → Segurança → Alterar senha.
 
 > O segundo fator (2FA) usa TOTP via app autenticador (Google Authenticator, Authy etc.) — não depende de nenhuma variável de e-mail/SMTP. Ative em Configurações → Segurança depois de criar sua conta.
 
@@ -200,7 +205,7 @@ npx prisma db push
 npm run dev
 ```
 
-Acesse [http://localhost:3000](http://localhost:3000), crie uma conta em `/auth/register` (categorias padrão são criadas automaticamente).
+Acesse [http://localhost:3000](http://localhost:3000), crie uma conta em `/auth/register` (categorias padrão são criadas automaticamente; precisa de `ALLOW_REGISTRATION="true"`).
 
 ### Alternativa: Docker
 

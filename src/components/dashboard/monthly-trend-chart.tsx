@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { TrendingUp } from "lucide-react";
 import { formatCompactCurrency, maskCurrency } from "@/lib/utils";
 import { useIsPrivacyMode } from "./privacy-provider";
+import { chartTooltipProps } from "./chart-tooltip";
 
 interface MonthlyTrendChartProps {
     data: { label: string; saldo: number }[];
@@ -63,15 +64,7 @@ export function MonthlyTrendChart({ data }: MonthlyTrendChartProps) {
                             {hasNegative && <ReferenceLine y={0} stroke="hsl(var(--muted-foreground))" strokeOpacity={0.5} />}
                             <Tooltip
                                 formatter={(value: number) => [maskCurrency(value, isHidden), "Saldo"]}
-                                contentStyle={{
-                                    borderRadius: "12px",
-                                    border: "1px solid hsl(var(--border))",
-                                    boxShadow: "0 10px 15px -3px rgb(0 0 0 / 0.1)",
-                                    backgroundColor: "hsl(var(--popover))",
-                                    color: "hsl(var(--popover-foreground))",
-                                    fontSize: 12,
-                                }}
-                                labelClassName="capitalize font-semibold"
+                                {...chartTooltipProps}
                             />
                             <Area
                                 type="monotone"

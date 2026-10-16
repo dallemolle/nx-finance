@@ -23,7 +23,8 @@ Combinada em 2026-10-09. Cada etapa vai no seu próprio branch `feature/...`.
 6. **Depois, só com motivo concreto:** BL-017. (BL-018 ✅ feito em 2026-10-12, no branch `feature/2026-10-12_deploy_apos_ci`.)
 7. **Com o usuário:** BL-020 e BL-032 (em validação até novembro de 2026). (BL-019 ✅ concluído.)
 8. **Funcionalidades novas, sem pressa:** BL-030 (✅ 2026-10-12) e BL-031.
-9. **Lançamentos do mês** (2026-10-16): BL-038 no branch `feature/2026-10-16_excluir_lancamento_pendente` (✅ 2026-10-16); depois BL-039; BL-040 sem pressa.
+9. **Lançamentos do mês** (2026-10-16): BL-038 no branch `feature/2026-10-16_excluir_lancamento_pendente` (✅ 2026-10-16); depois BL-039; BL-040 sem pressa. BL-041 (tooltip no modo escuro) ✅ 2026-10-16, no branch `feature/2026-10-16_tooltip_grafico_modo_escuro`.
+10. **Conta** (2026-10-16): BL-042 (alterar senha) e BL-043 (cadastro fechado), no branch `feature/2026-10-16_alterar_senha_e_fechar_cadastro`. ✅ Concluída. Libera o BL-020. Achado no CI: BL-044 (mensagens de erro em produção) ✅ 2026-10-16, no branch `feature/2026-10-16_erros_server_actions`.
 
 ## Pendentes
 
@@ -62,8 +63,8 @@ Ideias que vieram do branch abandonado `feature/2026-07-18_prev-desc-new_table` 
   - a fatura prevista de novembro foi substituída pela importada, sem sumir nem duplicar;
   - as parcelas dos meses seguintes continuam em `/faturas` → Nubank → Ver meses.
   Se aparecer algo errado, abrir um item novo com o caso real.
-- [ ] **BL-020: senha do usuário dev local.** **Baixa.** 👤 **Ação do usuário.**
-  A senha local foi redefinida para `NxDev@2026` durante a revisão. Trocar se quiser. Afeta só o banco local.
+- [ ] **BL-020: senha do usuário dev local.** **Baixa.** 👤 **Ação do usuário.** 🔗 **Depende do BL-042** (✅ desde 2026-10-16, liberado depois do merge).
+  A senha local foi redefinida para `NxDev@2026` durante a revisão. Trocar pela tela: rodar o app local (`npm run dev`), entrar e ir em Configurações → Segurança → Alterar senha. Afeta só o banco local.
 
 ## Concluídos
 
@@ -118,3 +119,7 @@ Ideias que vieram do branch abandonado `feature/2026-07-18_prev-desc-new_table` 
 | BL-030 | Despesa prevista recorrente: opção **Recorrente** no diálogo (Uma vez · Parcelada · Recorrente), valor cheio por 2 a 36 meses, no cartão ou genérica, com prévia e total do período; sem mudança no banco. Cancelamento da genérica fica mês a mês (decisão do usuário) | 2026-10-12 · `1408e66` |
 | BL-037 | Cor de categoria sorteada: nova categoria nasce com uma cor que não repete nem lembra as do usuário (antes, sempre o azul `#3b82f6`), e Configurações → Categorias ganhou o botão 🎲 "Sugerir cor". Pedido do usuário | 2026-10-12 · `d524a60` |
 | BL-038 | Excluir lançamento pendente: lixeira em todo lançamento de "Nova Transação" pendente ou atrasado (entrada ou saída, avulso ou parcela), com confirmação; o registro é apagado, então sai da lista e das somas. Lançamento ou fatura importada **paga** não tem lixeira, e o servidor também recusa: para excluir, editar e voltar para Pendente. Junto: voltar de Pago para Pendente limpa a data de pagamento. Pedido do usuário (lançamento duplicado sem como apagar) | 2026-10-16 · `1008896` |
+| BL-041 | Tooltip dos gráficos legível no modo escuro: na linha do tempo de faturas, "Confirmado"/"Previsto" saíam em preto sobre fundo escuro (a cor das barras vem de classe CSS, e sem cor da série o Recharts usa preto). Estilo do tooltip compartilhado (`chart-tooltip.ts`) nos três gráficos; a pizza de categorias perdeu o fundo branco fixo e passou a respeitar o modo privacidade. E2E mede o contraste (≥ 4,5) no modo escuro. Reportado pelo usuário, com print | 2026-10-16 · `dfdf16d` |
+| BL-042 | Alterar senha em Configurações → Segurança: senha atual + nova (mín. 8 caracteres, digitada duas vezes, diferente da atual). Errar a senha atual conta no mesmo limite do login (BL-036), pra uma sessão roubada não virar força bruta da senha. A action devolve o erro como valor (lançado, a mensagem sumia no build de produção — ver BL-044). Sessões já abertas continuam até expirar. Antes não havia como trocar a senha pela tela | 2026-10-16 · `dde3a38` |
+| BL-043 | Cadastro de novos usuários fechado por padrão: só abre com `ALLOW_REGISTRATION=true`. Fechado, a action recusa no servidor, `/auth/register` leva pro login e o link "Cadastre-se" some. Antes, qualquer pessoa criava conta em produção e descobria quais e-mails já tinham ("E-mail já cadastrado") | 2026-10-16 · `dde3a38` |
+| BL-044 | Mensagens de erro das Server Actions legíveis em produção: no build de produção o React trocava a mensagem de erro lançado por "Minified React error #441" (no `next dev` aparecia, por isso só o CI pegou). `action-result.ts`: `actionResult()` devolve `{ success: false, error }` com mensagem segura (regra do app, Zod, códigos do Prisma; erro técnico vira a genérica) e `unwrap()` relança no navegador. Todas as actions que alteram dados convertidas (29 chamadas nas telas); "Não autorizado" segue lançando. Trava no `server-actions-guard.test.ts` contra o padrão antigo e e2e de mensagem de erro (excluir categoria com lançamentos) que falha com o comportamento antigo no build de produção. Dica: antes de entregar, rodar os e2e com `CI=1` (build de produção, como o CI) | 2026-10-16 · `6289c91` |

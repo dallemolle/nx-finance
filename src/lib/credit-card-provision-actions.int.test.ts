@@ -5,6 +5,7 @@ import { dateOnlyYmd } from "@/lib/date-only";
 import { provisionEstimatedExpense } from "./credit-card-provision-actions";
 import { createUserWithCard, type Scenario } from "../../test/fixtures";
 
+import { unwrap } from "@/lib/action-result";
 vi.mock("next-auth", () => ({ getServerSession: vi.fn() }));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 
@@ -23,7 +24,7 @@ describe("provisionEstimatedExpense sem cartão", () => {
     });
 
     test("à vista: um lançamento previsto no dia 1º do mês escolhido", async () => {
-        await provisionEstimatedExpense(input());
+        await provisionEstimatedExpense(input()).then(unwrap);
 
         const rows = await mine();
         expect(rows.map(r => [r.descricao, Number(r.valor), dateOnlyYmd(r.data_vencimento), r.is_provisioned])).toEqual([
@@ -32,7 +33,7 @@ describe("provisionEstimatedExpense sem cartão", () => {
     });
 
     test("parcelado: divide em centavos e atravessa o ano", async () => {
-        await provisionEstimatedExpense(input({ isInstallment: true, installmentsCount: 3 }));
+        await provisionEstimatedExpense(input({ isInstallment: true, installmentsCount: 3 })).then(unwrap);
 
         const rows = await mine();
         expect(rows.map(r => [r.descricao, Number(r.valor), dateOnlyYmd(r.data_vencimento)])).toEqual([
@@ -56,7 +57,7 @@ describe("provisionEstimatedExpense recorrente", () => {
         await provisionEstimatedExpense({
             descricao: "academia", valor: 120, categoria_id: s.category.id, invoice_month: 11, invoice_year: 2026,
             tipo_pagamento_id: s.paymentMethod.id, institution_id: s.institution.id, isRecurring: true, recurringMonths: 3,
-        });
+        }).then(unwrap);
 
         const rows = await db.transaction.findMany({ where: { userId: s.user.id }, orderBy: { data_vencimento: "asc" } });
         expect(rows.map(r => [r.descricao, Number(r.valor), dateOnlyYmd(r.data_vencimento), r.is_provisioned, r.credit_card_id])).toEqual([
@@ -70,7 +71,7 @@ describe("provisionEstimatedExpense recorrente", () => {
         await provisionEstimatedExpense({
             descricao: "streaming", valor: 39.9, categoria_id: s.category.id, invoice_month: 11, invoice_year: 2026,
             credit_card_id: s.card.id, isRecurring: true, recurringMonths: 3,
-        });
+        }).then(unwrap);
 
         const headers = await db.transaction.findMany({
             where: { userId: s.user.id, is_invoice_header: true },
@@ -92,9 +93,9 @@ describe("provisionEstimatedExpense recorrente", () => {
 
     test("no cartão: soma na fatura prevista que já existe no mês, sem duplicar o cabeçalho", async () => {
         const base = { categoria_id: s.category.id, invoice_month: 11, invoice_year: 2026, credit_card_id: s.card.id };
-        await provisionEstimatedExpense({ ...base, descricao: "mercado", valor: 400 });
+        await provisionEstimatedExpense({ ...base, descricao: "mercado", valor: 400 }).then(unwrap);
 
-        await provisionEstimatedExpense({ ...base, descricao: "streaming", valor: 40, isRecurring: true, recurringMonths: 2 });
+        await provisionEstimatedExpense({ ...base, descricao: "streaming", valor: 40, isRecurring: true, recurringMonths: 2 }).then(unwrap);
 
         const headers = await db.transaction.findMany({ where: { userId: s.user.id, is_invoice_header: true }, orderBy: { data_vencimento: "asc" } });
         expect(headers.map(h => [h.invoice_month, Number(h.valor)])).toEqual([[11, 440], [12, 40]]);

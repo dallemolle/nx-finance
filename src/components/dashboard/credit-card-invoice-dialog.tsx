@@ -34,6 +34,7 @@ import { Combobox } from "@/components/ui/combobox";
 import { toast } from "sonner";
 import type { Category, PaymentMethod, FinancialInstitution, CreditCardDisplay } from "@/types/models";
 
+import { unwrap } from "@/lib/action-result";
 interface ParsedInvoiceRow {
     id: number;
     title: string;
@@ -291,7 +292,7 @@ export function CreditCardInvoiceDialog({ userId, className }: { userId: string;
                 nome: catName,
                 icone: "Wallet",
                 tipo: "SAIDA",
-            });
+            }).then(unwrap);
             setCategories(prev => [...prev, newCat]);
             handleCategoryChange(id, newCat.id);
         } catch (e: unknown) {
@@ -302,7 +303,7 @@ export function CreditCardInvoiceDialog({ userId, className }: { userId: string;
 
     const handlePaymentMethodAdd = async (name: string) => {
         try {
-            const newPM = await createPaymentMethod({ nome: name });
+            const newPM = await createPaymentMethod({ nome: name }).then(unwrap);
             setPaymentMethods(prev => [...prev, newPM]);
             setPaymentMethodId(newPM.id);
         } catch (e: unknown) {
@@ -336,7 +337,7 @@ export function CreditCardInvoiceDialog({ userId, className }: { userId: string;
         setError(null);
 
         try {
-            const result = await importCreditCardInvoice({
+            await importCreditCardInvoice({
                 descricao: invoiceDescription,
                 data_vencimento: dueDate,
                 institution_id: institutionId,
@@ -351,12 +352,10 @@ export function CreditCardInvoiceDialog({ userId, className }: { userId: string;
                     installmentNumber: row.isInstallment ? row.installmentNumber : null,
                     installmentsCount: row.isInstallment ? row.installmentsCount : null,
                 })),
-            });
+            }).then(unwrap);
 
-            if (result.success) {
-                setOpen(false);
-                router.refresh();
-            }
+            setOpen(false);
+            router.refresh();
         } catch (e: unknown) {
             setError(getErrorMessage(e, "Erro ao importar fatura"));
         } finally {

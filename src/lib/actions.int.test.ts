@@ -6,6 +6,7 @@ import { createCategory, createTransaction, deleteTransaction, payTransaction, u
 import { areColorsSimilar, CATEGORY_PALETTE } from "./category-colors";
 import { createUserWithCard, type Scenario } from "../../test/fixtures";
 
+import { unwrap } from "@/lib/action-result";
 vi.mock("next-auth", () => ({ getServerSession: vi.fn() }));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 
@@ -26,7 +27,7 @@ describe("payTransaction", () => {
     test("liquida um lançamento real", async () => {
         const t = await expense(false);
 
-        await payTransaction(t.id);
+        await payTransaction(t.id).then(unwrap);
 
         const paid = await db.transaction.findUniqueOrThrow({ where: { id: t.id } });
         expect(paid.status).toBe("PAGO");
@@ -38,7 +39,7 @@ describe("payTransaction", () => {
     test("recusa liquidar um lançamento previsto", async () => {
         const t = await expense(true);
 
-        await expect(payTransaction(t.id)).rejects.toThrow(/previst/i);
+        await expect(payTransaction(t.id).then(unwrap)).rejects.toThrow(/previst/i);
 
         expect((await db.transaction.findUniqueOrThrow({ where: { id: t.id } })).status).toBe("PENDENTE");
     });
@@ -58,14 +59,14 @@ describe("createTransaction e updateTransaction (BL-013/BL-014)", () => {
     });
 
     test("à vista: um lançamento com a descrição normalizada", async () => {
-        await createTransaction(input());
+        await createTransaction(input()).then(unwrap);
 
         const rows = await mine();
         expect(rows.map(r => [r.descricao, Number(r.valor), dateOnlyYmd(r.data_vencimento)])).toEqual([["Geladeira", 320, "2026-01-31"]]);
     });
 
     test("parcelado: divide em centavos (a última absorve o resto), um mês por parcela", async () => {
-        await createTransaction(input({ isInstallment: true, installmentsCount: 3 }));
+        await createTransaction(input({ isInstallment: true, installmentsCount: 3 })).then(unwrap);
 
         const rows = await mine();
         expect(rows.map(r => [r.descricao, Number(r.valor), dateOnlyYmd(r.data_vencimento)])).toEqual([
@@ -77,15 +78,15 @@ describe("createTransaction e updateTransaction (BL-013/BL-014)", () => {
     });
 
     test("parcelado com descrições próprias por parcela", async () => {
-        await createTransaction(input({ isInstallment: true, installmentsCount: 2, installmentDescriptions: ["Entrada", ""] }));
+        await createTransaction(input({ isInstallment: true, installmentsCount: 2, installmentDescriptions: ["Entrada", ""] })).then(unwrap);
 
         expect((await mine()).map(r => r.descricao)).toEqual(["Entrada", "Geladeira (02/02)"]);
     });
 
     test("editar não cria parcelas nem grava os campos do formulário de parcelamento", async () => {
-        const { data } = await createTransaction(input());
+        const data = await createTransaction(input()).then(unwrap);
 
-        await updateTransaction(data.id, input({ valor: 350, isInstallment: true, installmentsCount: 4 }));
+        await updateTransaction(data.id, input({ valor: 350, isInstallment: true, installmentsCount: 4 })).then(unwrap);
 
         const rows = await mine();
         expect(rows.map(r => [r.descricao, Number(r.valor)])).toEqual([["Geladeira", 350]]);
@@ -100,23 +101,23 @@ describe("createTransaction e updateTransaction (BL-013/BL-014)", () => {
             },
         });
 
-        await expect(updateTransaction(theirs.id, input())).rejects.toThrow();
+        await expect(updateTransaction(theirs.id, input()).then(unwrap)).rejects.toThrow();
         expect(Number((await db.transaction.findUniqueOrThrow({ where: { id: theirs.id } })).valor)).toBe(10);
     });
 
     // BL-038: voltar de Pago para Pendente deixava a data de pagamento antiga gravada.
     test("data de pagamento acompanha o status na edição", async () => {
-        const { data } = await createTransaction(input());
-        await payTransaction(data.id);
+        const data = await createTransaction(input()).then(unwrap);
+        await payTransaction(data.id).then(unwrap);
         const paidAt = (await db.transaction.findUniqueOrThrow({ where: { id: data.id } })).data_pagamento;
 
-        await updateTransaction(data.id, input({ status: "PAGO", valor: 330 }));
+        await updateTransaction(data.id, input({ status: "PAGO", valor: 330 })).then(unwrap);
         expect((await db.transaction.findUniqueOrThrow({ where: { id: data.id } })).data_pagamento).toEqual(paidAt);
 
-        await updateTransaction(data.id, input({ status: "PENDENTE" }));
+        await updateTransaction(data.id, input({ status: "PENDENTE" })).then(unwrap);
         expect((await db.transaction.findUniqueOrThrow({ where: { id: data.id } })).data_pagamento).toBeNull();
 
-        await updateTransaction(data.id, input({ status: "PAGO" }));
+        await updateTransaction(data.id, input({ status: "PAGO" })).then(unwrap);
         expect((await db.transaction.findUniqueOrThrow({ where: { id: data.id } })).data_pagamento).not.toBeNull();
     });
 });
@@ -143,7 +144,7 @@ describe("deleteTransaction", () => {
             create(), create({ status: "ATRASADO" }), create({ tipo: "ENTRADA" }), create({ is_provisioned: true }),
         ]);
 
-        for (const r of rows) await deleteTransaction(r.id);
+        for (const r of rows) await deleteTransaction(r.id).then(unwrap);
 
         expect(await db.transaction.count({ where: { userId: s.user.id } })).toBe(0);
     });
@@ -151,11 +152,11 @@ describe("deleteTransaction", () => {
     test("recusa lançamento pago, e exclui depois de voltar para Pendente", async () => {
         const t = await create({ status: "PAGO", data_pagamento: new Date() });
 
-        await expect(deleteTransaction(t.id)).rejects.toThrow(/Volte o status para Pendente/);
+        await expect(deleteTransaction(t.id).then(unwrap)).rejects.toThrow(/Volte o status para Pendente/);
         expect(await exists(t.id)).toBe(true);
 
-        await updateTransaction(t.id, { descricao: "Aluguel", valor: 1500, data_vencimento: "2026-11-05", status: "PENDENTE", tipo: "SAIDA", categoria_id: s.category.id, tipo_pagamento_id: s.paymentMethod.id, institution_id: s.institution.id });
-        await deleteTransaction(t.id);
+        await updateTransaction(t.id, { descricao: "Aluguel", valor: 1500, data_vencimento: "2026-11-05", status: "PENDENTE", tipo: "SAIDA", categoria_id: s.category.id, tipo_pagamento_id: s.paymentMethod.id, institution_id: s.institution.id }).then(unwrap);
+        await deleteTransaction(t.id).then(unwrap);
         expect(await exists(t.id)).toBe(false);
     });
 
@@ -164,8 +165,8 @@ describe("deleteTransaction", () => {
         const other = await createUserWithCard();
         const theirs = await create({}, other);
 
-        await expect(deleteTransaction(header.id)).rejects.toThrow(/Fatura/);
-        await expect(deleteTransaction(theirs.id)).rejects.toThrow(/não encontrado/);
+        await expect(deleteTransaction(header.id).then(unwrap)).rejects.toThrow(/Fatura/);
+        await expect(deleteTransaction(theirs.id).then(unwrap)).rejects.toThrow(/não encontrado/);
         expect([await exists(header.id), await exists(theirs.id)]).toEqual([true, true]);
     });
 });
@@ -183,7 +184,7 @@ describe("createCategory: cor sorteada", () => {
         const all = [...used, s.category.cor];
 
         for (let i = 0; i < 5; i++) {
-            const created = await createCategory({ nome: `nova ${i}`, icone: "Tag", tipo: "SAIDA" });
+            const created = await createCategory({ nome: `nova ${i}`, icone: "Tag", tipo: "SAIDA" }).then(unwrap);
             expect(created.cor).toMatch(/^#[0-9a-f]{6}$/);
             expect(all.some(c => areColorsSimilar(c, created.cor)), created.cor).toBe(false);
             all.push(created.cor);
@@ -191,7 +192,7 @@ describe("createCategory: cor sorteada", () => {
     });
 
     test("cor informada é respeitada", async () => {
-        const created = await createCategory({ nome: "escolhida", cor: "#123456", icone: "Tag", tipo: "SAIDA" });
+        const created = await createCategory({ nome: "escolhida", cor: "#123456", icone: "Tag", tipo: "SAIDA" }).then(unwrap);
 
         expect(created.cor).toBe("#123456");
     });
@@ -203,7 +204,7 @@ describe("createCategory: cor sorteada", () => {
         const other = await createUserWithCard();
         await db.category.update({ where: { id: other.category.id }, data: { cor: "#14b8a6" } });
 
-        const created = await createCategory({ nome: "nova", icone: "Tag", tipo: "SAIDA" });
+        const created = await createCategory({ nome: "nova", icone: "Tag", tipo: "SAIDA" }).then(unwrap);
 
         expect(created.cor).toBe("#14b8a6");
     });});

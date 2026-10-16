@@ -16,6 +16,7 @@ import {
 } from "@/lib/actions";
 import { getErrorMessage } from "@/lib/utils";
 import { suggestCategoryColor } from "@/lib/category-colors";
+import { unwrap, type ActionResult } from "@/lib/action-result";
 import type { Category, PaymentMethod, FinancialInstitution } from "@/types/models";
 
 interface SettingsRowItem {
@@ -26,8 +27,8 @@ interface SettingsRowItem {
 
 interface SettingsItemProps<T extends SettingsRowItem> {
     item: T;
-    onUpdate: (id: string, data: { nome?: string; cor?: string }) => Promise<unknown>;
-    onDelete: (id: string) => Promise<unknown>;
+    onUpdate: (id: string, data: { nome?: string; cor?: string }) => Promise<ActionResult<unknown>>;
+    onDelete: (id: string) => Promise<ActionResult<unknown>>;
     hasColor?: boolean;
     // Sorteia uma cor nova a partir da atual (botão "Sugerir cor"; só categorias).
     suggestColor?: (currentColor: string) => string;
@@ -49,7 +50,7 @@ function SettingsRow<T extends SettingsRowItem>({ item, onUpdate, onDelete, hasC
 
             if (Object.keys(updateData).length === 0) return;
 
-            await onUpdate(item.id, updateData);
+            unwrap(await onUpdate(item.id, updateData));
             toast.success("Atualizado com sucesso!");
         } catch (error: unknown) {
             toast.error(getErrorMessage(error, "Erro ao atualizar"));
@@ -65,7 +66,7 @@ function SettingsRow<T extends SettingsRowItem>({ item, onUpdate, onDelete, hasC
 
         setIsPending(true);
         try {
-            await onDelete(item.id);
+            unwrap(await onDelete(item.id));
             toast.success("Excluído com sucesso!");
         } catch (error: unknown) {
             toast.error(getErrorMessage(error, "Erro ao excluir"));

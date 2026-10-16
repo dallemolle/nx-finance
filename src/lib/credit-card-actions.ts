@@ -4,7 +4,8 @@ import { db } from "@/lib/db";
 import { getSessionUserId } from "@/lib/session";
 import { revalidatePath } from "next/cache";
 import type { CreditCardInvoiceInput } from "@/lib/validations";
-import { getErrorMessage, getPrismaErrorMessage } from "@/lib/utils";
+import { getErrorMessage } from "@/lib/utils";
+import { actionResult } from "@/lib/action-result";
 import { monthRange } from "@/lib/date-only";
 import {
     deleteImportedInvoiceForUser,
@@ -15,45 +16,37 @@ import {
 } from "@/lib/services/credit-card-import";
 
 // Regra em services/credit-card-import.ts (importCreditCardInvoiceForUser).
+// Devolve ActionResult (BL-044): o navegador usa unwrap().
 export async function importCreditCardInvoice(data: CreditCardInvoiceInput) {
-    try {
-        const userId = await getSessionUserId();
+    const userId = await getSessionUserId();
+    return actionResult("Erro ao importar fatura de cartão de crédito", async () => {
         const result = await importCreditCardInvoiceForUser(userId, data);
 
         revalidatePath("/dashboard");
         revalidatePath("/reports");
 
         return {
-            success: true,
-            data: {
-                transaction: {
-                    ...result.transaction,
-                    valor: Number(result.transaction.valor),
-                },
-                itemsCount: result.itemsCount,
+            transaction: {
+                ...result.transaction,
+                valor: Number(result.transaction.valor),
             },
+            itemsCount: result.itemsCount,
         };
-    } catch (error: unknown) {
-        console.error("Error importing credit card invoice:", error);
-        throw new Error(getPrismaErrorMessage(error, "Erro ao importar fatura de cartão de crédito"));
-    }
+    });
 }
 
 // Apaga uma fatura importada (real) e os itens dela, pra refazer uma importação
 // errada. Regra em services/credit-card-import.ts (deleteImportedInvoiceForUser).
 export async function deleteImportedInvoice(transactionId: string) {
-    try {
-        const userId = await getSessionUserId();
+    const userId = await getSessionUserId();
+    return actionResult("Erro ao excluir a fatura importada", async () => {
         const result = await deleteImportedInvoiceForUser(userId, transactionId);
 
         revalidatePath("/");
         revalidatePath("/faturas");
         revalidatePath("/reports");
-        return { success: true, deletedItems: result.deletedItems };
-    } catch (error: unknown) {
-        console.error("Error deleting imported invoice:", error);
-        throw new Error(getPrismaErrorMessage(error, "Erro ao excluir a fatura importada"));
-    }
+        return { deletedItems: result.deletedItems };
+    });
 }
 
 // Regra em services/credit-card-import.ts (findPossibleDuplicateInstallmentsForUser).

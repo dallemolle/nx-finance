@@ -6,7 +6,7 @@ import { authOptions } from "@/lib/auth";
 import { generateSecret, generateURI } from "otplib";
 import QRCode from "qrcode";
 import type { EnableTwoFactorInput, TwoFactorConfirmInput } from "@/lib/validations";
-import { getPrismaErrorMessage } from "@/lib/utils";
+import { actionResult } from "@/lib/action-result";
 import {
     disableTwoFactorForUser,
     enableTwoFactorForUser,
@@ -20,58 +20,47 @@ async function getSession() {
     return { userId: session.user.id, email: session.user.email };
 }
 
+// Todas devolvem ActionResult (BL-044): o navegador usa unwrap() — senão, em
+// produção, "Senha incorreta" e "Código de verificação inválido" chegavam
+// como um erro genérico do React.
 export async function generateTwoFactorSetup() {
-    try {
-        const { email } = await getSession();
-
+    const { email } = await getSession();
+    return actionResult("Erro ao gerar configuração de 2FA", async () => {
         const secret = generateSecret();
         const otpauthUrl = generateURI({ issuer: "NxFinance", label: email, secret });
         const qrCodeDataUrl = await QRCode.toDataURL(otpauthUrl);
 
         return { secret, qrCodeDataUrl };
-    } catch (error: unknown) {
-        console.error("Error generating 2FA setup:", error);
-        throw new Error(getPrismaErrorMessage(error, "Erro ao gerar configuração de 2FA"));
-    }
+    });
 }
 
 // Regras em services/two-factor.ts. Ativar devolve os códigos de recuperação
 // (mostrados uma vez só na tela).
 export async function enableTwoFactor(input: EnableTwoFactorInput) {
-    try {
-        const { userId } = await getSession();
+    const { userId } = await getSession();
+    return actionResult("Erro ao ativar 2FA", async () => {
         const { recoveryCodes } = await enableTwoFactorForUser(userId, input);
 
         revalidatePath("/dashboard/settings");
-        return { success: true, recoveryCodes };
-    } catch (error: unknown) {
-        console.error("Error enabling 2FA:", error);
-        throw new Error(getPrismaErrorMessage(error, "Erro ao ativar 2FA"));
-    }
+        return { recoveryCodes };
+    });
 }
 
 export async function regenerateRecoveryCodes(input: TwoFactorConfirmInput) {
-    try {
-        const { userId } = await getSession();
+    const { userId } = await getSession();
+    return actionResult("Erro ao gerar novos códigos de recuperação", async () => {
         const { recoveryCodes } = await regenerateRecoveryCodesForUser(userId, input);
 
         revalidatePath("/dashboard/settings");
-        return { success: true, recoveryCodes };
-    } catch (error: unknown) {
-        console.error("Error regenerating recovery codes:", error);
-        throw new Error(getPrismaErrorMessage(error, "Erro ao gerar novos códigos de recuperação"));
-    }
+        return { recoveryCodes };
+    });
 }
 
 export async function disableTwoFactor(input: TwoFactorConfirmInput) {
-    try {
-        const { userId } = await getSession();
+    const { userId } = await getSession();
+    return actionResult("Erro ao desativar 2FA", async () => {
         await disableTwoFactorForUser(userId, input);
 
         revalidatePath("/dashboard/settings");
-        return { success: true };
-    } catch (error: unknown) {
-        console.error("Error disabling 2FA:", error);
-        throw new Error(getPrismaErrorMessage(error, "Erro ao desativar 2FA"));
-    }
+    });
 }

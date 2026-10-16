@@ -8,6 +8,7 @@ import { deleteTransaction } from "@/lib/actions";
 import { formatCurrency, getErrorMessage } from "@/lib/utils";
 import { toast } from "sonner";
 
+import { unwrap } from "@/lib/action-result";
 interface DeleteTransactionButtonProps {
     id: string;
     descricao: string;
@@ -24,7 +25,7 @@ export function DeleteTransactionButton({ id, descricao, valor }: DeleteTransact
         if (!confirm(`Excluir o lançamento "${descricao}" (${formatCurrency(valor)})?\n\nEssa ação não pode ser desfeita.`)) return;
         startTransition(async () => {
             try {
-                await deleteTransaction(id);
+                await deleteTransaction(id).then(unwrap);
                 toast.success("Lançamento excluído.");
                 router.refresh();
             } catch (err: unknown) {

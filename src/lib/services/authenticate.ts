@@ -82,3 +82,15 @@ export async function authenticateCredentials(credentials: Credentials, ip: stri
     await db.loginFailure.deleteMany({ where: { key: emailKey.key } });
     return { id: user.id, email: user.email };
 }
+
+// Conferir a senha atual fora do login (alterar senha, BL-042) conta no mesmo
+// limite por e-mail: uma sessão roubada não vira um jeito de adivinhar a senha
+// sem limite. Lança "Senha atual incorreta" ou a mensagem de bloqueio.
+export async function verifyCurrentPassword(user: { email: string; password: string }, password: string, now: Date = new Date()) {
+    const keys: ThrottleKey[] = [{ key: `email:${user.email.trim().toLowerCase()}`, max: LOGIN_LIMITS.maxPerEmail }];
+    await assertNotThrottled(keys, now);
+    if (!(await bcrypt.compare(password, user.password))) {
+        await recordFailure(keys, now);
+        throw new Error("Senha atual incorreta");
+    }
+}

@@ -55,11 +55,15 @@ describe("changePasswordForUser", () => {
         await expect(login(CURRENT)).rejects.toThrow(/Muitas tentativas/);
     });
 
-    test("a action usa o usuário da sessão e devolve a mensagem da validação, não o JSON do Zod", async () => {
+    // Erro esperado volta como valor: lançado, chegaria ao navegador em produção
+    // como "Minified React error #441", sem a mensagem.
+    test("a action usa o usuário da sessão e devolve o erro como valor, com a mensagem legível", async () => {
         vi.mocked(getServerSession).mockResolvedValue({ user: { id: s.user.id } });
 
-        await expect(changePassword(input({ confirmPassword: "outra-coisa-789" }))).rejects.toThrow("A confirmação não confere com a nova senha");
-        await changePassword(input());
+        expect(await changePassword(input({ confirmPassword: "outra-coisa-789" })))
+            .toEqual({ success: false, error: "A confirmação não confere com a nova senha" });
+        expect(await changePassword(input({ currentPassword: "errada" }))).toEqual({ success: false, error: "Senha atual incorreta" });
+        expect(await changePassword(input())).toEqual({ success: true });
         expect(await login(NEW)).toBeTruthy();
     });
 });

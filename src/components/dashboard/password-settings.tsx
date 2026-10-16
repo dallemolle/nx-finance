@@ -36,7 +36,11 @@ export function PasswordSettings() {
         }
         setIsPending(true);
         try {
-            await changePassword(fields);
+            const result = await changePassword(fields);
+            if (!result.success) {
+                setError(result.error);
+                return;
+            }
             toast.success("Senha alterada. Use a nova senha no próximo login.");
             setFields(EMPTY);
         } catch (err: unknown) {

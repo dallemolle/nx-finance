@@ -286,9 +286,11 @@ export async function findPossibleDuplicateInstallmentsForUser(
 export async function deleteImportedInvoiceForUser(userId: string, transactionId: string): Promise<{ deletedItems: number }> {
     const invoice = await db.transaction.findFirst({
         where: { id: transactionId, userId, is_invoice_header: true, is_provisioned: false },
-        select: { id: true, _count: { select: { invoiceItems: true } } },
+        select: { id: true, status: true, _count: { select: { invoiceItems: true } } },
     });
     if (!invoice) throw new Error("Fatura importada não encontrada.");
+    // Paga não se exclui: volta para Pendente antes (BL-038).
+    if (invoice.status === "PAGO") throw new Error("Fatura paga não pode ser excluída. Volte o status para Pendente antes de excluir.");
 
     // Itens saem junto (onDelete: Cascade em CreditCardInvoiceItem).
     await db.transaction.delete({ where: { id: invoice.id } });

@@ -20,6 +20,7 @@ import { Decimal } from "decimal.js";
 import { splitInstallments } from "./credit-card-cycle";
 import { suggestCategoryColor } from "./category-colors";
 import { getPrismaErrorMessage } from "@/lib/utils";
+import { deleteTransactionForUser, paymentDateForStatus } from "./services/transactions";
 
 // Transaction Actions
 export async function createTransaction(data: TransactionInput) {
@@ -84,11 +85,14 @@ export async function updateTransaction(id: string, data: TransactionInput) {
         const userId = await getSessionUserId();
         const validatedData = transactionSchema.parse(data);
         // Parcelamento só existe na criação; na edição esses campos do formulário não são gravados.
-        const { isInstallment, installmentsCount, installmentDescriptions, ...rest } = validatedData;
+        const { isInstallment, installmentsCount, installmentDescriptions, data_pagamento, ...rest } = validatedData;
+
+        const current = await db.transaction.findFirst({ where: { id, userId }, select: { data_pagamento: true } });
+        if (!current) throw new Error("Lançamento não encontrado.");
 
         const transaction = await db.transaction.update({
             where: { id, userId },
-            data: rest,
+            data: { ...rest, data_pagamento: paymentDateForStatus(rest.status, data_pagamento ?? current.data_pagamento) },
         });
 
         revalidatePath("/dashboard");
@@ -139,9 +143,7 @@ export async function payTransaction(id: string) {
 export async function deleteTransaction(id: string) {
     try {
         const userId = await getSessionUserId();
-        await db.transaction.delete({
-            where: { id, userId },
-        });
+        await deleteTransactionForUser(userId, id);
 
         revalidatePath("/dashboard");
         revalidatePath("/reports");

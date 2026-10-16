@@ -4,8 +4,12 @@ import { db } from "@/lib/db";
 import bcrypt from "bcryptjs";
 import { registerSchema, type RegisterInput } from "@/lib/validations";
 import { getPrismaErrorMessage } from "@/lib/utils";
+import { isRegistrationOpen, PASSWORD_HASH_ROUNDS } from "@/lib/services/account";
 
 export async function registerUser(data: RegisterInput) {
+    // Fechado por padrão (BL-043): a tela some, mas a action continua sendo um
+    // endpoint público, então a trava vale aqui também.
+    if (!isRegistrationOpen()) throw new Error("O cadastro de novos usuários está fechado.");
     const validatedData = registerSchema.parse(data);
 
     const existingUser = await db.user.findUnique({
@@ -16,7 +20,7 @@ export async function registerUser(data: RegisterInput) {
         throw new Error("E-mail já cadastrado");
     }
 
-    const hashedPassword = await bcrypt.hash(validatedData.password, 10);
+    const hashedPassword = await bcrypt.hash(validatedData.password, PASSWORD_HASH_ROUNDS);
 
     try {
         const user = await db.user.create({

@@ -53,6 +53,8 @@ export default defineConfig({
             // Servidor em UTC, como em produção (Vercel); o navegador fica em
             // Brasília (timezoneId acima) — a combinação real do BL-025.
             TZ: "UTC",
+            // Cadastro fechado, como em produção (BL-043), mesmo que o .env local o abra.
+            ALLOW_REGISTRATION: "",
         },
     },
 });

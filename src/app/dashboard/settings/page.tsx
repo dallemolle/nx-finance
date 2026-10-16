@@ -6,6 +6,7 @@ import { TopNav } from "@/components/layout/top-nav";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CategorySettings, InstitutionSettings, PaymentMethodSettings } from "@/components/dashboard/settings-forms";
 import { SecuritySettings } from "@/components/dashboard/security-settings";
+import { PasswordSettings } from "@/components/dashboard/password-settings";
 import { CreditCardSettings } from "@/components/dashboard/credit-card-settings";
 import { getCreditCards } from "@/lib/credit-card-provision-actions";
 import { countRemainingRecoveryCodesForUser } from "@/lib/services/two-factor";
@@ -69,7 +70,12 @@ export default async function SettingsPage() {
                             </TabsContent>
 
                             <TabsContent value="security" className="mt-0 focus-visible:outline-none focus-visible:ring-0">
-                                <SecuritySettings enabled={user?.status_2fa ?? false} recoveryCodesLeft={recoveryCodesLeft} />
+                                <div className="space-y-8">
+                                    <PasswordSettings />
+                                    <div className="border-t border-slate-100 dark:border-slate-800 pt-8">
+                                        <SecuritySettings enabled={user?.status_2fa ?? false} recoveryCodesLeft={recoveryCodesLeft} />
+                                    </div>
+                                </div>
                             </TabsContent>
                         </Tabs>
                     </CardContent>

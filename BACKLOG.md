@@ -23,6 +23,7 @@ Combinada em 2026-10-09. Cada etapa vai no seu próprio branch `feature/...`.
 6. **Depois, só com motivo concreto:** BL-017. (BL-018 ✅ feito em 2026-10-12, no branch `feature/2026-10-12_deploy_apos_ci`.)
 7. **Com o usuário:** BL-020 e BL-032 (em validação até novembro de 2026). (BL-019 ✅ concluído.)
 8. **Funcionalidades novas, sem pressa:** BL-030 (✅ 2026-10-12) e BL-031.
+9. **Lançamentos do mês** (2026-10-16): BL-038 no branch `feature/2026-10-16_excluir_lancamento_pendente` (✅ 2026-10-16); depois BL-039; BL-040 sem pressa.
 
 ## Pendentes
 
@@ -34,6 +35,18 @@ Combinada em 2026-10-09. Cada etapa vai no seu próprio branch `feature/...`.
   - **Tailwind 3** (`braces`, `micromatch`, `chokidar`, `postcss-selector-parser`, `postcss-nested`): DoS só com padrões/seletores maliciosos no próprio código do projeto, durante o build. Resolve no Tailwind 4, que é uma migração (config em CSS, mudanças de classes); fazer como projeto próprio, com prints antes/depois das telas.
   - **`eslint-config-next`** (`fast-glob` via `@next/eslint-plugin-next`): só no lint. A sugestão do `npm audit` é um rebaixamento pra 14.2, que não faz sentido; acompanhar as versões novas do `eslint-config-next`.
   Nunca usar `npm audit fix --force` (instalaria versões principais sem revisão).
+
+### Lançamentos do mês
+
+Levantados em 2026-10-16, a partir de um lançamento duplicado sem lixeira.
+
+BL-038 ✅ concluído em 2026-10-16 (ver [Concluídos](#concluídos)).
+
+- [ ] **BL-039: aviso de possível duplicado ao criar lançamento.** **Média.**
+  Ao salvar uma "Nova Transação", procurar lançamento do mesmo tipo e valor com vencimento até 3 dias de diferença e avisar antes de gravar ("Já existe 'Aluguel' de R$ 1.500 em 05/11. Lançar mesmo assim?"). Ataca a causa do BL-038. A importação de fatura já faz checagem parecida.
+- [ ] **BL-040: agrupar as parcelas de "Nova Transação".** **Baixa.**
+  Hoje as parcelas só se ligam pelo texto "(01/03)" na descrição. Gravar um identificador comum (como `installment_group_id` dos itens de cartão) permitiria "excluir esta e as próximas" e editar o parcelamento inteiro. Exige campo novo no banco.
+
 ### Funcionalidades novas
 
 Ideias que vieram do branch abandonado `feature/2026-07-18_prev-desc-new_table` (último commit `7d64086`, apagado em 2026-10-10). O código dele não serve mais: é anterior ao schema atual e à refatoração em `src/lib/services/`. Se for implementar, fazer do zero, seguindo o padrão atual e com testes.
@@ -104,3 +117,4 @@ Ideias que vieram do branch abandonado `feature/2026-07-18_prev-desc-new_table` 
 | BL-018 | Deploy só depois do CI e do `db push`: auto-deploy da Vercel desligado para `main`/`staging` (`vercel.json`) e job "Publica na Vercel" chamando o deploy hook do branch. 👤 Requer criar os hooks na Vercel e os secrets `VERCEL_DEPLOY_HOOK_MAIN`/`_STAGING` no GitHub (README → Deploy). Remoções no schema ainda pedem dois deploys | 2026-10-12 |
 | BL-030 | Despesa prevista recorrente: opção **Recorrente** no diálogo (Uma vez · Parcelada · Recorrente), valor cheio por 2 a 36 meses, no cartão ou genérica, com prévia e total do período; sem mudança no banco. Cancelamento da genérica fica mês a mês (decisão do usuário) | 2026-10-12 · `1408e66` |
 | BL-037 | Cor de categoria sorteada: nova categoria nasce com uma cor que não repete nem lembra as do usuário (antes, sempre o azul `#3b82f6`), e Configurações → Categorias ganhou o botão 🎲 "Sugerir cor". Pedido do usuário | 2026-10-12 · `d524a60` |
+| BL-038 | Excluir lançamento pendente: lixeira em todo lançamento de "Nova Transação" pendente ou atrasado (entrada ou saída, avulso ou parcela), com confirmação; o registro é apagado, então sai da lista e das somas. Lançamento ou fatura importada **paga** não tem lixeira, e o servidor também recusa: para excluir, editar e voltar para Pendente. Junto: voltar de Pago para Pendente limpa a data de pagamento. Pedido do usuário (lançamento duplicado sem como apagar) | 2026-10-16 · `1008896` |

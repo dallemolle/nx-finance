@@ -232,4 +232,14 @@ describe("deleteImportedInvoiceForUser (BL-029)", () => {
         await expect(deleteImportedInvoiceForUser(other.user.id, real.id)).rejects.toThrow(/não encontrada/);
         expect(await db.transaction.count({ where: { id: { in: [real.id, provisioned.id, plain.id] } } })).toBe(3);
     });
+
+    // BL-038: fatura paga só se exclui depois de voltar para Pendente.
+    test("recusa fatura importada paga", async () => {
+        const s = await createUserWithCard({ closingDay: 25, dueDay: 5 });
+        const { transaction } = await importInvoice(s, new Date(2026, 8, 5), [{ descricao: "Mercado", valor: 200 }]);
+        await db.transaction.update({ where: { id: transaction.id }, data: { status: "PAGO" } });
+
+        await expect(deleteImportedInvoiceForUser(s.user.id, transaction.id)).rejects.toThrow(/Volte o status para Pendente/);
+        expect(await db.creditCardInvoiceItem.count({ where: { transactionId: transaction.id } })).toBe(1);
+    });
 });

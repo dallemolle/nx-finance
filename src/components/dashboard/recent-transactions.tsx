@@ -10,6 +10,7 @@ import { QuickPayButton } from "./quick-pay-button";
 import { ConfirmEstimatedExpenseButton } from "./confirm-estimated-expense-button";
 import { CancelProvisionedButton } from "./cancel-provisioned-button";
 import { DeleteImportedInvoiceButton } from "./delete-imported-invoice-button";
+import { DeleteTransactionButton } from "./delete-transaction-button";
 import { ProvisionedBadge } from "./provisioned-badge";
 import { ChevronRight, ChevronDown, CreditCard } from "lucide-react";
 import { maskCurrency } from "@/lib/utils";
@@ -115,7 +116,11 @@ export function RecentTransactions({ transactions, userId }: RecentTransactionsP
                                     <CancelProvisionedButton kind="transaction" id={t.id} />
                                 </>
                             )}
-                            {t.is_invoice_header && !t.is_provisioned && (
+                            {/* Lixeira só no que está pendente; pago volta para Pendente antes (BL-038). */}
+                            {!t.is_invoice_header && !t.is_provisioned && t.status !== "PAGO" && (
+                                <DeleteTransactionButton id={t.id} descricao={t.descricao} valor={Number(t.valor)} />
+                            )}
+                            {t.is_invoice_header && !t.is_provisioned && t.status !== "PAGO" && (
                                 <DeleteImportedInvoiceButton
                                     id={t.id}
                                     descricao={t.descricao}

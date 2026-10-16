@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, test, vi } from "vitest";
 import { getServerSession } from "next-auth";
 import { db } from "@/lib/db";
 import { dateOnlyUtc, dateOnlyYmd } from "@/lib/date-only";
-import { createCategory, createTransaction, payTransaction, updateTransaction } from "./actions";
+import { createCategory, createTransaction, deleteTransaction, payTransaction, updateTransaction } from "./actions";
 import { areColorsSimilar, CATEGORY_PALETTE } from "./category-colors";
 import { createUserWithCard, type Scenario } from "../../test/fixtures";
 
@@ -102,6 +102,71 @@ describe("createTransaction e updateTransaction (BL-013/BL-014)", () => {
 
         await expect(updateTransaction(theirs.id, input())).rejects.toThrow();
         expect(Number((await db.transaction.findUniqueOrThrow({ where: { id: theirs.id } })).valor)).toBe(10);
+    });
+
+    // BL-038: voltar de Pago para Pendente deixava a data de pagamento antiga gravada.
+    test("data de pagamento acompanha o status na edição", async () => {
+        const { data } = await createTransaction(input());
+        await payTransaction(data.id);
+        const paidAt = (await db.transaction.findUniqueOrThrow({ where: { id: data.id } })).data_pagamento;
+
+        await updateTransaction(data.id, input({ status: "PAGO", valor: 330 }));
+        expect((await db.transaction.findUniqueOrThrow({ where: { id: data.id } })).data_pagamento).toEqual(paidAt);
+
+        await updateTransaction(data.id, input({ status: "PENDENTE" }));
+        expect((await db.transaction.findUniqueOrThrow({ where: { id: data.id } })).data_pagamento).toBeNull();
+
+        await updateTransaction(data.id, input({ status: "PAGO" }));
+        expect((await db.transaction.findUniqueOrThrow({ where: { id: data.id } })).data_pagamento).not.toBeNull();
+    });
+});
+
+// BL-038: qualquer lançamento pendente se exclui; pago, só depois de voltar para Pendente.
+describe("deleteTransaction", () => {
+    let s: Scenario;
+    const create = (extra: Record<string, unknown> = {}, owner: Scenario = s) => db.transaction.create({
+        data: {
+            descricao: "Aluguel", valor: 1500, data_vencimento: dateOnlyUtc(2026, 11, 5), status: "PENDENTE", tipo: "SAIDA",
+            userId: owner.user.id, categoria_id: owner.category.id, tipo_pagamento_id: owner.paymentMethod.id, institution_id: owner.institution.id,
+            ...extra,
+        },
+    });
+    const exists = async (id: string) => (await db.transaction.count({ where: { id } })) === 1;
+
+    beforeEach(async () => {
+        s = await createUserWithCard();
+        vi.mocked(getServerSession).mockResolvedValue({ user: { id: s.user.id } });
+    });
+
+    test("exclui lançamento pendente, atrasado, entrada e despesa prevista", async () => {
+        const rows = await Promise.all([
+            create(), create({ status: "ATRASADO" }), create({ tipo: "ENTRADA" }), create({ is_provisioned: true }),
+        ]);
+
+        for (const r of rows) await deleteTransaction(r.id);
+
+        expect(await db.transaction.count({ where: { userId: s.user.id } })).toBe(0);
+    });
+
+    test("recusa lançamento pago, e exclui depois de voltar para Pendente", async () => {
+        const t = await create({ status: "PAGO", data_pagamento: new Date() });
+
+        await expect(deleteTransaction(t.id)).rejects.toThrow(/Volte o status para Pendente/);
+        expect(await exists(t.id)).toBe(true);
+
+        await updateTransaction(t.id, { descricao: "Aluguel", valor: 1500, data_vencimento: "2026-11-05", status: "PENDENTE", tipo: "SAIDA", categoria_id: s.category.id, tipo_pagamento_id: s.paymentMethod.id, institution_id: s.institution.id });
+        await deleteTransaction(t.id);
+        expect(await exists(t.id)).toBe(false);
+    });
+
+    test("recusa fatura de cartão e lançamento de outro usuário", async () => {
+        const header = await create({ is_invoice_header: true, credit_card_id: s.card.id });
+        const other = await createUserWithCard();
+        const theirs = await create({}, other);
+
+        await expect(deleteTransaction(header.id)).rejects.toThrow(/Fatura/);
+        await expect(deleteTransaction(theirs.id)).rejects.toThrow(/não encontrado/);
+        expect([await exists(header.id), await exists(theirs.id)]).toEqual([true, true]);
     });
 });
 // Nova categoria sem cor: o servidor sorteia uma diferente das que o usuário já usa.
